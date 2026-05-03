@@ -1,0 +1,19 @@
+# asdf-style version pins. Resolves audit finding F-023.
+#
+# Read by asdf, mise, and similar version managers. Contributors who use
+# them will get the same toolchain automatically. CI installs these versions
+# explicitly via the workflow steps in .github/workflows/ci-safety-gate.yml.
+#
+# Constraints (from docs/contracts/scaffold-contract.md):
+#   - Python: 3.12.x (requires-python = ">=3.12,<3.13")
+#   - Node:   20 LTS
+#   - pnpm:   >= 9
+#   - uv:     latest stable (no pin in scaffold contract)
+#
+# Bump procedure: edit this file, update CI step versions if needed, run
+# `uv sync` and `pnpm install` locally, commit lock files, open PR.
+
+python 3.12.7
+nodejs 20.18.0
+uv 0.5.9
+pnpm 9.15.0

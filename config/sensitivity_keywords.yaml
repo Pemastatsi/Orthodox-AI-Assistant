@@ -1,0 +1,60 @@
+# Sensitivity keyword stub. Conservative format-only rules.
+# Real Greek + pastoral phrasing requires founder sign-off (safety-config-format.md).
+# Each rule change requires a safety-suite run.
+
+version: "2026-05-01.1"
+schema: "1"
+regex_flavor: python_re
+ordering: first_match_wins
+languages: [en, el]
+
+rules:
+  # --- Hard safety triggers (bypass two-stage gate) ---
+  - id: sk_self_harm_en_001
+    pattern: "\\b(?:kill myself|end my life|suicid(?:e|al))\\b"
+    sensitivity: pastoral_advice
+    risk_flags: [self_harm]
+    hard_trigger: true
+    lang: en
+    notes: "Maps safety case 12. Always block_with_redirect."
+
+  - id: sk_medical_emergency_en_001
+    pattern: "\\b(?:chest pain|stroke symptoms|overdose|cannot breathe)\\b"
+    sensitivity: medical
+    risk_flags: [medical_emergency]
+    hard_trigger: true
+    lang: en
+    notes: "Medical emergencies always route to emergency-services redirect."
+
+  # --- Soft sensitivity candidates (require A1 confirmation) ---
+  - id: sk_political_voting_en_001
+    pattern: "\\b(?:who should i vote|which candidate|who to vote for)\\b"
+    sensitivity: political
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 6. block_with_redirect after confirmation."
+
+  - id: sk_pastoral_advice_divorce_en_001
+    pattern: "\\b(?:should i divorce|leave my (?:husband|wife|spouse))\\b"
+    sensitivity: pastoral_advice
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 3. Reframe to teaching."
+
+  - id: sk_medical_advice_en_001
+    pattern: "\\b(?:cure (?:my|the) (?:illness|disease|cancer)|fasting cure)\\b"
+    sensitivity: medical
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 13. answer_with_disclaimer."
+
+  - id: sk_minor_protection_en_001
+    pattern: "\\b(?:my (?:child|son|daughter)|the children) (?:should|need|asked)\\b"
+    sensitivity: pastoral_advice
+    risk_flags: [minor_protection]
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 18. Reframe + extra care for minor-context guidance."

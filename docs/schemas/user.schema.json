@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user.schema.json",
+  "title": "User",
+  "description": "Internal user record. Source of truth for identity is Clerk; this row carries internal mapping and tenant binding.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "userId",
+    "clerkUserId",
+    "tenantId",
+    "role",
+    "status",
+    "createdAt"
+  ],
+  "properties": {
+    "userId": { "type": "string" },
+    "clerkUserId": { "type": "string" },
+    "tenantId": { "type": "string" },
+    "email": { "type": ["string", "null"], "format": "email" },
+    "displayName": { "type": ["string", "null"] },
+    "role": {
+      "type": "string",
+      "enum": ["member", "scholar", "content_manager", "admin", "owner"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "invited", "disabled"]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "lastSeenAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "answer-mode.schema.json",
+  "title": "AnswerMode",
+  "type": "string",
+  "enum": [
+    "direct_citation",
+    "consensus",
+    "historical_development",
+    "scholarly_dispute",
+    "institutional_policy"
+  ]
+}

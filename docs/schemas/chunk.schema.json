@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "chunk.schema.json",
+  "title": "Chunk",
+  "description": "Indexed retrievable chunk. The Qdrant payload mirrors the same fields plus the embedding vector.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "chunkId",
+    "sourceId",
+    "tenantId",
+    "text",
+    "chunkHash",
+    "approved",
+    "visibility",
+    "embeddingModel",
+    "corpusVersion",
+    "createdAt"
+  ],
+  "properties": {
+    "chunkId": { "type": "string" },
+    "sourceId": { "type": "string" },
+    "tenantId": { "type": "string" },
+    "text": { "type": "string", "minLength": 1 },
+    "chunkHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "approved": { "type": "boolean", "default": false },
+    "visibility": {
+      "type": "string",
+      "enum": ["member", "scholar", "admin_only", "suppressed"]
+    },
+    "father": { "type": ["string", "null"] },
+    "work": { "type": ["string", "null"] },
+    "page": { "type": ["string", "null"] },
+    "timestamp": { "type": ["string", "null"] },
+    "language": { "type": "string", "enum": ["en", "el", "mixed"], "default": "en" },
+    "categories": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "embeddingModel": {
+      "type": "string",
+      "description": "Versioned embedding model used at index time, e.g., 'openai:text-embedding-3-small@2024-03'."
+    },
+    "embeddingDimension": { "type": "integer", "minimum": 1 },
+    "corpusVersion": { "type": "string" },
+    "reviewNote": { "type": ["string", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}

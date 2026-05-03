@@ -1,0 +1,79 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+token.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+.tox/
+
+# uv
+uv.lock
+
+# Node
+node_modules/
+.pnp/
+.pnp.js
+.next/
+out/
+.turbo/
+.vercel/
+pnpm-debug.log
+yarn-debug.log
+yarn-error.log
+npm-debug.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Local artifacts
+.tmp/
+tmp/
+*.log
+*.local
+
+# Docker
+docker-compose.override.yml
+
+# Coverage and reports
+coverage/
+.nyc_output/
+junit.xml
+test-results/
+playwright-report/
+
+# Editors
+.history/
+*.bak

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "model-route.schema.json",
+  "title": "ModelRoute",
+  "description": "Certified provider/model/prompt/schema combination eligible to serve production traffic. Per ADR 0004, only certified routes may be used.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "routeId",
+    "purpose",
+    "provider",
+    "model",
+    "promptVersion",
+    "schemaVersion",
+    "certificationStatus",
+    "createdAt"
+  ],
+  "properties": {
+    "routeId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]+@[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[0-9]+$",
+      "description": "Format: <name>@<YYYY-MM-DD.NN>, e.g., 'a5_compose_anthropic@2026-05-01.1'."
+    },
+    "purpose": {
+      "type": "string",
+      "enum": ["query_analyzer", "compose", "verifier_judge", "embedding"],
+      "description": "Which pipeline stage this route is certified for."
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["anthropic", "openai"]
+    },
+    "model": { "type": "string" },
+    "promptVersion": { "type": "string" },
+    "schemaVersion": { "type": "string" },
+    "supportsPromptCache": { "type": "boolean", "default": false },
+    "supportsBatch": { "type": "boolean", "default": false },
+    "supportsJsonMode": { "type": "boolean", "default": false },
+    "certificationStatus": {
+      "type": "string",
+      "enum": ["draft", "experiment", "certified", "deprecated"]
+    },
+    "safetySuiteRunId": {
+      "type": ["string", "null"],
+      "description": "Reference to the safety-suite run that certified this route."
+    },
+    "certifiedBy": { "type": ["string", "null"] },
+    "certifiedAt": { "type": ["string", "null"], "format": "date-time" },
+    "deprecatedAt": { "type": ["string", "null"], "format": "date-time" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}

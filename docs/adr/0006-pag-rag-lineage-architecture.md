@@ -1,0 +1,68 @@
+# ADR 0006: PAG-RAG Lineage Architecture
+
+Date: 2026-04-26 (amended 2026-05-02 to add Embedding Model Upgrade placeholder section per decision register row 17)
+Status: Accepted
+
+## Context
+
+The Patristic Library Assistant must answer from a closed, tenant-approved corpus. Standard vector RAG is useful for finding semantically similar passages, but patristic and Orthodox theological questions often depend on lineage, authority, translation history, quotation chains, and whether a later source is structurally downstream from an earlier witness.
+
+The project will use "PAG-RAG" as internal shorthand for Private Agentic Graph-RAG. This is not an external industry standard. It combines established patterns:
+
+- GraphRAG / graph-enhanced vector search
+- Agentic or hybrid RAG planning
+- closed-corpus evidence packaging
+- deterministic citation and lineage verification
+- private/local deployment options
+
+## Decision
+
+The long-term retrieval architecture is graph-enhanced, but MVP remains vector-first.
+
+Phase 1 uses Qdrant vector retrieval, tenant filters, approved-source gating, deterministic A4 evidence packaging, A5 composition from evidence only, and A6 citation verification.
+
+Phase 2 adds graph metadata capture and admin review. Candidate entities and candidate lineage edges may be produced during ingestion, but they are not evidence until approved.
+
+Phase 3 may enable graph-aware retrieval. A2 can request graph expansion for answer modes such as `consensus`, `historical_development`, `scholarly_dispute`, and selected `institutional_policy` queries. A3 may combine vector/BM25 retrieval with approved graph traversal. A4 must admit only approved graph edges into `EvidencePacket.lineageContext`. ADR 0007 defines the related query-transformation boundary: Phase 1 does not use generic LLM query rewriting, and any later concept expansion must be graph-grounded, tenant-scoped, and approved.
+
+Phase 4+ extends the same contract to passage alignment, translation variants, and manuscript witness graphs.
+
+## Rules
+
+1. Qdrant remains the semantic retrieval engine in MVP.
+2. PostgreSQL stores canonical graph edges first. Neo4j or Apache AGE is optional later, not required for MVP.
+3. An LLM-extracted edge is a candidate, not authority.
+4. Every graph edge must include tenant scope, relation type, relation basis, extraction method, confidence score, review status, and provenance note.
+5. Only approved edges may affect answer composition, confidence tier, lineage explanations, or source prioritization.
+6. A5 may not claim "X builds on Y", "X quotes Y", "X is a translation of Y", or "X contrasts with Y" unless that relation appears as an approved edge in the evidence packet.
+7. A6 must verify all lineage claims against approved edge IDs.
+8. Candidate edges are visible to admins/reviewers but suppressed from user-facing answers.
+9. Local/private inference is a deployment option, not a retrieval guarantee by itself. Cloud model routes may still be certified if they pass privacy, safety, and closed-corpus requirements.
+
+## Data Model
+
+Canonical graph tables:
+
+- `graph_entities`: persons, works, concepts, councils, passages, sources, and tradition tags.
+- `chunk_entity_mentions`: reviewed mentions linking chunks to graph entities.
+- `lineage_edges`: reviewed relations such as `quotes`, `references`, `builds_on`, `contrasts_with`, `same_passage_as`, `translation_of`, `paraphrases`, `supports`, and `contested_by`.
+
+Existing Qdrant payload fields such as `related_chunks`, `references_father`, and `builds_on` remain lightweight retrieval hints. The authoritative version of a relation lives in PostgreSQL and must carry review status.
+
+## Embedding Model Upgrade (Placeholder — Detailed SOP in Phase 2)
+
+Phase 1 uses `openai:text-embedding-3-small`. When upgrading to a different embedding model the rough flow is:
+
+1. Add the new model to `model_routes` with `purpose='embedding'`, `certification_status='draft'`.
+2. Run a dual-index window: index a representative chunk sample under both the old and new vectors; compare retrieval quality on the per-tenant retrieval evaluation set defined in ADR 0007 (recall@k, MRR, no-result follow-up rate).
+3. Backfill all approved chunks with the new vectors via `workers/tasks/embedding.py` in batched mode; do not delete old vectors until cutover is complete (Qdrant tolerates extra payload but `chunk.embeddingDimension` must match the active route).
+4. Owner certifies the new route per ADR 0004; `.env`'s `ACTIVE_MODEL_ROUTE_EMBEDDING` is updated atomically with a deploy.
+5. Cutover bumps `corpusVersion` (cache flush) and deprecates the old route after a stability window.
+
+The detailed SOP — including rollback, partial-tenant cutover, and dimension mismatch handling — is added in Phase 2 alongside the multi-tenant ingestion stress-test plan.
+
+## Consequences
+
+This architecture is stronger than plain vector RAG for doctrinal-development, consensus, scholarly-dispute, and witness-aware queries. It also adds ingestion and review cost, so graph-driven answering is deliberately deferred until the closed-corpus MVP is stable.
+
+The project should avoid marketing claims like "deterministic lineage" unless the underlying edges are curated or formally approved. The correct claim is: deterministic handling of validated lineage metadata.

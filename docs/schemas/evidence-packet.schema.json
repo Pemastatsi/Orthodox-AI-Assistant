@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evidence-packet.schema.json",
+  "title": "EvidencePacket",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tenantId",
+    "corpusVersion",
+    "confidenceTier",
+    "admittedChunks",
+    "suppressedChunkIds"
+  ],
+  "properties": {
+    "tenantId": { "type": "string" },
+    "corpusVersion": { "type": "string" },
+    "confidenceTier": {
+      "type": "string",
+      "enum": ["GREEN", "YELLOW", "RED"]
+    },
+    "admittedChunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chunkId",
+          "sourceId",
+          "title",
+          "text",
+          "score",
+          "approved",
+          "visibility",
+          "sourceHash",
+          "chunkHash"
+        ],
+        "properties": {
+          "chunkId": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "title": { "type": "string" },
+          "work": { "type": "string" },
+          "father": { "type": "string" },
+          "text": { "type": "string" },
+          "score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "page": { "type": ["string", "null"] },
+          "timestamp": { "type": ["string", "null"] },
+          "approved": { "const": true },
+          "visibility": { "type": "string" },
+          "sourceHash": { "type": "string" },
+          "chunkHash": { "type": "string" }
+        }
+      }
+    },
+    "suppressedChunkIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "lineageContext": {
+      "type": "array",
+      "default": [],
+      "description": "Only approved edge IDs may appear here. Phase 1 emits an empty array.",
+      "items": {
+        "type": "object",
+        "required": ["edgeId", "relationType", "approved"],
+        "properties": {
+          "edgeId": { "type": "string" },
+          "relationType": { "type": "string" },
+          "approved": { "const": true },
+          "provenanceNote": { "type": "string" }
+        }
+      }
+    }
+  }
+}

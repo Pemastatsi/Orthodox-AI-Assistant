@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "classified-query.schema.json",
+  "title": "ClassifiedQuery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rawQuery",
+    "answerMode",
+    "sensitivityPrimary",
+    "riskFlags",
+    "handling",
+    "preliminaryConfidenceTier"
+  ],
+  "properties": {
+    "rawQuery": { "type": "string", "minLength": 1 },
+    "reframedQuery": { "type": ["string", "null"] },
+    "answerMode": { "$ref": "answer-mode.schema.json" },
+    "preliminaryConfidenceTier": {
+      "type": "string",
+      "enum": ["GREEN", "YELLOW", "RED"],
+      "description": "A1's preliminary read of expected answerability before retrieval. The authoritative confidenceTier on EvidencePacket and VerifiedResponse is computed by A4 after evidence admission. Used only to short-circuit RED early-exit paths."
+    },
+    "sensitivityPrimary": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "pastoral_advice",
+        "political",
+        "medical",
+        "comparative_religion",
+        "canonical_dispute",
+        "other_sensitive"
+      ]
+    },
+    "riskFlags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "self_harm",
+          "medical_emergency",
+          "canonical_dispute_active",
+          "minor_protection"
+        ]
+      }
+    },
+    "handling": {
+      "type": "string",
+      "enum": [
+        "answer",
+        "answer_with_disclaimer",
+        "reframe_to_teaching",
+        "block_with_redirect",
+        "insufficient_evidence"
+      ]
+    },
+    "reframingDisclosureRequired": { "type": "boolean", "default": false },
+    "classifierVersion": { "type": "string" }
+  }
+}

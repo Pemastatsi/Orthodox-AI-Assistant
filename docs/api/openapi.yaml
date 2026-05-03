@@ -1,0 +1,614 @@
+openapi: 3.1.0
+info:
+  title: Orthodox AI Assistant API
+  version: 2026-05-02
+  description: |
+    Phase 1 closed-corpus, tenant-aware API contract.
+    Every non-2xx response uses the `ApiError` envelope. Error codes are
+    defined in `docs/contracts/error-taxonomy.md`. Versioning rules in
+    `docs/contracts/api-versioning.md`.
+
+    ## Extensions
+
+    - `x-required-scope` (string): the single Clerk-derived scope that the
+      authenticated principal must hold to invoke the operation. Maps to
+      the role-scope table in `docs/contracts/auth-context.md`. Backend
+      handlers MUST enforce this via `Depends(require_scope(...))` and a
+      generated test asserts the dependency is present per code-gen-guide.md.
+    - Webhook operations and `/health` use `security: []` (no Clerk JWT)
+      and therefore have no `x-required-scope`.
+servers:
+  - url: /api/v1
+    description: Default mount.
+
+security:
+  - clerkBearer: []
+
+tags:
+  - name: query
+  - name: ingest
+  - name: corpus
+  - name: tenant
+  - name: runs
+  - name: admin
+  - name: webhooks
+
+paths:
+  /health:
+    get:
+      summary: Liveness probe.
+      operationId: getHealth
+      tags: [tenant]
+      security: []
+      responses:
+        "200":
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+                  version: { type: string }
+
+  /query:
+    post:
+      summary: Submit a tenant-scoped closed-corpus question.
+      operationId: submitQuery
+      tags: [query]
+      x-required-scope: query:read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              additionalProperties: false
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                answerMode:
+                  $ref: "#/components/schemas/AnswerMode"
+                sessionId:
+                  type: string
+                streamProgress:
+                  type: boolean
+                  default: false
+                  description: |
+                    When true, the response is delivered as Server-Sent Events with
+                    `progress` events, ending with a single `done` event whose payload
+                    is the full VerifiedResponse. Draft answer text is never streamed.
+                    On a cache hit the orchestrator emits a single `done` event with
+                    the cached VerifiedResponse and no intermediate `progress` events.
+      responses:
+        "200":
+          description: Verified answer or bounded fallback.
+          headers:
+            X-Run-Id:
+              schema: { type: string }
+              description: ULID for this pipeline run.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifiedResponse"
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  SSE stream when streamProgress=true. Final `done` event payload
+                  conforms to VerifiedResponse. Cache hits short-circuit to a single
+                  `done` event with no preceding `progress` events.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/CorpusEmpty" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /ingest:
+    post:
+      summary: Upload a source document for tenant corpus review.
+      operationId: uploadSource
+      tags: [ingest]
+      x-required-scope: corpus:write
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                sourceType:
+                  type: string
+                  enum: [pdf, txt, md, docx]
+                title: { type: string }
+                father: { type: string }
+                work: { type: string }
+                language: { type: string, enum: [en, el, mixed] }
+      responses:
+        "202":
+          description: Ingestion accepted and queued for approval.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobId, sourceId, status]
+                properties:
+                  jobId: { type: string }
+                  sourceId: { type: string }
+                  status: { type: string, enum: [queued] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/IngestTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/IngestInvalid" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /ingest/jobs/{jobId}:
+    get:
+      summary: Read ingestion job status.
+      operationId: getIngestJob
+      tags: [ingest]
+      x-required-scope: corpus:read
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: IngestJob status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /corpus:
+    get:
+      summary: List tenant corpus chunks visible to the caller role.
+      operationId: listCorpus
+      tags: [corpus]
+      x-required-scope: corpus:read
+      parameters:
+        - { name: cursor, in: query, schema: { type: string }, description: Opaque pagination cursor. }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: approved, in: query, schema: { type: boolean } }
+        - { name: visibility, in: query, schema: { type: string, enum: [member, scholar, admin_only, suppressed] } }
+        - { name: sourceId, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Page of chunks scoped to the tenant.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Chunk" }
+                  nextCursor: { type: ["string", "null"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /corpus/{chunkId}:
+    patch:
+      summary: Approve, reject, or update review metadata for a chunk.
+      operationId: reviewChunk
+      tags: [corpus]
+      x-required-scope: corpus:approve
+      parameters:
+        - { name: chunkId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                approved: { type: boolean }
+                visibility: { type: string, enum: [member, scholar, admin_only, suppressed] }
+                reviewNote: { type: string }
+      responses:
+        "200":
+          description: Updated chunk.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Chunk" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /tenant/config:
+    get:
+      summary: Read safe tenant configuration.
+      operationId: getTenantConfig
+      tags: [tenant]
+      x-required-scope: tenant:config:read
+      responses:
+        "200":
+          description: |
+            Tenant safe configuration. The returned `configVersion` is the optimistic-concurrency token clients
+            must echo back via the `If-Match` header on subsequent PATCH requests.
+          headers:
+            ETag:
+              schema: { type: string }
+              description: Equal to the returned `configVersion`. Convenience for HTTP caches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configVersion]
+                properties:
+                  tone: { type: string, enum: [plain, pastoral, scholarly] }
+                  defaultAnswerLength: { type: string, enum: [short, medium, long] }
+                  citationStyle: { type: string }
+                  calendarProfile: { $ref: "#/components/schemas/CalendarProfile" }
+                  starterCorpusEnabled: { type: boolean }
+                  sensitiveHandlingStrictness: { type: string, enum: [standard, strict] }
+                  disclaimerTemplateId: { type: string, nullable: true }
+                  configVersion: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    patch:
+      summary: Update safe tenant configuration fields only.
+      operationId: updateTenantConfig
+      tags: [tenant]
+      x-required-scope: tenant:config:write
+      parameters:
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+          description: |
+            Optimistic concurrency token. Must equal the `configVersion` most recently returned by
+            `GET /tenant/config`. On mismatch the server returns 412 `precondition_failed` and the
+            client must re-read, merge, and retry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                tone: { type: string, enum: [plain, pastoral, scholarly] }
+                defaultAnswerLength: { type: string, enum: [short, medium, long] }
+                citationStyle: { type: string }
+                calendarProfile: { $ref: "#/components/schemas/CalendarProfile" }
+                starterCorpusEnabled: { type: boolean }
+                sensitiveHandlingStrictness: { type: string, enum: [standard, strict] }
+                disclaimerTemplateId: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Updated safe tenant configuration. The new `configVersion` is returned for the next If-Match round-trip.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configVersion]
+                properties:
+                  configVersion: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /runs/{runId}:
+    get:
+      summary: Read a pipeline run trace.
+      operationId: getRun
+      tags: [runs]
+      x-required-scope: query:read
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: RunTrace.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunTrace" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /admin/queries:
+    get:
+      summary: List query log rows for the tenant.
+      operationId: listAdminQueries
+      tags: [admin]
+      x-required-scope: admin:queries:read
+      parameters:
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: handling, in: query, schema: { type: string } }
+        - { name: confidenceTier, in: query, schema: { type: string, enum: [GREEN, YELLOW, RED] } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Page of run-trace summaries (sensitive query text redacted).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/RunTrace" }
+                  nextCursor: { type: ["string", "null"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /admin/flagged:
+    get:
+      summary: List flagged queries for the tenant.
+      operationId: listFlaggedQueries
+      tags: [admin]
+      x-required-scope: admin:flagged:read
+      parameters:
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: flagReason, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Page of flagged queries (redacted by default).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/FlaggedQuery" }
+                  nextCursor: { type: ["string", "null"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /admin/audit:
+    get:
+      summary: List audit entries for the tenant.
+      operationId: listAuditEntries
+      tags: [admin]
+      x-required-scope: admin:audit:read
+      parameters:
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: resourceType, in: query, schema: { type: string } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Page of audit entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditEntry" }
+                  nextCursor: { type: ["string", "null"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /webhooks/stripe:
+    post:
+      summary: Stripe webhook intake.
+      operationId: stripeWebhook
+      tags: [webhooks]
+      security: []
+      parameters:
+        - { name: Stripe-Signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: Accepted. }
+        "401": { $ref: "#/components/responses/WebhookBadSignature" }
+        "409": { $ref: "#/components/responses/WebhookReplay" }
+
+  /webhooks/clerk:
+    post:
+      summary: Clerk webhook intake.
+      operationId: clerkWebhook
+      tags: [webhooks]
+      security: []
+      parameters:
+        - { name: svix-id, in: header, required: true, schema: { type: string } }
+        - { name: svix-timestamp, in: header, required: true, schema: { type: string } }
+        - { name: svix-signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: Accepted. }
+        "401": { $ref: "#/components/responses/WebhookBadSignature" }
+        "409": { $ref: "#/components/responses/WebhookReplay" }
+
+  /webhooks/make:
+    post:
+      summary: Make.com webhook intake.
+      operationId: makeWebhook
+      tags: [webhooks]
+      security: []
+      parameters:
+        - { name: X-Make-Timestamp, in: header, required: true, schema: { type: string } }
+        - { name: X-Make-Nonce, in: header, required: true, schema: { type: string } }
+        - { name: X-Make-Signature, in: header, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: Accepted. }
+        "401": { $ref: "#/components/responses/WebhookBadSignature" }
+        "409": { $ref: "#/components/responses/WebhookReplay" }
+
+components:
+  securitySchemes:
+    clerkBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Authentication failed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    Forbidden:
+      description: Authorization failed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    ValidationFailed:
+      description: Request body failed validation.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    CorpusEmpty:
+      description: Tenant has no approved chunks.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    RateLimited:
+      description: Rate limit exceeded. See `retryAfterSeconds`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    UnsupportedMediaType:
+      description: Upload type not supported.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    IngestTooLarge:
+      description: Upload exceeds tenant size limit.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    IngestInvalid:
+      description: Upload could not be processed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    WebhookBadSignature:
+      description: Webhook signature verification failed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    WebhookReplay:
+      description: Webhook idempotency key already processed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    PreconditionFailed:
+      description: Optimistic concurrency check failed (e.g., If-Match did not match the current version).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    InternalError:
+      description: Unexpected error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+
+  schemas:
+    AnswerMode:
+      type: string
+      enum:
+        - direct_citation
+        - consensus
+        - historical_development
+        - scholarly_dispute
+        - institutional_policy
+
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message, traceId]
+      properties:
+        code:
+          type: string
+          description: Stable code from docs/contracts/error-taxonomy.md.
+        message:
+          type: string
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        retryable:
+          type: boolean
+          default: false
+        retryAfterSeconds:
+          type: ["integer", "null"]
+          minimum: 0
+
+    ClassifiedQuery:
+      $ref: "../schemas/classified-query.schema.json"
+    RetrievalPlan:
+      $ref: "../schemas/retrieval-plan.schema.json"
+    EvidencePacket:
+      $ref: "../schemas/evidence-packet.schema.json"
+    VerifiedResponse:
+      $ref: "../schemas/verified-response.schema.json"
+    Principal:
+      $ref: "../schemas/principal.schema.json"
+    CalendarProfile:
+      $ref: "../schemas/calendar-profile.schema.json"
+    Tenant:
+      $ref: "../schemas/tenant.schema.json"
+    User:
+      $ref: "../schemas/user.schema.json"
+    Source:
+      $ref: "../schemas/source.schema.json"
+    Chunk:
+      $ref: "../schemas/chunk.schema.json"
+    Session:
+      $ref: "../schemas/session.schema.json"
+    IngestJob:
+      $ref: "../schemas/ingest-job.schema.json"
+    BillingUsage:
+      $ref: "../schemas/billing-usage.schema.json"
+    AuditEntry:
+      $ref: "../schemas/audit-entry.schema.json"
+    FlaggedQuery:
+      $ref: "../schemas/flagged-query.schema.json"
+    ModelRoute:
+      $ref: "../schemas/model-route.schema.json"
+    RunTrace:
+      $ref: "../schemas/run-trace.schema.json"

@@ -1,0 +1,38 @@
+# Pastoral forbidden-phrase stub. Conservative format-only rules.
+# A6 post-composition filter. reject_answer fails verification.
+# Real Greek + pastoral phrasing requires founder sign-off.
+
+version: "2026-05-01.1"
+schema: "1"
+regex_flavor: python_re
+ordering: first_match_wins
+languages: [en, el]
+
+rules:
+  - id: pf_direct_personal_advice_en_001
+    pattern: "\\b(?:you should (?:divorce|leave|quit|abandon))\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: en
+    notes: "Direct personal advice phrasing must be reframed to teaching."
+
+  - id: pf_diagnosis_en_001
+    pattern: "\\byou (?:have|are suffering from) [a-z ]{3,40} (?:disease|disorder|condition)\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: en
+    notes: "Never diagnose."
+
+  - id: pf_electoral_guidance_en_001
+    pattern: "\\b(?:vote for|don't vote for|the right candidate is)\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: en
+    notes: "Never give electoral guidance."
+
+  - id: pf_invented_quote_attribution_en_001
+    pattern: "\\bsaint [a-z]+ said[: ]\\s*\"[^\"]+\""
+    action: warn
+    reason_code: verifier_failed
+    lang: en
+    notes: "Quote attribution without an explicit citation marker — likely fabricated; warn for review."

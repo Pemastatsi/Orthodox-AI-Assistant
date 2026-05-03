@@ -1,0 +1,147 @@
+name: CI Safety Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Contracts (schemas + openapi)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate JSON Schemas
+        run: |
+          python -c "
+          import json, glob, sys
+          ok = True
+          for p in sorted(glob.glob('docs/schemas/*.schema.json')):
+              try:
+                  s = json.load(open(p))
+                  assert '\$id' in s and 'title' in s, p
+              except Exception as e:
+                  print(f'FAIL {p}: {e}')
+                  ok = False
+          sys.exit(0 if ok else 1)
+          "
+
+      - name: Validate safety config YAML
+        run: |
+          pip install pyyaml
+          python -c "
+          import yaml, re
+          for path in ['config/sensitivity_keywords.yaml','config/pastoral_filters.yaml']:
+              data = yaml.safe_load(open(path))
+              for r in data['rules']:
+                  re.compile(r['pattern'])
+          print('safety config OK')
+          "
+
+      - name: Lint OpenAPI
+        run: |
+          npm install -g @redocly/cli@1.34.x
+          redocly lint docs/api/openapi.yaml
+
+  backend:
+    name: Backend (ruff + mypy + pytest)
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('backend/pyproject.toml') != '' }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run mypy app
+      - run: uv run pytest -q
+
+  frontend:
+    name: Frontend (eslint + tsc + vitest)
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('web/package.json') != '' }}
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test --run
+
+  safety-suite-fixtures:
+    name: Theological Safety Suite — Fixture Validation (20 cases present, well-shaped)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: pip install pytest
+      - name: Validate canonical 20-case fixture structure
+        run: pytest tests/safety -v
+
+  safety-suite-execution:
+    name: Theological Safety Suite — Execution (20 cases through live pipeline)
+    runs-on: ubuntu-latest
+    # This job MUST be a required check on main. It is intentionally failing
+    # until T-006 ships backend/tests/safety/test_20_queries_harness.py per
+    # docs/contracts/scaffold-contract.md. A green check here means the 20
+    # cases were actually executed end-to-end and matched expected_handling
+    # AND expected_sensitivity. A green check on safety-suite-fixtures alone
+    # only means the fixture file is well-shaped; that is NOT a safety gate.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify harness exists
+        id: harness
+        run: |
+          if [ -f backend/tests/safety/test_20_queries_harness.py ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Block until harness lands (T-006)
+        if: steps.harness.outputs.present == 'false'
+        run: |
+          echo "::error::Safety execution harness backend/tests/safety/test_20_queries_harness.py is missing."
+          echo "::error::This check is intentionally failing until T-006 lands. See docs/contracts/scaffold-contract.md and audit finding F-006."
+          exit 1
+      - uses: actions/setup-python@v5
+        if: steps.harness.outputs.present == 'true'
+        with:
+          python-version: "3.12"
+      - name: Install backend deps
+        if: steps.harness.outputs.present == 'true'
+        working-directory: backend
+        run: |
+          pip install uv
+          uv sync
+      - name: Run safety suite execution harness
+        if: steps.harness.outputs.present == 'true'
+        working-directory: backend
+        run: uv run pytest tests/safety/test_20_queries_harness.py -v

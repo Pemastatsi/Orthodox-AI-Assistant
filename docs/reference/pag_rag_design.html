@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PAG-RAG Design — Orthodox AI Assistant</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1f2630;
+    --border: #2a313c;
+    --text: #e6edf3;
+    --muted: #9aa4b2;
+    --accent: #f6c177;
+    --green: #4ade80;
+    --yellow: #facc15;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --violet: #c084fc;
+    --teal: #2dd4bf;
+    --rose: #fb7185;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: grid; grid-template-columns: 1fr 420px; min-height: 100vh; }
+
+  header { grid-column: 1 / -1; padding: 18px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: 0.3px; }
+  h1 span { color: var(--accent); }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .controls button { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.15s; }
+  .controls button:hover { background: #2a3340; border-color: #3a4350; }
+  .controls button.active { background: var(--accent); color: #0e1116; border-color: var(--accent); font-weight: 600; }
+
+  main { padding: 22px 28px; overflow: auto; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; font-size: 12px; color: var(--muted); }
+  .legend .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; }
+
+  /* Diagram */
+  .diagram { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; position: relative; }
+  svg { width: 100%; height: auto; display: block; }
+  .node rect { cursor: pointer; transition: stroke-width 0.15s, filter 0.15s; }
+  .node:hover rect { stroke-width: 2.5; filter: brightness(1.15); }
+  .node text { pointer-events: none; fill: var(--text); font-size: 13px; font-weight: 600; }
+  .node text.sub { font-size: 10.5px; font-weight: 400; fill: var(--muted); }
+  .node.selected rect { stroke-width: 3.2; }
+  .edge { stroke: #5a6677; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+  .edge.hot { stroke: var(--accent); stroke-width: 2.2; }
+  .edge-label { fill: var(--muted); font-size: 10.5px; }
+  .boundary { fill: rgba(96, 165, 250, 0.05); stroke: #60a5fa; stroke-width: 1.2; stroke-dasharray: 6 4; }
+  .boundary-label { fill: #93c5fd; font-size: 11px; font-weight: 600; }
+  .store rect { fill: #1c2330; stroke: #3a4350; }
+  .store text.title { fill: var(--teal); font-weight: 700; }
+  .phase-only { opacity: 0.35; transition: opacity 0.25s; }
+  .phase-only.active { opacity: 1; }
+  .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  /* Side panel */
+  aside { background: var(--panel); border-left: 1px solid var(--border); padding: 22px 24px; overflow-y: auto; max-height: 100vh; position: sticky; top: 0; }
+  aside h2 { margin: 0 0 4px 0; font-size: 16px; color: var(--accent); }
+  aside .tag { display: inline-block; font-size: 10.5px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; margin-right: 6px; margin-bottom: 8px; }
+  aside p { color: #cbd5e1; line-height: 1.55; font-size: 13.5px; }
+  aside .section { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+  aside .section h3 { margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  aside ul { padding-left: 18px; margin: 6px 0; font-size: 13px; color: #cbd5e1; }
+  aside li { margin: 3px 0; line-height: 1.5; }
+  aside code { background: #0b0f14; border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; color: var(--accent); }
+
+  .verdict { background: linear-gradient(135deg, rgba(246,193,119,0.08), rgba(192,132,252,0.08)); border: 1px solid #4a3f55; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+  .verdict strong { color: var(--accent); }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0 4px; }
+  .compare .col { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 12.5px; }
+  .compare .col h4 { margin: 0 0 6px 0; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+  .compare ul { padding-left: 14px; margin: 0; }
+  .compare li { font-size: 12px; line-height: 1.45; margin: 2px 0; color: #d1d9e3; }
+
+  @media (max-width: 1100px) { body { grid-template-columns: 1fr; } aside { position: static; max-height: none; border-left: none; border-top: 1px solid var(--border); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PAG-RAG <span>·</span> Orthodox AI Assistant — Interactive Design Map</h1>
+  <div class="controls">
+    <button id="btn-p1" class="active">Phase 1 (MVP)</button>
+    <button id="btn-p3">Phase 3 (Graph-aware)</button>
+    <button id="btn-flow">Animate query flow</button>
+  </div>
+</header>
+
+<main>
+  <div class="legend">
+    <span class="chip"><span class="swatch" style="background:var(--blue)"></span>Agent step</span>
+    <span class="chip"><span class="swatch" style="background:var(--teal)"></span>Data store</span>
+    <span class="chip"><span class="swatch" style="background:var(--green)"></span>GREEN tier</span>
+    <span class="chip"><span class="swatch" style="background:var(--yellow)"></span>YELLOW tier</span>
+    <span class="chip"><span class="swatch" style="background:var(--red)"></span>RED early exit</span>
+    <span class="chip"><span class="swatch" style="background:#60a5fa; opacity:0.4"></span>Closed-corpus boundary</span>
+    <span class="chip" style="margin-left:auto;">Click any node for details</span>
+  </div>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1180 720" id="svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a6677" />
+        </marker>
+        <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#f6c177" />
+        </marker>
+      </defs>
+
+      <!-- Closed-corpus boundary -->
+      <rect class="boundary" x="20" y="80" width="900" height="600" rx="14" />
+      <text class="boundary-label" x="36" y="102">CLOSED-CORPUS BOUNDARY · tenant_id + approved=true everywhere</text>
+
+      <!-- User -->
+      <g class="node" data-id="user">
+        <rect x="40" y="30" width="160" height="38" rx="8" fill="#2a3340" stroke="#5a6677" />
+        <text x="120" y="54" text-anchor="middle">User Query</text>
+      </g>
+
+      <!-- A1 -->
+      <g class="node" data-id="a1">
+        <rect x="60" y="140" width="200" height="76" rx="10" fill="#1e3a5c" stroke="#60a5fa" />
+        <text x="160" y="166" text-anchor="middle">A1 · Classifier</text>
+        <text class="sub" x="160" y="184" text-anchor="middle">classification + sensitivity</text>
+        <text class="sub" x="160" y="200" text-anchor="middle">safety reframing (transparent)</text>
+      </g>
+
+      <!-- A2 -->
+      <g class="node" data-id="a2">
+        <rect x="320" y="140" width="200" height="76" rx="10" fill="#1e3a5c" stroke="#60a5fa" />
+        <text x="420" y="166" text-anchor="middle">A2 · Retrieval Planner</text>
+        <text class="sub" x="420" y="184" text-anchor="middle">filters · boosts · mode · k</text>
+        <text class="sub" x="420" y="200" text-anchor="middle">no intent rewriting</text>
+      </g>
+      <text class="edge-label" x="332" y="135">QueryAnalyzer (combined call, logged separately)</text>
+
+      <!-- A3 -->
+      <g class="node" data-id="a3">
+        <rect x="580" y="140" width="200" height="76" rx="10" fill="#1e3a5c" stroke="#60a5fa" />
+        <text x="680" y="166" text-anchor="middle">A3 · Retriever</text>
+        <text class="sub" x="680" y="184" text-anchor="middle">vector search (Qdrant)</text>
+        <text class="sub" x="680" y="200" text-anchor="middle">scored candidate chunks</text>
+      </g>
+
+      <!-- A4 -->
+      <g class="node" data-id="a4">
+        <rect x="580" y="290" width="200" height="84" rx="10" fill="#3d2c52" stroke="#c084fc" />
+        <text x="680" y="316" text-anchor="middle">A4 · Evidence Composer</text>
+        <text class="sub" x="680" y="334" text-anchor="middle">DETERMINISTIC admission</text>
+        <text class="sub" x="680" y="350" text-anchor="middle">tenant · approval · role · policy</text>
+        <text class="sub" x="680" y="364" text-anchor="middle">→ EvidencePacket</text>
+      </g>
+
+      <!-- A5 -->
+      <g class="node" data-id="a5">
+        <rect x="320" y="290" width="200" height="84" rx="10" fill="#1e3a5c" stroke="#60a5fa" />
+        <text x="420" y="316" text-anchor="middle">A5 · Composer (LLM)</text>
+        <text class="sub" x="420" y="334" text-anchor="middle">composes ONLY from</text>
+        <text class="sub" x="420" y="350" text-anchor="middle">EvidencePacket</text>
+        <text class="sub" x="420" y="364" text-anchor="middle">no model knowledge</text>
+      </g>
+
+      <!-- A6 -->
+      <g class="node" data-id="a6">
+        <rect x="60" y="290" width="200" height="84" rx="10" fill="#1e3a5c" stroke="#60a5fa" />
+        <text x="160" y="316" text-anchor="middle">A6 · Verifier</text>
+        <text class="sub" x="160" y="334" text-anchor="middle">deterministic citation check</text>
+        <text class="sub" x="160" y="350" text-anchor="middle">+ optional consistency judge</text>
+        <text class="sub" x="160" y="364" text-anchor="middle">claim ↔ source</text>
+      </g>
+
+      <!-- RED early exit -->
+      <g class="node" data-id="red">
+        <rect x="320" y="430" width="200" height="60" rx="10" fill="#3b1d1d" stroke="#f87171" />
+        <text x="420" y="454" text-anchor="middle">RED / Hard Safety</text>
+        <text class="sub" x="420" y="472" text-anchor="middle">early exit · bounded fallback</text>
+      </g>
+
+      <!-- VerifiedResponse -->
+      <g class="node" data-id="response">
+        <rect x="60" y="430" width="200" height="60" rx="10" fill="#1d3320" stroke="#4ade80" />
+        <text x="160" y="454" text-anchor="middle">VerifiedResponse</text>
+        <text class="sub" x="160" y="472" text-anchor="middle">to user · with citations</text>
+      </g>
+
+      <!-- Data Stores Row -->
+      <g class="node store" data-id="qdrant">
+        <rect x="580" y="540" width="200" height="68" rx="10" />
+        <text class="title" x="680" y="566" text-anchor="middle">Qdrant</text>
+        <text class="sub" x="680" y="584" text-anchor="middle">vector index · tenant payload</text>
+        <text class="sub" x="680" y="600" text-anchor="middle">approved=true filter</text>
+      </g>
+
+      <g class="node store" data-id="postgres">
+        <rect x="320" y="540" width="200" height="68" rx="10" />
+        <text class="title" x="420" y="566" text-anchor="middle">PostgreSQL</text>
+        <text class="sub" x="420" y="584" text-anchor="middle">tenants · sources · chunks</text>
+        <text class="sub" x="420" y="600" text-anchor="middle">graph_entities · lineage_edges</text>
+      </g>
+
+      <g class="node store" data-id="redis">
+        <rect x="60" y="540" width="200" height="68" rx="10" />
+        <text class="title" x="160" y="566" text-anchor="middle">Redis</text>
+        <text class="sub" x="160" y="584" text-anchor="middle">answer cache · session</text>
+        <text class="sub" x="160" y="600" text-anchor="middle">tenant-scoped keys</text>
+      </g>
+
+      <!-- External (outside boundary) -->
+      <g class="node" data-id="llm">
+        <rect x="960" y="140" width="180" height="58" rx="10" fill="#2a3340" stroke="#9aa4b2" />
+        <text x="1050" y="164" text-anchor="middle">LLM Providers</text>
+        <text class="sub" x="1050" y="182" text-anchor="middle">Anthropic certified · routed</text>
+      </g>
+      <g class="node" data-id="embed">
+        <rect x="960" y="220" width="180" height="58" rx="10" fill="#2a3340" stroke="#9aa4b2" />
+        <text x="1050" y="244" text-anchor="middle">Embeddings</text>
+        <text class="sub" x="1050" y="262" text-anchor="middle">OpenAI text-embedding-3-small</text>
+      </g>
+      <g class="node" data-id="clerk">
+        <rect x="960" y="300" width="180" height="58" rx="10" fill="#2a3340" stroke="#9aa4b2" />
+        <text x="1050" y="324" text-anchor="middle">Clerk · Tenants</text>
+        <text class="sub" x="1050" y="342" text-anchor="middle">org → tenant_id</text>
+      </g>
+
+      <!-- Phase 3 graph node -->
+      <g class="node phase-only" id="graph-node" data-id="graph">
+        <rect x="840" y="430" width="220" height="76" rx="10" fill="#0f3a36" stroke="#2dd4bf" stroke-dasharray="5 3" />
+        <text x="950" y="456" text-anchor="middle">Graph-Aware Expansion</text>
+        <text class="sub" x="950" y="474" text-anchor="middle">Phase 3 · approved edges only</text>
+        <text class="sub" x="950" y="490" text-anchor="middle">consensus · lineage · disputes</text>
+      </g>
+
+      <!-- Edges -->
+      <path class="edge" id="e-user-a1" d="M 120 68 L 120 138" />
+      <path class="edge" id="e-a1-a2" d="M 260 178 L 318 178" />
+      <path class="edge" id="e-a2-a3" d="M 520 178 L 578 178" />
+      <path class="edge" id="e-a3-a4" d="M 680 218 L 680 288" />
+      <path class="edge" id="e-a4-a5" d="M 578 332 L 522 332" />
+      <path class="edge" id="e-a5-a6" d="M 318 332 L 262 332" />
+      <path class="edge" id="e-a6-resp" d="M 160 376 L 160 428" />
+      <path class="edge" id="e-a4-red" d="M 580 360 L 522 440" />
+      <path class="edge" id="e-a1-red" d="M 200 200 L 380 428" />
+
+      <!-- Store wires -->
+      <path class="edge" d="M 680 374 L 680 538" stroke-dasharray="4 3" />
+      <path class="edge" d="M 420 374 L 420 538" stroke-dasharray="4 3" />
+      <path class="edge" d="M 160 376 C 160 460, 160 500, 160 538" stroke-dasharray="4 3" opacity="0.5" />
+
+      <!-- External wires -->
+      <path class="edge" d="M 520 168 C 700 100, 880 100, 960 168" stroke-dasharray="4 3" />
+      <path class="edge" d="M 520 332 C 700 250, 880 220, 960 246" stroke-dasharray="4 3" />
+
+      <!-- Phase 3 graph edge -->
+      <path class="edge phase-only" id="e-graph" d="M 780 332 C 880 380, 920 410, 940 430" stroke="#2dd4bf" stroke-dasharray="6 3" />
+
+      <!-- Lineage edge from postgres → A4 (graph context admission) -->
+      <path class="edge phase-only" id="e-pg-a4" d="M 520 540 C 600 460, 660 410, 680 374" stroke="#2dd4bf" stroke-dasharray="6 3" />
+
+    </svg>
+  </div>
+</main>
+
+<aside id="panel">
+  <div class="verdict">
+    <strong>Is this traditional RAG?</strong>
+    <p style="margin: 8px 0 0 0;">No. It is <em>closed-corpus, multi-agent RAG with deferred graph augmentation</em> — internally branded <code>PAG-RAG</code> (Private Agentic Graph-RAG). Click any node to learn more.</p>
+
+    <div class="compare">
+      <div class="col">
+        <h4>Traditional RAG</h4>
+        <ul>
+          <li>Retrieve → stuff prompt → generate</li>
+          <li>Open knowledge OK as fallback</li>
+          <li>One LLM call</li>
+          <li>Citations optional / soft</li>
+          <li>Single tenant assumption</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h4>PAG-RAG (this app)</h4>
+        <ul>
+          <li>6-agent pipeline A1 → A6</li>
+          <li>Closed-corpus only · fail closed</li>
+          <li>Deterministic A4 admission gate</li>
+          <li>A6 verifies every citation</li>
+          <li>Tenant-scoped from day 1</li>
+          <li>Graph metadata layered on later</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2 id="title">Overview</h2>
+  <div id="tags"></div>
+  <div id="body">
+    <p>This pipeline answers a user query strictly from <code>tenant_id</code>-approved chunks. The architecture is <strong>vector-first in MVP</strong> (Qdrant), with a planned <strong>graph-aware</strong> retrieval layer in Phase 3 that draws only from reviewed lineage edges in PostgreSQL.</p>
+    <p>The five locked rules: closed corpus, tenant isolation, deterministic A4 admission, A5 composes only from the EvidencePacket, and A6 verifies citations before any text reaches the user.</p>
+
+    <div class="section">
+      <h3>The 6-agent pipeline</h3>
+      <ul>
+        <li><strong>A1</strong> classifies intent and sensitivity, transparently reframes pastoral/medical advice into teaching form.</li>
+        <li><strong>A2</strong> plans retrieval (filters, boosts, answer mode, <code>k</code>) — never rewrites the user's intent.</li>
+        <li><strong>A3</strong> runs vector retrieval against approved tenant chunks.</li>
+        <li><strong>A4</strong> deterministically admits chunks: tenant + approval + role + thresholds + citation-health → <code>EvidencePacket</code>.</li>
+        <li><strong>A5</strong> composes the answer using <em>only</em> admitted evidence.</li>
+        <li><strong>A6</strong> verifies citation existence, ≥70% quote overlap, schema completeness, and safety handling.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Phased rollout</h3>
+      <ul>
+        <li><strong>Phase 1 (now)</strong>: vector RAG, deterministic admission, citation verification.</li>
+        <li><strong>Phase 2</strong>: candidate graph entities and edges captured at ingest, admin-only.</li>
+        <li><strong>Phase 3</strong>: graph-aware retrieval for <code>consensus</code>, <code>historical_development</code>, <code>scholarly_dispute</code> — uses approved edges only.</li>
+        <li><strong>Phase 4+</strong>: passage alignment, translation variants, manuscript witness graphs.</li>
+      </ul>
+    </div>
+  </div>
+</aside>
+
+<script>
+const details = {
+  user: {
+    title: "User Query",
+    tags: ["entry"],
+    body: `<p>The raw question enters from the chat UI. It carries an authenticated tenant context (Clerk org → internal <code>tenant_id</code>) and a role. From this point on, every downstream call carries that tenant scope.</p>
+    <p>Standalone questions may be cached; follow-ups include a session hash and never share cache entries with standalone queries.</p>`
+  },
+  a1: {
+    title: "A1 · Classifier",
+    tags: ["LLM", "structured output", "safety"],
+    body: `<p>Owns three things: query <strong>classification</strong>, <strong>sensitivity detection</strong>, and <strong>transparent safety reframing</strong>.</p>
+    <ul>
+      <li><code>confidenceTier</code>: GREEN / YELLOW / RED</li>
+      <li><code>sensitivityPrimary</code>: normal · pastoral_advice · political · medical · comparative_religion · canonical_dispute · other_sensitive</li>
+      <li><code>riskFlags</code>: self_harm · medical_emergency · canonical_dispute_active · minor_protection</li>
+      <li><code>handling</code>: answer · answer_with_disclaimer · reframe_to_teaching · block_with_redirect · insufficient_evidence</li>
+    </ul>
+    <p>Hard triggers (self-harm, medical emergency) immediately go to <strong>block_with_redirect</strong>. Pastoral advice questions get reframed to a teaching question, with the reframing shown to the user.</p>
+    <p>Output schema: <code>ClassifiedQuery</code>.</p>`
+  },
+  a2: {
+    title: "A2 · Retrieval Planner",
+    tags: ["LLM", "structured output"],
+    body: `<p>Plans <strong>how</strong> to retrieve — never rewrites <strong>what</strong> the user asked.</p>
+    <p>Phase 1 rule (locked in ADR 0007):</p>
+    <p><code>RetrievalPlan.semanticQuery = classifiedQuery.reframedQuery ?? classifiedQuery.rawQuery</code></p>
+    <p>No generic LLM rewriting, no synonym expansion, no intent reinterpretation in MVP. A2 selects filters, boosts, answer mode, and <code>k</code>.</p>
+    <p>A1 + A2 are typically <em>one combined low-cost structured call</em> physically, but logged as two separate outputs (<code>ClassifiedQuery</code> and <code>RetrievalPlan</code>).</p>
+    <p>Phase 3 may add <code>conceptExpansion</code> — but only from <em>approved</em> graph entities, aliases, and lineage edges.</p>`
+  },
+  a3: {
+    title: "A3 · Retriever",
+    tags: ["Qdrant", "vector"],
+    body: `<p>Executes the retrieval plan against Qdrant. Always filters by:</p>
+    <ul>
+      <li><code>tenant_id</code> = current tenant</li>
+      <li><code>approved = true</code></li>
+      <li>role-visibility constraints</li>
+    </ul>
+    <p>Returns scored candidate chunks. <strong>This is just candidates</strong> — admission happens in A4.</p>
+    <p>Future: A3 may combine vector + BM25 + approved graph traversal.</p>`
+  },
+  a4: {
+    title: "A4 · Evidence Composer",
+    tags: ["deterministic", "admission gate"],
+    body: `<p><strong>The single most important step.</strong> A4 is the boundary between "candidate" and "evidence". It is deterministic in MVP — no LLM judgment.</p>
+    <p>Applies in order:</p>
+    <ul>
+      <li>Tenant isolation</li>
+      <li>Approval gates</li>
+      <li>Role visibility</li>
+      <li>Score / similarity thresholds</li>
+      <li>Policy checks</li>
+      <li>Citation health (chunk hash, source hash, page/timestamp present)</li>
+    </ul>
+    <p>Produces <code>EvidencePacket</code> with <code>admittedChunks</code>, <code>suppressedChunkIds</code>, <code>lineageContext</code> (Phase 3+, approved edges only), and a <code>confidenceTier</code>.</p>
+    <p>If insufficient evidence remains → bounded fallback. RED tier short-circuits A5/A6 entirely.</p>`
+  },
+  a5: {
+    title: "A5 · Composer",
+    tags: ["LLM", "evidence-locked"],
+    body: `<p>Generates the prose answer, but is <strong>locked to the EvidencePacket</strong>. Cannot use model training data, outside knowledge, or any chunk not in <code>admittedChunks</code>.</p>
+    <p>Forbidden in Phase 1 (no approved edges yet):</p>
+    <ul>
+      <li>"X quotes Y"</li>
+      <li>"X builds on Y"</li>
+      <li>"X is a translation of Y"</li>
+      <li>"X contrasts with Y"</li>
+    </ul>
+    <p>Such lineage claims require an approved <code>lineage_edges</code> row, only available from Phase 3.</p>
+    <p>Output is <em>not</em> streamed to the user — A6 must verify it first.</p>`
+  },
+  a6: {
+    title: "A6 · Verifier",
+    tags: ["deterministic", "+ optional judge"],
+    body: `<p>Final guardrail before the response leaves the system.</p>
+    <ul>
+      <li>Each cited chunk ID actually exists in the EvidencePacket</li>
+      <li>Quoted text overlaps the source by ≥70% (tenant-tunable through safe config)</li>
+      <li>Schema completeness for the chosen answer mode</li>
+      <li>Safety handling (disclaimers, reframing disclosure) is correctly applied</li>
+      <li>Optional: a low-cost certified consistency judge for claim ↔ source agreement</li>
+    </ul>
+    <p>If verification fails, the response is rejected — never partially shipped.</p>
+    <p>Output: <code>VerifiedResponse</code>.</p>`
+  },
+  red: {
+    title: "RED / Hard-Safety Early Exit",
+    tags: ["safety", "fail closed"],
+    body: `<p>If A1 returns RED tier, or a hard trigger (self_harm, medical_emergency) is set, the pipeline <strong>skips A5 and A6 entirely</strong>.</p>
+    <p>The user receives a bounded fallback: a redirect to appropriate help, a teaching reframe, or an "insufficient evidence" notice. No generative composition is attempted.</p>
+    <p>This is the "fail closed" contract: silence and redirection are preferred over a guessed answer.</p>`
+  },
+  response: {
+    title: "VerifiedResponse",
+    tags: ["output"],
+    body: `<p>What the user finally sees. Always includes:</p>
+    <ul>
+      <li>The answer text (only if A6 passed)</li>
+      <li>Citations with chunk ID, source title, work, father, page/timestamp, source hash</li>
+      <li>Confidence tier badge</li>
+      <li>Reframing disclosure if A1 reframed the query</li>
+      <li>Disclaimers per <code>handling</code></li>
+    </ul>
+    <p>Persisted alongside the run trace for audit, billing (<code>served_answer_count</code>), and metrics (recall@k, MRR, no-result follow-up rate).</p>`
+  },
+  qdrant: {
+    title: "Qdrant",
+    tags: ["vector store"],
+    body: `<p>The semantic retrieval engine in MVP. Single collection, multi-tenant via <strong>payload filters</strong> — every query enforces <code>tenant_id</code> and <code>approved=true</code>.</p>
+    <p>Lightweight retrieval hints live in payload (<code>related_chunks</code>, <code>references_father</code>, <code>builds_on</code>) but the <em>authoritative</em> version of any relation lives in PostgreSQL with a review status.</p>
+    <p>Embeddings: OpenAI <code>text-embedding-3-small</code> unless a later certified route replaces it.</p>`
+  },
+  postgres: {
+    title: "PostgreSQL",
+    tags: ["canonical", "graph"],
+    body: `<p>Source of truth for everything that needs review status, audit trail, or relational integrity.</p>
+    <ul>
+      <li><code>tenants</code>, <code>sources</code>, <code>chunks</code> with <code>tenant_id</code> + approval state</li>
+      <li><code>graph_entities</code>: persons, works, concepts, councils, passages, sources, tradition tags</li>
+      <li><code>chunk_entity_mentions</code>: reviewed mentions linking chunks to entities</li>
+      <li><code>lineage_edges</code>: reviewed relations — quotes, references, builds_on, contrasts_with, same_passage_as, translation_of, paraphrases, supports, contested_by</li>
+    </ul>
+    <p>Every edge carries: tenant scope, relation type, basis, extraction method, confidence score, review status, provenance note. <strong>Candidate ≠ approved</strong>. Only approved edges affect retrieval, wording, or confidence.</p>
+    <p>Neo4j or Apache AGE is optional later — not required for MVP.</p>`
+  },
+  redis: {
+    title: "Redis",
+    tags: ["cache", "session"],
+    body: `<p>Stored answer cache (default 1-hour TTL) and session storage. Cache keys include:</p>
+    <ul>
+      <li>tenant + role</li>
+      <li>normalized query (+ session hash for follow-ups)</li>
+      <li>corpus version, prompt version</li>
+      <li>model route, schema version</li>
+      <li>tenant config + calendar version</li>
+    </ul>
+    <p>Cached answers count as <code>served_answer_count</code>; fresh model runs count separately as <code>fresh_model_run_count</code>. Stripe MVP meter is <code>served_answer_count</code>.</p>`
+  },
+  llm: {
+    title: "LLM Providers",
+    tags: ["external", "certified routes"],
+    body: `<p>Provider abstraction from day 1. Anthropic certified first. A production model route must be certified by: provider × model × prompt version × schema version × safety-suite result.</p>
+    <p>Used by A1 (classification), A2 (planning) — typically combined — A5 (composition), and optionally A6 (consistency judge).</p>`
+  },
+  embed: {
+    title: "Embeddings",
+    tags: ["external"],
+    body: `<p>OpenAI <code>text-embedding-3-small</code> for chunk and query embeddings. Used at ingest (chunks → Qdrant) and at query time (semantic query → vector). Replaceable through the provider abstraction once a new route is certified.</p>`
+  },
+  clerk: {
+    title: "Clerk → Tenants",
+    tags: ["identity"],
+    body: `<p>Clerk is the identity source of truth. Stripe is the billing source of truth. The internal <code>tenants</code> table joins them.</p>
+    <p>Every Clerk org maps to a <code>tenant_id</code>. Every persisted domain row that can carry tenant data carries <code>tenant_id</code>. Qdrant and SQL queries always filter by it.</p>`
+  },
+  graph: {
+    title: "Graph-Aware Expansion (Phase 3)",
+    tags: ["future", "approved-only"],
+    body: `<p>This node only activates in Phase 3. A2 will be allowed to request graph expansion for specific answer modes:</p>
+    <ul>
+      <li><code>consensus</code> — what do multiple fathers agree on?</li>
+      <li><code>historical_development</code> — how did a doctrine develop?</li>
+      <li><code>scholarly_dispute</code> — where do witnesses disagree?</li>
+      <li>selected <code>institutional_policy</code> queries</li>
+    </ul>
+    <p>A3 will combine vector/BM25 retrieval with approved graph traversal. A4 will admit only approved graph edges into <code>EvidencePacket.lineageContext</code>. A5 will then be allowed to make lineage claims — but every claim must trace to an <code>edgeId</code> verified by A6.</p>
+    <p>Candidate edges from LLM extraction are <strong>never</strong> user-facing.</p>`
+  }
+};
+
+// Render selection
+function selectNode(id) {
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("selected", n.dataset.id === id));
+  const d = details[id];
+  if (!d) return;
+  document.getElementById("title").textContent = d.title;
+  document.getElementById("tags").innerHTML = d.tags.map(t => `<span class="tag">${t}</span>`).join("");
+  document.getElementById("body").innerHTML = d.body;
+}
+document.querySelectorAll(".node").forEach(n => n.addEventListener("click", () => selectNode(n.dataset.id)));
+
+// Phase toggle
+const btnP1 = document.getElementById("btn-p1");
+const btnP3 = document.getElementById("btn-p3");
+function setPhase(p) {
+  document.querySelectorAll(".phase-only").forEach(el => el.classList.toggle("active", p === 3));
+  btnP1.classList.toggle("active", p === 1);
+  btnP3.classList.toggle("active", p === 3);
+}
+btnP1.addEventListener("click", () => setPhase(1));
+btnP3.addEventListener("click", () => setPhase(3));
+
+// Animated query flow
+const flowEdges = ["e-user-a1","e-a1-a2","e-a2-a3","e-a3-a4","e-a4-a5","e-a5-a6","e-a6-resp"];
+const flowNodes = ["user","a1","a2","a3","a4","a5","a6","response"];
+let animating = false;
+document.getElementById("btn-flow").addEventListener("click", async () => {
+  if (animating) return;
+  animating = true;
+  document.querySelectorAll(".edge").forEach(e => e.classList.remove("hot"));
+  document.querySelectorAll(".node").forEach(n => n.classList.remove("pulse","selected"));
+  for (let i = 0; i < flowNodes.length; i++) {
+    const node = document.querySelector(`.node[data-id="${flowNodes[i]}"]`);
+    node.classList.add("pulse");
+    selectNode(flowNodes[i]);
+    if (i < flowEdges.length) {
+      const edge = document.getElementById(flowEdges[i]);
+      edge.classList.add("hot");
+      edge.setAttribute("marker-end", "url(#arrow-hot)");
+    }
+    await new Promise(r => setTimeout(r, 950));
+    node.classList.remove("pulse");
+  }
+  animating = false;
+});
+
+// Default selection
+selectNode("a4");
+</script>
+
+</body>
+</html>

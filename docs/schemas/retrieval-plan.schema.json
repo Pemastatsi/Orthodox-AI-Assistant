@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "retrieval-plan.schema.json",
+  "title": "RetrievalPlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "semanticQuery",
+    "answerMode",
+    "tenantId",
+    "filters",
+    "k"
+  ],
+  "properties": {
+    "semanticQuery": {
+      "type": "string",
+      "description": "Phase 1 must equal classifiedQuery.reframedQuery ?? classifiedQuery.rawQuery."
+    },
+    "answerMode": { "$ref": "answer-mode.schema.json" },
+    "tenantId": { "type": "string" },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approved", "tenantId"],
+      "properties": {
+        "tenantId": { "type": "string" },
+        "approved": { "const": true },
+        "visibility": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "language": { "type": "string" },
+        "categories": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "boosts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "value", "weight"],
+        "properties": {
+          "field": { "type": "string" },
+          "value": { "type": "string" },
+          "weight": { "type": "number" }
+        }
+      }
+    },
+    "k": { "type": "integer", "minimum": 1, "maximum": 20, "default": 8 },
+    "retrieval": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Retrieval mode flags. Phase 1 default: vector-only. Hybrid and reranker are reserved for ADR-approved enablement.",
+      "properties": {
+        "useBM25": { "type": "boolean", "default": false },
+        "useHybrid": { "type": "boolean", "default": false },
+        "reranker": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "model": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "conceptExpansion": {
+      "type": "null",
+      "description": "Reserved for later ADR-approved graph-grounded expansion; null in Phase 1."
+    }
+  }
+}

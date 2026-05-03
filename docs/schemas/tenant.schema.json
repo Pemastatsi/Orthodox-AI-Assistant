@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tenant.schema.json",
+  "title": "Tenant",
+  "description": "Internal tenant record. Joined to Clerk org and Stripe customer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tenantId",
+    "name",
+    "clerkOrgId",
+    "status",
+    "dataRegion",
+    "createdAt"
+  ],
+  "properties": {
+    "tenantId": { "type": "string" },
+    "name": { "type": "string", "minLength": 1 },
+    "clerkOrgId": { "type": "string" },
+    "stripeCustomerId": { "type": ["string", "null"] },
+    "status": {
+      "type": "string",
+      "enum": ["active", "suspended", "trial", "closed"]
+    },
+    "dataRegion": { "type": "string", "enum": ["us", "eu"] },
+    "starterCorpusEnabled": { "type": "boolean", "default": false },
+    "config": {
+      "type": "object",
+      "description": "Safe tenant configuration mirror of /tenant/config. The calendarProfile is stored inline so the cache-key path tenants.config.calendarProfile.version (per docs/contracts/cache-key.md) is satisfied without a join.",
+      "additionalProperties": false,
+      "properties": {
+        "tone": { "type": "string", "enum": ["plain", "pastoral", "scholarly"] },
+        "defaultAnswerLength": { "type": "string", "enum": ["short", "medium", "long"] },
+        "citationStyle": { "type": "string" },
+        "calendarProfile": { "$ref": "calendar-profile.schema.json" },
+        "starterCorpusEnabled": { "type": "boolean" },
+        "sensitiveHandlingStrictness": { "type": "string", "enum": ["standard", "strict"] },
+        "disclaimerTemplateId": { "type": ["string", "null"] },
+        "configVersion": { "type": "string" }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

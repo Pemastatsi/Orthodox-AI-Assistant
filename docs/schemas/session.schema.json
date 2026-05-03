@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "session.schema.json",
+  "title": "Session",
+  "description": "Conversation session for follow-up queries. The sessionHash is derived from sessionId+tenantId and contributes to cache keys for follow-ups so they do not share cache entries with standalone queries.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sessionId",
+    "tenantId",
+    "userId",
+    "sessionHash",
+    "turnCount",
+    "createdAt"
+  ],
+  "properties": {
+    "sessionId": { "type": "string" },
+    "tenantId": { "type": "string" },
+    "userId": { "type": "string" },
+    "sessionHash": {
+      "type": "string",
+      "description": "Stable hash derived from sessionId + tenantId; used in cache key for follow-ups only."
+    },
+    "turnCount": { "type": "integer", "minimum": 0 },
+    "lastQueryAt": { "type": ["string", "null"], "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}

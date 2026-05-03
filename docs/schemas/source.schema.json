@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "source.schema.json",
+  "title": "Source",
+  "description": "Tenant corpus source document. Created by ingestion; chunks are produced from approved sources.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sourceId",
+    "tenantId",
+    "title",
+    "sourceType",
+    "sourceHash",
+    "extractionMethod",
+    "approved",
+    "corpusVersion",
+    "createdAt"
+  ],
+  "properties": {
+    "sourceId": { "type": "string" },
+    "tenantId": { "type": "string" },
+    "title": { "type": "string", "minLength": 1 },
+    "father": { "type": ["string", "null"] },
+    "work": { "type": ["string", "null"] },
+    "language": { "type": "string", "enum": ["en", "el", "mixed"], "default": "en" },
+    "sourceType": {
+      "type": "string",
+      "enum": ["pdf", "txt", "md", "docx"]
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "SHA-256 of raw bytes before processing, per decision register row J."
+    },
+    "extractionMethod": {
+      "type": "string",
+      "description": "Tool + version used for text extraction (e.g., 'pypdf@4.2.0')."
+    },
+    "approved": { "type": "boolean", "default": false },
+    "approvalNote": { "type": ["string", "null"] },
+    "approvedBy": { "type": ["string", "null"] },
+    "approvedAt": { "type": ["string", "null"], "format": "date-time" },
+    "corpusVersion": { "type": "string" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Free-form metadata: edition, translator, publisher, year, etc."
+    },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run-trace.schema.json",
+  "title": "RunTrace",
+  "description": "Full pipeline run trace persisted for every query that reaches A1. Used by /runs/{id}, admin query log, debugging, and safety review.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "tenantId",
+    "userId",
+    "startedAt",
+    "stages",
+    "cacheHit",
+    "usage"
+  ],
+  "properties": {
+    "runId": { "type": "string", "description": "ULID; matches X-Run-Id header." },
+    "tenantId": { "type": "string" },
+    "userId": { "type": "string" },
+    "sessionId": { "type": ["string", "null"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": ["string", "null"], "format": "date-time" },
+    "cacheHit": { "type": "boolean" },
+    "stages": {
+      "type": "array",
+      "description": "Ordered stage records. Each pipeline call produces one entry.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage", "startedAt", "finishedAt", "outcome"],
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": ["a1_a2_query_analyzer", "a3_retrieval", "a4_evidence_packager", "a5_composer", "a6_verifier", "cache_lookup", "cache_store"]
+          },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "finishedAt": { "type": "string", "format": "date-time" },
+          "outcome": {
+            "type": "string",
+            "enum": ["ok", "fallback", "error", "skipped"]
+          },
+          "modelRouteId": { "type": ["string", "null"] },
+          "promptTokens": { "type": ["integer", "null"], "minimum": 0 },
+          "completionTokens": { "type": ["integer", "null"], "minimum": 0 },
+          "errorCode": { "type": ["string", "null"] },
+          "notes": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["servedAnswerCount", "freshModelRunCount"],
+      "properties": {
+        "servedAnswerCount": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "freshModelRunCount": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "promptTokens": { "type": "integer", "minimum": 0 },
+        "completionTokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "finalHandling": {
+      "type": ["string", "null"],
+      "enum": [
+        "answer",
+        "answer_with_disclaimer",
+        "reframe_to_teaching",
+        "block_with_redirect",
+        "insufficient_evidence",
+        null
+      ]
+    },
+    "finalConfidenceTier": {
+      "type": ["string", "null"],
+      "enum": ["GREEN", "YELLOW", "RED", null]
+    },
+    "verifierPassed": { "type": ["boolean", "null"] },
+    "evidencePacketRef": { "type": ["string", "null"] }
+  }
+}

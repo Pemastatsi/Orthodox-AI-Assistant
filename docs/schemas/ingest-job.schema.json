@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ingest-job.schema.json",
+  "title": "IngestJob",
+  "description": "Async ingestion job tracking upload → extract → chunk → embed → review-queue.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "tenantId",
+    "userId",
+    "sourceId",
+    "status",
+    "createdAt"
+  ],
+  "properties": {
+    "jobId": { "type": "string" },
+    "tenantId": { "type": "string" },
+    "userId": { "type": "string" },
+    "sourceId": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "extracting",
+        "chunking",
+        "embedding",
+        "awaiting_review",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stage": { "type": "string" },
+        "completed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "errorCode": { "type": ["string", "null"] },
+    "errorMessage": { "type": ["string", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "startedAt": { "type": ["string", "null"], "format": "date-time" },
+    "finishedAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

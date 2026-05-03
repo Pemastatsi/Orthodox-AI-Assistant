@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "api-error.schema.json",
+  "title": "ApiError",
+  "description": "Canonical error envelope returned by every non-2xx response. Code values defined in docs/contracts/error-taxonomy.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "message", "traceId"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]+$",
+      "description": "Stable machine-readable code from error-taxonomy.md."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable, user-safe message. Never includes secrets, raw sensitive query text, or stack traces."
+    },
+    "traceId": {
+      "type": "string",
+      "description": "ULID matching X-Run-Id; used to find logs."
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional structured details. Must not include sensitive fields."
+    },
+    "retryable": { "type": "boolean", "default": false },
+    "retryAfterSeconds": { "type": ["integer", "null"], "minimum": 0 }
+  }
+}

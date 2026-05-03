@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "principal.schema.json",
+  "title": "Principal",
+  "description": "Authenticated request principal. Built by core/middleware.py from a Clerk JWT. Required by every repository and service call.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["userId", "tenantId", "clerkOrgId", "role", "scopes"],
+  "properties": {
+    "userId": { "type": "string", "description": "Internal user id." },
+    "clerkUserId": { "type": "string", "description": "Source-of-truth user id from Clerk." },
+    "tenantId": { "type": "string", "description": "Internal tenant id." },
+    "clerkOrgId": { "type": "string", "description": "Clerk organization id mapped 1:1 to tenantId." },
+    "role": {
+      "type": "string",
+      "enum": ["member", "scholar", "content_manager", "admin", "owner"]
+    },
+    "scopes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "query:read",
+          "corpus:read",
+          "corpus:write",
+          "corpus:approve",
+          "admin:queries:read",
+          "admin:flagged:read",
+          "admin:audit:read",
+          "tenant:config:read",
+          "tenant:config:write",
+          "billing:read"
+        ]
+      }
+    },
+    "dataRegion": { "type": "string", "enum": ["us", "eu"], "default": "us" }
+  }
+}

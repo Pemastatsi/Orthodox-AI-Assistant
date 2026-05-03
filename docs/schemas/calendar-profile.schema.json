@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calendar-profile.schema.json",
+  "title": "CalendarProfile",
+  "description": "Inline calendar profile stored on tenants.config.calendarProfile. Carries the version string used by cache-key.md (calendarVersion field). Per decision register row I, fixed-feast and Paschalion choices are independent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "fixedFeastCalendar", "paschalion"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[0-9]+$",
+      "description": "YYYY-MM-DD.NN per docs/contracts/api-versioning.md. Bumped on every change to fixedFeastCalendar or paschalion. Drives cache-key calendarVersion."
+    },
+    "fixedFeastCalendar": {
+      "type": "string",
+      "enum": ["julian", "revised_julian", "gregorian"],
+      "description": "Which calendar governs fixed feasts (e.g., Nativity, Theophany)."
+    },
+    "paschalion": {
+      "type": "string",
+      "enum": ["julian", "gregorian"],
+      "description": "Which Paschalion governs movable feasts. Independent of fixedFeastCalendar (decision register row I)."
+    },
+    "displayLabel": {
+      "type": ["string", "null"],
+      "description": "Optional admin-facing label (e.g., 'Old Calendar (Julian)')."
+    },
+    "notes": {
+      "type": ["string", "null"],
+      "description": "Optional free-text notes for content managers; never user-facing."
+    }
+  }
+}

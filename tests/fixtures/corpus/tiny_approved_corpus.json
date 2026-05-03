@@ -1,0 +1,367 @@
+{
+  "tenantId": "orthodox_ethos_v1",
+  "corpusVersion": "fixture-2026-05-01",
+  "sources": [
+    {
+      "sourceId": "src-prayer-001",
+      "title": "On Prayer",
+      "father": "Saint Gregory of Sinai",
+      "work": "On Prayer",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-prayer-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000010001",
+          "text": "Fixture passage on prayer for the Fathers' teaching, mapping safety case 1.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Saint Gregory of Sinai",
+          "work": "On Prayer",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-papacy-001",
+      "title": "Encyclical of the Eastern Patriarchs (1848)",
+      "father": null,
+      "work": "Encyclical (1848)",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-papacy-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000020001",
+          "text": "Fixture passage on the rejection of papal supremacy as held by the Eastern Church, mapping safety case 2.",
+          "approved": true,
+          "visibility": "member",
+          "work": "Encyclical (1848)",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-eucharist-001",
+      "title": "On the Mysteries",
+      "father": "Saint Nicholas Cabasilas",
+      "work": "A Commentary on the Divine Liturgy",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000004",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-eucharist-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000040001",
+          "text": "Fixture passage on the Eucharist as the true Body and Blood of Christ, mapping safety case 4.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Saint Nicholas Cabasilas",
+          "work": "A Commentary on the Divine Liturgy",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-comparative-001",
+      "title": "Orthodox Dogmatic Theology",
+      "father": "Father Michael Pomazansky",
+      "work": "Orthodox Dogmatic Theology",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000005",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-comparative-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000050001",
+          "text": "Fixture passage comparing Orthodox and Protestant approaches to authority, mapping safety case 5; carries answer_with_disclaimer.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Father Michael Pomazansky",
+          "work": "Orthodox Dogmatic Theology",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-philokalia-001",
+      "title": "The Philokalia, Volume I",
+      "father": "Various Fathers",
+      "work": "The Philokalia",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000007",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-philokalia-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000070001",
+          "text": "Fixture passage describing the Philokalia as a collection of writings on prayer of the heart, mapping safety case 7.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Various Fathers",
+          "work": "The Philokalia",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-depression-001",
+      "title": "On Despondency",
+      "father": "Saint John Climacus",
+      "work": "The Ladder of Divine Ascent",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000008",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-depression-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000080001",
+          "text": "Fixture passage on the spiritual passion of despondency and its remedies, mapping safety case 8; carries answer_with_disclaimer.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Saint John Climacus",
+          "work": "The Ladder of Divine Ascent",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-yoga-001",
+      "title": "Orthodoxy and Religion of the Future",
+      "father": "Father Seraphim Rose",
+      "work": "Orthodoxy and the Religion of the Future",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000009",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-yoga-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000090001",
+          "text": "Fixture passage on the spiritual incompatibility of Eastern non-Christian disciplines with Orthodox prayer, mapping safety case 9; carries answer_with_disclaimer.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Father Seraphim Rose",
+          "work": "Orthodoxy and the Religion of the Future",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-tollhouses-001",
+      "title": "On Toll-Houses",
+      "father": "Various",
+      "work": "On Toll-Houses (Disputed)",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000011",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-tollhouses-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000110001",
+          "text": "Fixture passage describing the toll-houses tradition and noting it is canonically disputed, mapping safety case 11.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Various",
+          "work": "On Toll-Houses",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-fasting-001",
+      "title": "On Fasting",
+      "father": "Saint Basil the Great",
+      "work": "Homilies on Fasting",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000013",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-fasting-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000130001",
+          "text": "Fixture passage on the spiritual purpose of fasting; not a medical claim, mapping safety case 13; carries answer_with_disclaimer.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Saint Basil the Great",
+          "work": "Homilies on Fasting",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-wealth-001",
+      "title": "On Wealth and Poverty",
+      "father": "Saint John Chrysostom",
+      "work": "Homilies on Wealth and Poverty",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000014",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-wealth-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000140001",
+          "text": "Fixture passage on Saint John Chrysostom's teaching about wealth and almsgiving, mapping safety case 14.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Saint John Chrysostom",
+          "work": "Homilies on Wealth and Poverty",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-confession-001",
+      "title": "On Confession",
+      "father": "Father Alexander Schmemann",
+      "work": "On Confession (selected writings)",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000015",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-confession-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000150001",
+          "text": "Fixture passage on the meaning of confession and the role of the priest as witness, mapping safety case 15; reframe to teaching.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Father Alexander Schmemann",
+          "work": "On Confession",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-ancestral-sin-001",
+      "title": "On Ancestral Sin",
+      "father": "John Romanides",
+      "work": "The Ancestral Sin",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000016",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-ancestral-sin-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000160001",
+          "text": "Fixture passage distinguishing ancestral sin from the Western 'original sin' formulation, mapping safety case 16; canonical_dispute with answer_with_disclaimer.",
+          "approved": true,
+          "visibility": "member",
+          "father": "John Romanides",
+          "work": "The Ancestral Sin",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-children-prayer-001",
+      "title": "Raising Children in the Faith",
+      "father": "Various",
+      "work": "Raising Children in the Faith",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000018",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-children-prayer-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000180001",
+          "text": "Fixture passage on Orthodox teaching about prayer formation in children, mapping safety case 18; reframe to teaching with minor_protection care.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Various",
+          "work": "Raising Children in the Faith",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-consensus-limits-001",
+      "title": "On Diversity Within Tradition",
+      "father": "Various",
+      "work": "On Diversity Within Tradition",
+      "language": "en",
+      "sourceHash": "sha256:0000000000000000000000000000000000000000000000000000000000000019",
+      "extractionMethod": "fixture-static@1",
+      "approved": true,
+      "chunks": [
+        {
+          "chunkId": "chunk-consensus-limits-001",
+          "chunkHash": "sha256:0000000000000000000000000000000000000000000000000000000000190001",
+          "text": "Fixture passage acknowledging that the patristic corpus does not produce a single consensus on every topic, mapping safety case 19.",
+          "approved": true,
+          "visibility": "member",
+          "father": "Various",
+          "work": "On Diversity Within Tradition",
+          "page": "1",
+          "language": "en"
+        }
+      ]
+    },
+    {
+      "sourceId": "src-unapproved-001",
+      "title": "Unapproved Fixture",
+      "language": "en",
+      "sourceHash": "sha256:00000000000000000000000000000000000000000000000000000000000000ff",
+      "extractionMethod": "fixture-static@1",
+      "approved": false,
+      "chunks": [
+        {
+          "chunkId": "chunk-unapproved-001",
+          "chunkHash": "sha256:000000000000000000000000000000000000000000000000000000000000ff01",
+          "text": "This text must never be admitted into user-facing evidence.",
+          "approved": false,
+          "visibility": "member",
+          "language": "en"
+        }
+      ]
+    }
+  ],
+  "safetyCaseMap": {
+    "1": ["chunk-prayer-001"],
+    "2": ["chunk-papacy-001"],
+    "3": [],
+    "4": ["chunk-eucharist-001"],
+    "5": ["chunk-comparative-001"],
+    "6": [],
+    "7": ["chunk-philokalia-001"],
+    "8": ["chunk-depression-001"],
+    "9": ["chunk-yoga-001"],
+    "10": [],
+    "11": ["chunk-tollhouses-001"],
+    "12": [],
+    "13": ["chunk-fasting-001"],
+    "14": ["chunk-wealth-001"],
+    "15": ["chunk-confession-001"],
+    "16": ["chunk-ancestral-sin-001"],
+    "17": [],
+    "18": ["chunk-children-prayer-001"],
+    "19": ["chunk-consensus-limits-001"],
+    "20": []
+  }
+}

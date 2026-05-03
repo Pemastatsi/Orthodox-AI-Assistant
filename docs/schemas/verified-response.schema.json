@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "verified-response.schema.json",
+  "title": "VerifiedResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "answer",
+    "confidenceTier",
+    "handling",
+    "citations",
+    "verification",
+    "reframing",
+    "usage",
+    "servedFromCache",
+    "schemaVersion"
+  ],
+  "oneOf": [
+    {
+      "title": "SuccessResponse",
+      "description": "Successful response paths must carry a runId.",
+      "required": ["runId"],
+      "properties": {
+        "handling": {
+          "enum": ["answer", "answer_with_disclaimer", "reframe_to_teaching"]
+        }
+      }
+    },
+    {
+      "title": "BoundedFallbackResponse",
+      "description": "Bounded fallbacks may omit runId when no run was executed (e.g., classifier-only path).",
+      "properties": {
+        "handling": {
+          "enum": ["block_with_redirect", "insufficient_evidence"]
+        }
+      }
+    }
+  ],
+  "properties": {
+    "answer": { "type": "string" },
+    "confidenceTier": {
+      "type": "string",
+      "enum": ["GREEN", "YELLOW", "RED"]
+    },
+    "handling": {
+      "type": "string",
+      "enum": [
+        "answer",
+        "answer_with_disclaimer",
+        "reframe_to_teaching",
+        "block_with_redirect",
+        "insufficient_evidence"
+      ]
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["citationId", "chunkId", "sourceId", "title"],
+        "properties": {
+          "citationId": { "type": "string" },
+          "chunkId": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "title": { "type": "string" },
+          "page": { "type": ["string", "null"] },
+          "timestamp": { "type": ["string", "null"] },
+          "quote": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["passed", "checkedAt", "verifierVersion"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "checkedAt": { "type": "string", "format": "date-time" },
+        "verifierVersion": { "type": "string" },
+        "failureReason": { "type": ["string", "null"] }
+      }
+    },
+    "reframing": {
+      "type": "object",
+      "required": ["wasReframed"],
+      "properties": {
+        "wasReframed": { "type": "boolean" },
+        "originalQuery": { "type": ["string", "null"] },
+        "reframedQuery": { "type": ["string", "null"] },
+        "disclosureText": { "type": ["string", "null"] }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "servedAnswerCount",
+        "freshModelRunCount",
+        "modelRouteId"
+      ],
+      "description": "Per-request accounting per ADR 0005. servedAnswerCount is always incremented (cache or fresh). freshModelRunCount only on cache miss.",
+      "properties": {
+        "servedAnswerCount": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "freshModelRunCount": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "modelRouteId": { "type": ["string", "null"] },
+        "promptTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "completionTokens": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "runId": {
+      "type": "string",
+      "description": "ULID identifying the pipeline run. Required on success paths; may be null on bounded fallbacks that short-circuit before run-trace creation."
+    },
+    "servedFromCache": { "type": "boolean" },
+    "schemaVersion": {
+      "type": "string",
+      "description": "Format YYYY-MM-DD.NN per docs/contracts/api-versioning.md."
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit-entry.schema.json",
+  "title": "AuditEntry",
+  "description": "Immutable audit row written for sensitive admin views, raw-sensitive-text reads, role escalations, prompt activations, model-route certifications, and corpus approval changes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "auditId",
+    "tenantId",
+    "actorUserId",
+    "action",
+    "resourceType",
+    "resourceId",
+    "occurredAt"
+  ],
+  "properties": {
+    "auditId": { "type": "string" },
+    "tenantId": { "type": "string" },
+    "actorUserId": { "type": "string" },
+    "actorRole": { "type": "string" },
+    "action": {
+      "type": "string",
+      "enum": [
+        "raw_sensitive_view",
+        "chunk_approved",
+        "chunk_rejected",
+        "chunk_visibility_changed",
+        "model_route_certified",
+        "prompt_version_activated",
+        "tenant_config_updated",
+        "user_role_changed",
+        "data_export_requested",
+        "retention_purged",
+        "founder_phase2_signoff"
+      ]
+    },
+    "resourceType": {
+      "type": "string",
+      "enum": ["chunk", "source", "query_log", "tenant", "user", "prompt_version", "model_route"]
+    },
+    "resourceId": { "type": "string" },
+    "details": { "type": "object", "additionalProperties": true },
+    "ipAddress": { "type": ["string", "null"] },
+    "occurredAt": { "type": "string", "format": "date-time" }
+  }
+}

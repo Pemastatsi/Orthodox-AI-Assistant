@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flagged-query.schema.json",
+  "title": "FlaggedQuery",
+  "description": "Captured query that hit RED, block_with_redirect, insufficient_evidence, or A6 verifier failure. Used for content gap analysis and safety review.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "flaggedQueryId",
+    "tenantId",
+    "userId",
+    "queryTextRedacted",
+    "flagReason",
+    "createdAt"
+  ],
+  "properties": {
+    "flaggedQueryId": { "type": "string" },
+    "tenantId": { "type": "string" },
+    "userId": { "type": "string" },
+    "runId": { "type": ["string", "null"] },
+    "queryTextRedacted": {
+      "type": "string",
+      "description": "Redacted query text per ADR 0005. Raw text lives only in raw_sensitive_log when the row is sensitive."
+    },
+    "rawSensitiveLogId": {
+      "type": ["string", "null"],
+      "description": "FK to encrypted raw_sensitive_log row when sensitive; admin-only, audited, 30-day retention."
+    },
+    "flagReason": {
+      "type": "string",
+      "enum": [
+        "red_tier",
+        "insufficient_evidence",
+        "block_with_redirect",
+        "verifier_failed",
+        "hard_safety_trigger",
+        "user_reported"
+      ]
+    },
+    "sensitivityPrimary": { "type": ["string", "null"] },
+    "riskFlags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "embedding": {
+      "type": ["array", "null"],
+      "description": "Optional flagged-query embedding for clustering. Vector dimension matches the active embedding model.",
+      "items": { "type": "number" }
+    },
+    "embeddingModel": { "type": ["string", "null"] },
+    "clusterId": { "type": ["string", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}
