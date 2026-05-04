@@ -44,7 +44,11 @@
           "promptTokens": { "type": ["integer", "null"], "minimum": 0 },
           "completionTokens": { "type": ["integer", "null"], "minimum": 0 },
           "errorCode": { "type": ["string", "null"] },
-          "notes": { "type": ["string", "null"] }
+          "notes": {
+            "type": ["string", "null"],
+            "maxLength": 256,
+            "description": "Short structured token only. MUST NOT contain raw query text, raw answer text, raw chunk text, secrets, or any field on the redaction inventory in observability.md. Use details (see parent) for any richer payload."
+          }
         }
       }
     },

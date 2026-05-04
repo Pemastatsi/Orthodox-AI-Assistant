@@ -52,7 +52,9 @@ If the frontend renders a tenant switcher, it must call Clerk's `setActive({ org
 | `scholar` | member + `tenant:config:read` |
 | `content_manager` | scholar + `corpus:write`, `corpus:approve`, `admin:queries:read`, `admin:flagged:read` |
 | `admin` | content_manager + `admin:audit:read`, `tenant:config:write`, `billing:read` |
-| `owner` | admin + (no additional scope; reserved for future delegation rules) |
+| `owner` | admin + `model_route:certify` |
+
+Per ADR 0004 §"Certification Protocol", only `owner` may certify a model route via `PATCH /admin/model-routes/{routeId}/certify`. The `model_route:certify` scope is implicit on the `owner` role and on no other role. Certification is recorded as `audit_entries` with `action='model_route_certified'`.
 
 Scopes are checked in handlers via a small dependency:
 
@@ -66,6 +68,8 @@ def require_scope(scope: str) -> Callable:
 ```
 
 Content managers see sensitive/flagged content **redacted by default**. Raw sensitive views require admin role and produce an `audit_entries` row with `action='raw_sensitive_view'`.
+
+Backend enforcement: `GET /admin/queries` and `GET /admin/flagged` always return sensitive fields redacted. Raw (un-redacted) views are available **only** via `GET /admin/queries/{runId}/raw`, which requires the `admin:raw_sensitive:read` scope (admin role only) and writes an `audit_entries` row with `action='raw_sensitive_view'`, `actor_user_id` = the calling principal, `resource_type='run'`, `resource_id` = the run ID. Content managers and owners cannot read raw — by design. The audit row is queryable via `GET /admin/audit-log`.
 
 ## Webhook Auth
 
@@ -91,6 +95,14 @@ All auth errors use the `ApiError` envelope (`docs/schemas/api-error.schema.json
 | Insufficient scope | `forbidden_role` | 403 |
 | Webhook signature | `webhook_bad_signature` | 401 |
 | Webhook replay | `webhook_replay` | 409 |
+
+## `/runs/{runId}` access rule
+
+A principal may read a run trace via `GET /runs/{runId}` when **all** of:
+- `tenant_id == principal.tenantId` (cross-tenant access is forbidden), AND
+- either (`user_id == principal.userId`) OR the principal holds the `admin:queries:read` scope (i.e., role is `admin`, `owner`, or `content_manager`).
+
+When the rule fails, the endpoint returns **HTTP 404** rather than 403, to avoid disclosing that a run ID exists in another user's history. The same rule applies to `/admin/queries/{runId}` and `/admin/queries/{runId}/raw`; the latter additionally requires the `admin:raw_sensitive:read` scope (admin role only) and writes an audit row.
 
 ## Forbidden Patterns
 

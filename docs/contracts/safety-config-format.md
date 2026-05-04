@@ -90,6 +90,10 @@ A validation failure prevents the service from starting. Tests in `tests/unit/te
 
 The shipped stubs contain *format-correct, conservative* rules only. Real Greek/pastoral phrasing requires founder sign-off and is added in follow-up PRs.
 
+## Paraphrase Coverage
+
+Real safety configs (post-stub) MUST be tested against more than the literal phrasings in `tests/safety/test_20_queries.py`. The fuzz harness `tests/safety/test_20_queries_paraphrases.py` (skeleton stub added in T-006 follow-up) generates 3–5 paraphrases per case and asserts that the same `expected_handling` is reached. Stub configs may fail the paraphrase suite by design; the suite gates on `APP_ENV='production' AND configs.version != stub_baseline`. Real-config authors are responsible for ensuring their patterns generalize beyond the literal canonical phrasings.
+
 ## Phase 2 Launch Gate (per `phase1-implementation-contract.md` exit criterion #9)
 
 The two stub files are gated for Phase 2 readiness. The `version` string `2026-05-01.1` is the stub baseline. Both files MUST carry a different `version` (i.e., real rules merged) before the Phase-1→2 review opens.

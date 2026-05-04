@@ -78,6 +78,8 @@ web/
 │   └── ui/skeleton/Skeleton.tsx
 ├── lib/
 │   ├── api-client.ts              # generated from openapi (placeholder file with TODO)
+│   ├── i18n/
+│   │   └── errors.en.json         # stub i18n error strings; one entry per code in error-taxonomy.md
 │   └── schemas/                   # generated zod (placeholder TODO)
 └── tests/
     └── smoke.test.ts
@@ -153,8 +155,9 @@ REDIS_URL=redis://localhost:6379/0
 RESPONSE_CACHE_TTL_SECONDS=3600
 
 # --- Qdrant ---
-QDRANT_URL=http://localhost:6333
-QDRANT_COLLECTION=chunks
+QDRANT_URL=                      # in-network Railway URL or Qdrant Cloud endpoint
+QDRANT_COLLECTION=patristic      # or per-tenant collection name pattern
+QDRANT_API_KEY=                  # leave blank for self-hosted Qdrant without auth
 
 # --- Clerk ---
 CLERK_SECRET_KEY=sk_test_REPLACE_ME
@@ -172,10 +175,10 @@ ANTHROPIC_API_KEY=REPLACE_ME
 OPENAI_API_KEY=REPLACE_ME
 
 # --- Make.com webhooks ---
-MAKE_WEBHOOK_SECRET=REPLACE_ME
+MAKE_WEBHOOK_SECRET=REPLACE_ME   # HMAC secret; can be left as REPLACE_ME until the Make.com integration is activated (Phase 2). The endpoint returns 501 until then.
 
 # --- Sensitive log encryption ---
-SENSITIVE_LOG_KMS_KEY_ID=REPLACE_ME      # KMS key id or label
+SENSITIVE_LOG_DATA_KEY_BASE64=   # base64-encoded AES-256 key for application-level envelope encryption of raw sensitive logs; rotate via Railway secret manager. Required when APP_ENV=production.
 SENSITIVE_LOG_RETENTION_DAYS=30
 
 # --- Versions (read at startup) ---
@@ -185,6 +188,7 @@ ACTIVE_PROMPT_VERSION_A5=a5_compose@2026-05-01.1
 ACTIVE_MODEL_ROUTE_A1A2=qa_analyze_anthropic@2026-05-01.1
 ACTIVE_MODEL_ROUTE_A5=a5_compose_anthropic@2026-05-01.1
 ACTIVE_MODEL_ROUTE_EMBEDDING=embedding_openai@2026-05-01.1
+ACTIVE_MODEL_ROUTE_VERIFIER=     # optional; absence disables A6 judge (deterministic citation checks still run)
 
 # --- Frontend ---
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_REPLACE_ME
@@ -211,7 +215,7 @@ Backend and web are run from the host (`make dev`) so reload is fast. The compos
 
 ## `railway.toml`
 
-Two services: `backend` (Dockerfile.backend) and `web` (Dockerfile.web). Postgres, Qdrant, and Redis are Railway plugins. Health checks point at `/health` (backend) and `/api/health` (web).
+Two services: `backend` (Dockerfile.backend) and `web` (Dockerfile.web). Postgres and Redis are Railway-managed plugins. **Qdrant is a Railway custom-Docker service** (deployed from `qdrant/qdrant:latest` or pointed at an external host such as Qdrant Cloud) — it is not a Railway-managed plugin. The `railway.toml` declares the Qdrant service alongside the backend and frontend; the `QDRANT_URL` env var points at the in-network service URL, and `QDRANT_API_KEY` is set when the Qdrant instance has authentication enabled (leave blank for self-hosted unauthenticated dev). Health checks point at `/health` (backend) and `/api/health` (web).
 
 ## `Makefile`
 
@@ -275,9 +279,14 @@ T-001 is complete when:
 7. `app/domain/models/` contains a pydantic model per JSON schema in `docs/schemas/`, generated or hand-written, that round-trips a fixture instance.
 8. The CI workflow at `.github/workflows/ci-safety-gate.yml` runs to green on a PR that ships only this scaffold.
 9. No hardcoded secret, no `os.environ` read outside `core/config.py`, no provider SDK import outside `adapters/providers/`.
+10. Frontend i18n: `web/lib/i18n/errors.en.json` exists with at minimum a stub entry for each error `code` listed in `error-taxonomy.md` (use `"<code>": "<short user-facing string>"`); the smoke test "unknown error code → fallback to `errors.en.json#unknown_error`" is set up in T-001 (test body may be a TODO until T-006).
 
 ## Notes on Discipline
 
 - T-001 is the only task card opened during scaffold. T-002 through T-006 stay closed until T-001 is reviewed and merged.
 - If a contract is found wrong during scaffold (typo, contradiction, ambiguity), the contract is fixed first. Code does not work around contracts.
 - New hygiene files (`.gitignore`, etc.) shipped in S11 of the documentation hardening plan are already on disk; T-001 does not recreate them.
+
+## Phase 2 Deferrals (informational, not part of T-001)
+
+- Six `ACTIVE_MODEL_ROUTE_*` env vars (verifier added in F-08) are individually pinned for Phase 1 simplicity. Phase 2 may consolidate them into a `system_config` DB table with a startup loader that overlays env-var overrides; tracked as a Phase 2 ergonomics ticket.

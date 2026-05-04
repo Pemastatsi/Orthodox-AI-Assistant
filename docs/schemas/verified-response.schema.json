@@ -28,7 +28,8 @@
     },
     {
       "title": "BoundedFallbackResponse",
-      "description": "Bounded fallbacks may omit runId when no run was executed (e.g., classifier-only path).",
+      "description": "Always present. Even on hard-safety bypass, a runId is minted and a minimal run_traces row is persisted (see phase1-implementation-contract.md §Run-trace persistence is unconditional).",
+      "required": ["runId"],
       "properties": {
         "handling": {
           "enum": ["block_with_redirect", "insufficient_evidence"]
@@ -107,7 +108,7 @@
     },
     "runId": {
       "type": "string",
-      "description": "ULID identifying the pipeline run. Required on success paths; may be null on bounded fallbacks that short-circuit before run-trace creation."
+      "description": "ULID identifying the pipeline run. Always present. Even on hard-safety bypass, a runId is minted and a minimal run_traces row is persisted (see phase1-implementation-contract.md §Run-trace persistence is unconditional)."
     },
     "servedFromCache": { "type": "boolean" },
     "schemaVersion": {

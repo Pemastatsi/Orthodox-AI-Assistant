@@ -28,6 +28,8 @@ This document defines the prop, state, and behavior contracts for the Phase 1 Re
 
 A user without the required scope is redirected to `/` with a non-blocking toast.
 
+**`/runs/[runId]` per-user filtering:** Members see only their own runs; admins, owners, and content managers see all runs in the tenant via the same route. The `<AdminQueryLog>` deep-link path (`/admin/queries → /runs/[runId]`) relies on the admin scope; member fetch attempts on other-user runIds receive a 404 (not 403) per the access rule in `auth-context.md §/runs/{runId} access rule`.
+
 ## Components
 
 ### `<ChatComposer>` (client)
@@ -56,7 +58,7 @@ interface ChatComposerState {
 Behavior:
 
 - Enter submits; Shift+Enter inserts a newline.
-- Posts to `/api/v1/query` with `streamProgress: true`. Progress events update local state and render in `<StageStatus>`. The terminal `done` event fires `onResponse`.
+- Posts to `/api/v1/query` with `streamProgress: true`. Progress events update local state and render in `<StageStatus>`. The terminal `done` event fires `onResponse`. Event grammar: see `code-gen-guide.md §Server-Sent Events (SSE) for /query progress`.
 - On 4xx, fires `onError(error)`.
 - Disables the textarea while `isSubmitting`.
 
@@ -181,7 +183,7 @@ interface AdminQueryLogProps {
 
 Behavior:
 
-- Default redaction mode is `"redacted"`. The `"raw_admin"` mode requires `admin` role and produces an `audit_entries` row on first reveal of each row.
+- Default redaction mode is `"redacted"`. The `"raw_admin"` mode requires `admin` role and produces an `audit_entries` row on first reveal of each row. `redactionMode='raw_admin'` is honored by the backend only when the principal holds `admin:raw_sensitive:read` and only on the `/admin/queries/{runId}/raw` endpoint; on `/admin/queries` the prop is a UI hint with no effect (the API always returns redacted text on the list endpoint).
 - Columns: time, runId (truncated), handling, confidenceTier, cacheHit, durationMs.
 - Click a row → navigate to `/runs/[runId]`.
 

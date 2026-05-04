@@ -39,6 +39,12 @@ backend/
 │   │   ├── agents/
 │   │   │   ├── a1_classifier.py      # ClassifiedQuery
 │   │   │   ├── a2_retrieval_planner.py # RetrievalPlan (paired with a1)
+│   │   │   │                         # NOTE: A1 and A2 are a single physical LLM call (one structured-output
+│   │   │   │                         # request returning both ClassifiedQuery and RetrievalPlan), but they
+│   │   │   │                         # remain separate Python modules to keep the conceptual contract surface
+│   │   │   │                         # clean and to allow future split if a different routing strategy emerges.
+│   │   │   │                         # Do not consolidate into a single query_analyzer.py without an ADR.
+│   │   │   │                         # Logs persist the two outputs separately per AGENTS.md §Query Pipeline.
 │   │   │   ├── a3_retrieval.py       # Qdrant search → candidate chunks
 │   │   │   ├── a4_evidence_packager.py # deterministic admission gates
 │   │   │   ├── a5_composer.py        # evidence-only composition
@@ -122,6 +128,16 @@ web/
 ```
 
 Component prop contracts are in `docs/contracts/frontend-components.md`.
+
+### Server-Sent Events (SSE) for /query progress
+
+The `POST /query` endpoint accepts an optional `streamProgress: true` body field. When set, the server may upgrade the response to `text/event-stream` over the same path (clients send `Accept: text/event-stream`). The OpenAPI contract (`docs/api/openapi.yaml`) does **not** model the SSE media type — the typed JSON shape there is the cache-hit and final-event payload only. SSE event grammar:
+
+- `event: progress` — JSON payload `{ "stage": "<a1|a3|a4|a5|a6>", "elapsedMs": <int> }`. Sent zero or more times during a fresh model run; never sent for cache hits.
+- `event: done` — JSON payload is the full `VerifiedResponse` per `verified-response.schema.json`. Sent exactly once at the end.
+- `event: error` — JSON payload is the standard `ApiError` envelope. Sent at most once; terminates the stream.
+
+Cache hits return a single `done` event followed by stream close; no `progress` events are emitted. Frontend implementation (`web/lib/api-client.ts`) must consume the stream via `EventSource` or fetch+ReadableStream; see `frontend-components.md` for `<ChatComposer>` behavior.
 
 ## 4. Layering Rules (Hard)
 

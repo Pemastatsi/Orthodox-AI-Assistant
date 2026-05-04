@@ -13,6 +13,8 @@ Build a provider interface from day one. Only certified provider/model/prompt/sc
 
 ## Interface
 
+**Authoritative source for the interface surface:** `docs/contracts/provider-interface.md`. The methods listed below capture the original ADR scope; current additions (notably `embed_texts`, `supports_embeddings`, `supports_json_mode`) are documented in the contract file and surface in the `LLMProvider` Protocol there. Treat any conflict between this ADR section and `provider-interface.md` as resolved in favor of the contract.
+
 Provider adapters expose:
 
 - `generate_structured`

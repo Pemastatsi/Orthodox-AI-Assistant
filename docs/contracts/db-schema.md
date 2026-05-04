@@ -178,6 +178,8 @@ CREATE INDEX idx_run_traces_tenant_started ON run_traces(tenant_id, started_at D
 CREATE INDEX idx_run_traces_user ON run_traces(tenant_id, user_id, started_at DESC);
 ```
 
+**Why two tables instead of one:** `flagged_queries` and `raw_sensitive_logs` are deliberately split. `flagged_queries` is reviewer-facing (admin UI lists, paginates, filters), retains for analytics, and stores no encrypted blobs. `raw_sensitive_logs` is encryption-isolated (single table = single retention worker scope, single KMS rotation surface, smaller blast radius). The cross-table FK (`flagged_queries.raw_sensitive_log_id → raw_sensitive_logs.log_id`) carries the linkage when sensitivity warrants; for non-sensitive flags, `raw_sensitive_log_id IS NULL`. A future consolidation would either split retention granularity (worse) or expose ciphertext columns to all flag review queries (also worse).
+
 ### `flagged_queries`
 
 ```sql

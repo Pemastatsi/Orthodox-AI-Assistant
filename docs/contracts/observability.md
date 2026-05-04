@@ -81,9 +81,11 @@ cvv, pan, query_text, raw_query, raw_answer, chunk_text, source_text
 
 `raw_query` and `query_text` are also redacted because raw sensitive query text never enters logs (ADR 0005). The orchestrator passes a hashed `queryNormalizedHash` instead.
 
+The `stages[].notes` field on a `RunTrace` is governed by the same prohibition: it MUST NOT contain raw query text, raw answer text, raw chunk text, secrets, or any value listed in the redaction inventory. Agents writing to `notes` should restrict themselves to small structured tokens (e.g., `'rule_matched: pastoral_divorce_001'`) and rely on `details` for richer audit-relevant data already covered by the redaction filter.
+
 ## Event Catalog
 
-Authoritative list. Engineers add to this list when introducing a new event.
+Authoritative list. Engineers add to this list when introducing a new event. Every served request emits exactly one `query.completed` event and persists exactly one `run_traces` row, regardless of whether the request reached A5 or short-circuited via hard-safety.
 
 ### query.*
 - `query.received` — request landed; auth not yet resolved.
@@ -121,7 +123,7 @@ Authoritative list. Engineers add to this list when introducing a new event.
 
 ## Metrics
 
-Recorded as counter increments in the structured log (`event` ending in a state) and reflected in a Prometheus-compatible exporter when one is added. Phase 1 minimum:
+Recorded as counter increments in the structured log (`event` ending in a state). Prometheus exporter is **deferred to Phase 2**; for Phase 1, exit-criterion accounting is computed by `scripts/exit_criteria_dashboard.py` (a small Python script that reads `run_traces` and prints each criterion's current value). The metric names listed below are the contract for the future exporter and the column names emitted by the dashboard script. Phase 1 minimum:
 
 | Metric | Type | Labels | Source event |
 |---|---|---|---|
