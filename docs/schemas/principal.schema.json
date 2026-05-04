@@ -5,7 +5,7 @@
   "description": "Authenticated request principal. Built by core/middleware.py from a Clerk JWT. Required by every repository and service call.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["userId", "tenantId", "clerkOrgId", "role", "scopes"],
+  "required": ["userId", "clerkUserId", "tenantId", "clerkOrgId", "role", "scopes"],
   "properties": {
     "userId": { "type": "string", "description": "Internal user id." },
     "clerkUserId": { "type": "string", "description": "Source-of-truth user id from Clerk." },

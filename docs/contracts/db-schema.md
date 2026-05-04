@@ -36,7 +36,7 @@ CREATE TABLE tenants (
     status                 text NOT NULL CHECK (status IN ('active','suspended','trial','closed')),
     data_region            text NOT NULL CHECK (data_region IN ('us','eu')) DEFAULT 'us',
     starter_corpus_enabled boolean NOT NULL DEFAULT false,
-    config                 jsonb NOT NULL DEFAULT '{}'::jsonb,
+    config                 jsonb NOT NULL DEFAULT '{}'::jsonb,  -- shape: tenant.schema.json#/properties/config; config.corpusVersion is a system-managed string set by the ingestion service on cutover; never written via the PATCH /tenant/config endpoint
     config_version         text NOT NULL DEFAULT '2026-05-01.1',
     created_at             timestamptz NOT NULL DEFAULT now(),
     updated_at             timestamptz
@@ -44,6 +44,8 @@ CREATE TABLE tenants (
 CREATE INDEX idx_tenants_clerk_org ON tenants(clerk_org_id);
 CREATE INDEX idx_tenants_stripe_customer ON tenants(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
 ```
+
+`tenants.config.corpusVersion` (optional string) is populated by the ingestion service when a new corpus version is cut over. It is never written by application code that handles `PATCH /tenant/config`. The field is absent during initial provisioning and becomes present after the first successful ingestion cutover.
 
 ### `users`
 
@@ -74,7 +76,7 @@ CREATE TABLE sources (
     work               text,
     language           text NOT NULL CHECK (language IN ('en','el','mixed')) DEFAULT 'en',
     source_type        text NOT NULL CHECK (source_type IN ('pdf','txt','md','docx')),
-    source_hash        text NOT NULL,                 -- 'sha256:<hex>' per decision J
+    source_hash        text NOT NULL CHECK (source_hash ~ '^sha256:[0-9a-f]{64}$'),  -- 'sha256:<hex>' per decision J
     extraction_method  text NOT NULL,
     approved           boolean NOT NULL DEFAULT false,
     approval_note      text,
@@ -97,7 +99,7 @@ CREATE TABLE chunks (
     source_id           text NOT NULL REFERENCES sources(source_id) ON DELETE CASCADE,
     tenant_id           text NOT NULL REFERENCES tenants(tenant_id) ON DELETE RESTRICT,
     text                text NOT NULL,
-    chunk_hash          text NOT NULL,
+    chunk_hash          text NOT NULL CHECK (chunk_hash ~ '^sha256:[0-9a-f]{64}$'),
     approved            boolean NOT NULL DEFAULT false,
     visibility          text NOT NULL CHECK (visibility IN ('member','scholar','admin_only','suppressed')) DEFAULT 'admin_only',
     father              text,
@@ -303,6 +305,7 @@ CREATE INDEX idx_billing_period_end ON billing_usage(period_end);
 3. `flagged_queries.raw_sensitive_log_id` is non-null only when `sensitivity_primary` is set.
 4. `audit_entries` are append-only. There is no UPDATE or DELETE granted to the application role.
 5. `raw_sensitive_logs` are deleted only by the retention worker.
+6. `tenants.config.corpusVersion` is the active corpus pointer for cache-key invalidation per `cache-key.md`. It is set by the ingestion cutover step and never editable via the public tenant config API.
 
 ## Migrations
 

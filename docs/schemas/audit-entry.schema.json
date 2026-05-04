@@ -9,6 +9,7 @@
     "auditId",
     "tenantId",
     "actorUserId",
+    "actorRole",
     "action",
     "resourceType",
     "resourceId",

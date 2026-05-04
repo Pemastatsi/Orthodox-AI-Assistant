@@ -36,7 +36,11 @@
         "starterCorpusEnabled": { "type": "boolean" },
         "sensitiveHandlingStrictness": { "type": "string", "enum": ["standard", "strict"] },
         "disclaimerTemplateId": { "type": ["string", "null"] },
-        "configVersion": { "type": "string" }
+        "configVersion": { "type": "string" },
+        "corpusVersion": {
+          "type": "string",
+          "description": "System-managed pointer to the active corpus version for this tenant. Set by the ingestion service on cutover; surfaces in cache-key recipe and on GET /tenant/config (read-only). Not editable via PATCH /tenant/config."
+        }
       }
     },
     "createdAt": { "type": "string", "format": "date-time" },
