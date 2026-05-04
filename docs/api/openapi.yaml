@@ -85,7 +85,11 @@ paths:
                     the cached VerifiedResponse and no intermediate `progress` events.
       responses:
         "200":
-          description: Verified answer or bounded fallback.
+          description: |
+            Verified answer or bounded fallback. When `streamProgress: true` is requested,
+            the server may switch to a Server-Sent Events stream over the same path. The SSE
+            event grammar is documented out-of-band in `docs/contracts/code-gen-guide.md` §SSE;
+            the typed JSON contract here is the cache-hit and final-event shape.
           headers:
             X-Run-Id:
               schema: { type: string }
@@ -94,15 +98,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VerifiedResponse"
-            text/event-stream:
-              schema:
-                type: string
-                description: |
-                  SSE stream when streamProgress=true. Final `done` event payload
-                  conforms to VerifiedResponse. Cache hits short-circuit to a single
-                  `done` event with no preceding `progress` events.
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "402": { $ref: "#/components/responses/QuotaExceeded" }
         "409": { $ref: "#/components/responses/CorpusEmpty" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
@@ -145,6 +143,7 @@ paths:
                   sourceId: { type: string }
                   status: { type: string, enum: [queued] }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/QuotaExceeded" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "413": { $ref: "#/components/responses/IngestTooLarge" }
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
@@ -258,8 +257,16 @@ paths:
                   calendarProfile: { $ref: "#/components/schemas/CalendarProfile" }
                   starterCorpusEnabled: { type: boolean }
                   sensitiveHandlingStrictness: { type: string, enum: [standard, strict] }
-                  disclaimerTemplateId: { type: string, nullable: true }
+                  disclaimerTemplateId: { type: [string, "null"] }
                   configVersion: { type: string }
+                  corpusVersion:
+                    type: [string, "null"]
+                    readOnly: true
+                    description: |
+                      System-managed pointer to the active corpus version for this tenant. Set by the
+                      ingestion service on cutover; never editable via PATCH /tenant/config. Surfaces
+                      here so clients can detect cache invalidation. Null until the first ingestion
+                      cutover succeeds.
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -292,7 +299,7 @@ paths:
                 calendarProfile: { $ref: "#/components/schemas/CalendarProfile" }
                 starterCorpusEnabled: { type: boolean }
                 sensitiveHandlingStrictness: { type: string, enum: [standard, strict] }
-                disclaimerTemplateId: { type: string, nullable: true }
+                disclaimerTemplateId: { type: [string, "null"] }
       responses:
         "200":
           description: Updated safe tenant configuration. The new `configVersion` is returned for the next If-Match round-trip.
@@ -315,6 +322,12 @@ paths:
       operationId: getRun
       tags: [runs]
       x-required-scope: query:read
+      description: |
+        Returns the run trace if the requesting principal can read it. The principal can read
+        a trace when `tenant_id == principal.tenantId` AND (`user_id == principal.userId` OR
+        the principal holds the `admin:queries:read` scope). When the rule fails the endpoint
+        returns **404** (not 403) to avoid disclosing the existence of run IDs that belong to
+        other users.
       parameters:
         - { name: runId, in: path, required: true, schema: { type: string } }
       responses:
@@ -413,6 +426,78 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /admin/queries/{runId}/raw:
+    get:
+      operationId: getAdminQueryRaw
+      summary: Read a single query's raw (un-redacted) sensitive fields. Admin-only.
+      description: |
+        Returns the raw query text and any decrypted sensitive log payload for a single
+        query, bypassing the default redaction applied by `/admin/queries`. Restricted
+        to the `admin` role. Each successful read writes an `audit_entries` row with
+        `action='raw_sensitive_view'` and the requesting principal's `actor_user_id`.
+      tags: [admin]
+      x-required-scope: admin:raw_sensitive:read
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Raw query payload.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Shape includes `runId`, `tenantId`, `rawQueryText`, `rawSensitivePayload` (object), `auditEntryId`.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/model-routes/{routeId}/certify:
+    patch:
+      operationId: certifyModelRoute
+      summary: Mark a model route as certified for production use. Owner role only.
+      description: |
+        Sets `model_routes.certification_status='certified'` on the named route. Only
+        principals with role `owner` may call this endpoint (per ADR 0004). The change
+        is recorded in `audit_entries` with `action='model_route_certified'`. Routes
+        cannot be un-certified via this endpoint; deprecation is handled separately.
+      tags: [admin]
+      x-required-scope: model_route:certify
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [certificationNotes]
+              properties:
+                certificationNotes:
+                  type: string
+                  minLength: 1
+                  description: Free-text rationale, persisted to audit row details.
+      responses:
+        "200":
+          description: Route certified.
+          content:
+            application/json:
+              schema:
+                $ref: "../schemas/model-route.schema.json"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Route already certified or in an incompatible state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /webhooks/stripe:
     post:
       summary: Stripe webhook intake.
@@ -453,10 +538,14 @@ paths:
 
   /webhooks/make:
     post:
-      summary: Make.com webhook intake.
+      summary: Make.com webhook intake (deferred – Phase 2).
       operationId: makeWebhook
       tags: [webhooks]
       security: []
+      x-phase: deferred-phase-2
+      description: |
+        URL contract is locked for Phase 2. The handler is not yet active; all requests
+        currently return 501. Activation requires founder sign-off and a Make.com integration spec.
       parameters:
         - { name: X-Make-Timestamp, in: header, required: true, schema: { type: string } }
         - { name: X-Make-Nonce, in: header, required: true, schema: { type: string } }
@@ -471,6 +560,12 @@ paths:
         "200": { description: Accepted. }
         "401": { $ref: "#/components/responses/WebhookBadSignature" }
         "409": { $ref: "#/components/responses/WebhookReplay" }
+        "501":
+          description: Make.com webhook handler is deferred to Phase 2; activation requires founder sign-off and a Make.com integration spec. The endpoint exists today only to lock the URL contract.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
 components:
   securitySchemes:
@@ -507,6 +602,11 @@ components:
           schema: { $ref: "#/components/schemas/ApiError" }
     RateLimited:
       description: Rate limit exceeded. See `retryAfterSeconds`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    QuotaExceeded:
+      description: Tenant has exceeded its plan quota.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ApiError" }
