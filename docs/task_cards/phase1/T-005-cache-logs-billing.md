@@ -41,3 +41,9 @@ Implement safe response caching, query/run logs, served-answer metering, and sen
 - Do not make cached answers free in usage accounting.
 - Do not share follow-up cache entries with standalone queries.
 - Do not implement public billing launch workflows.
+
+## Acceptance — Wave 4 Additions
+
+- **F-13:** `tests/integration/test_tenant_isolation.py` (all 6 tests) PASS — owner of the tenant-isolation invariant for exit criterion #5.
+- **F-15:** `tests/unit/test_cache_key.py` PASSES — V1–V4 reference vectors match (literal sha256 + from-input-dict).
+- **F-23 E2E:** `tests/integration/test_t005_e2e.py::test_cache_hit_persists_run_trace_with_runId` PASSES — confirms hard-safety bypass mints a runId and persists a minimal run_traces row (per F-18).

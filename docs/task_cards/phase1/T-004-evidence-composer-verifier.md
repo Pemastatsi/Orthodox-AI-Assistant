@@ -41,3 +41,9 @@ Implement deterministic A4, evidence-only A5 composition, and A6 verification.
 - Do not stream draft answer text before verification.
 - Do not allow A5 outside knowledge.
 - Do not fabricate citations or lineage.
+
+## Acceptance — Wave 4 Additions
+
+- **F-08:** Verifier judge env slot wiring — `ACTIVE_MODEL_ROUTE_VERIFIER` empty disables the optional A6 judge cleanly; deterministic citation checks still run. Startup test confirms.
+- **F-14:** `tests/unit/test_quote_overlap.py` PASSES — quote-overlap V1–V6 vectors match within ±0.01.
+- **F-23 E2E:** `tests/integration/test_t004_e2e.py::test_admit_compose_verify_round_trip` PASSES — A4+A5+A6 over a fixed evidence packet, asserting the produced VerifiedResponse passes A6 deterministic checks.

@@ -39,3 +39,8 @@ Implement tenant-aware persistence and manual corpus ingestion with approval wor
 - Do not implement graph-driven retrieval.
 - Do not let any query omit tenant context.
 - Do not auto-approve uploaded chunks.
+
+## Acceptance — Wave 4 Additions
+
+- **F-12:** `tests/integration/test_corpus.py::test_chunk_approval_requires_source_approval` and `test_source_un_approval_cascades_or_rejects` PASS — encoding the chunks⇒sources approval invariant from db-schema.md cross-table invariant #1.
+- **F-23 E2E:** `tests/integration/test_t002_e2e.py::test_ingest_then_query_round_trip` PASSES — uploads a small fixture, runs ingestion, confirms approved chunks appear in retrieval and unapproved chunks do not.

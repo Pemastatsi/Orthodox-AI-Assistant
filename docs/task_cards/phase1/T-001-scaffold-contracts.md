@@ -42,3 +42,7 @@ Defined in the "Acceptance Criteria for T-001" section of the scaffold contract.
 - Writing or modifying any ADR.
 - Moving archived/reference docs back to root.
 - Adding files outside the scaffold contract's tree without updating the contract first.
+
+## Acceptance — Wave 4 Additions
+
+- **F-24:** `web/lib/i18n/errors.en.json` exists with at least one stub entry per error code in `error-taxonomy.md`. Smoke test: unknown error code falls back to `errors.en.json#unknown_error`.

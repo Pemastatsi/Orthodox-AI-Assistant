@@ -38,3 +38,7 @@ Implement combined A1/A2 structured analysis and A3 tenant-filtered retrieval.
 - Do not add synonym expansion.
 - Do not use candidate graph data for retrieval.
 - Do not allow unapproved chunk retrieval.
+
+## Acceptance — Wave 4 Additions
+
+- **F-23 E2E:** `tests/integration/test_t003_e2e.py::test_classify_then_retrieve_against_fixture` PASSES — runs A1+A2+A3 against `tiny_approved_corpus.json` and asserts tenant-filtered retrieval and recovery of expected chunkIds.
