@@ -50,8 +50,14 @@ jobs:
           "
 
       - name: Lint OpenAPI
+        # Redocly is pinned to an exact patch version for reproducibility.
+        # Bumping requires a contract-pack PR. We `bundle` first so any
+        # broken relative $ref (e.g., docs/schemas/*.schema.json) fails
+        # this step rather than silently passing lint with unresolved
+        # references. Per audit finding F-26.
         run: |
-          npm install -g @redocly/cli@1.34.x
+          npm install -g @redocly/cli@1.34.3
+          redocly bundle docs/api/openapi.yaml --output /tmp/openapi.bundled.yaml
           redocly lint docs/api/openapi.yaml
 
   backend:

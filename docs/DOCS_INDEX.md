@@ -102,6 +102,7 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/task_cards/phase1/T-004-evidence-composer-verifier.md` | contract | A4, A5, and A6. |
 | `docs/task_cards/phase1/T-005-cache-logs-billing.md` | contract | Cache, logs, billing counters, privacy. |
 | `docs/task_cards/phase1/T-006-admin-chat-safety-gate.md` | contract | Chat UI, admin UI, safety gate. |
+| `docs/task_cards/phase1/T-007-real-safety-configs.md` | contract | Real (non-stub) safety config delivery; founder + Greek-language reviewer ownership. Required by exit criterion #9. |
 
 ## Tests and Fixtures
 
@@ -109,7 +110,13 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 |---|---|---|
 | `tests/fixtures/corpus/tiny_approved_corpus.json` | contract | Corpus fixture with approved evidence for safety cases requiring it (Orthodox Ethos tenant). |
 | `tests/fixtures/corpus/tiny_other_tenant_corpus.json` | contract | Second-tenant fixture for tenant-isolation integration tests; pairs with tiny_approved_corpus.json. |
-| `tests/safety/test_20_queries.py` | contract | Canonical 20-query safety expectations (data + structural meta-tests). |
+| `tests/safety/test_20_queries.py` | contract | Canonical 20-query safety expectations (data + structural meta-tests + canonical-text substring inventory for cases 6/10/12/17/20). |
+| `tests/safety/test_20_queries_paraphrases.py` | contract (skeleton, content delivered by T-007) | Paraphrase fuzz harness; gated on production + non-stub configs. |
+| `tests/integration/test_corpus.py` | contract (skeleton, body delivered by T-002) | Encodes the chunks⇒sources approval invariant. |
+| `tests/integration/test_tenant_isolation.py` | contract (skeleton, body delivered by T-005) | Owner of Phase 1 → 2 exit criterion #5 (tenant isolation invariant). |
+| `tests/unit/test_quote_overlap.py` | contract (skeleton, body delivered by T-004) | Asserts quote-overlap V1–V6 vectors within ±0.01. |
+| `tests/unit/test_cache_key.py` | contract (skeleton, body delivered by T-005) | Asserts cache-key V1–V4 vectors (literal sha256 + from-input-dict). |
+| `scripts/exit_criteria_dashboard.py` | contract (skeleton, body delivered with Phase-2-exit dashboard work) | Phase 1 mechanism for tracking the 9 exit criteria; replaces the deferred Prometheus exporter. |
 | `backend/tests/safety/test_20_queries_harness.py` | contract (delivered by T-006) | Executes the 20 cases through the live A1–A6 pipeline; required by CI `safety-suite-execution` job. |
 
 ## Reference Material
@@ -171,3 +178,41 @@ These files are superseded planning drafts. They have headers warning future age
 - Founder Phase-2 sign-off is recorded as an `audit_entries` row with `action='founder_phase2_signoff'` and a JSON checklist in `details`.
 - Phase-1→2 exit criterion #9 (added 2026-05-02): real safety-config rules approved by founder + Greek-language reviewer; CI startup test fails when stub baseline is still in place under `APP_ENV='production'`.
 - Cache-key V3 SHA-256 corrected on 2026-05-02 to match the documented canonical JSON; V4 added for calendar-profile bumps.
+
+### Audit Response — Phase 1 Pre-Implementation Audit (2026-05-04)
+
+The 2026-05-04 pre-implementation audit identified 34 findings (F-01 through F-34). All resolutions land on branch `audit/phase1-pre-t001-fixes`. Status of each finding (✅ resolved · ➤ already in original commit · 📋 task-card workstream):
+
+- ✅ **F-01 (P0):** `corpusVersion` declared as system-managed string at `tenant.schema.json#/properties/config/properties/corpusVersion`; `db-schema.md` documents the path and adds Cross-Table Invariant #6; `openapi.yaml GET /tenant/config` surfaces the field as read-only. Cache-key recipe references now resolve.
+- ✅ **F-02 (P1):** `embeddingDimension` added to `chunk.schema.json#/required`.
+- ✅ **F-03 (P1):** `actorRole` added to `audit-entry.schema.json#/required`.
+- ✅ **F-04 (P1):** `/runs/{runId}` per-user filter rule documented in `auth-context.md`, `frontend-components.md`, and the OpenAPI description; cross-user fetch returns 404 not 403 to avoid runId existence disclosure.
+- ✅ **F-05 (P1):** `phase1-implementation-contract.md` defines the 409 `corpus_empty` (setup error) vs 200 `insufficient_evidence` (query-time evidence gap) boundary.
+- ✅ **F-06 (P1):** `text/event-stream` removed from `openapi.yaml /query`; SSE event grammar (`progress` / `done` / `error`) documented out-of-band in `code-gen-guide.md §Server-Sent Events (SSE) for /query progress`. Two pre-existing OpenAPI 3.1 `nullable: true` violations on `disclaimerTemplateId` fixed alongside; `redocly lint` exits 0.
+- ➤ **F-07 (P2):** ADR 0004 Interface section now points to `provider-interface.md` as the authoritative source.
+- ✅ **F-08 (P2):** `ACTIVE_MODEL_ROUTE_VERIFIER` added to `.env.example` (empty default; absence disables A6 judge cleanly).
+- ✅ **F-09 (P2):** `QuotaExceeded` response component + 402 wiring on `/query` and `/ingest` in OpenAPI.
+- ➤ **F-10 (P2):** Multi-org user model already documented in `auth-context.md`; no audit change needed.
+- ✅ **F-11 (P2):** `clerkUserId` added to `principal.schema.json#/required`.
+- 📋 **F-12 (P1):** `tests/integration/test_corpus.py` skeleton created with `test_chunk_approval_requires_source_approval` and `test_source_un_approval_cascades_or_rejects`; T-002 acceptance lists these tests.
+- 📋 **F-13 (P1):** `tests/integration/test_tenant_isolation.py` skeleton created with 6 tests covering A3 retrieval, A4 admission, citations, cache keys, run-trace stages, and `/admin/queries`; T-005 acceptance lists this file.
+- 📋 **F-14 (P2):** `tests/unit/test_quote_overlap.py` skeleton parametrized over V1–V6 vectors; T-004 acceptance lists ±0.01 tolerance.
+- 📋 **F-15 (P3):** `tests/unit/test_cache_key.py` skeleton parametrized over V1–V4 vectors with literal SHA-256 + from-input-dict assertions; logs Python version on failure for V3 Greek casefold regression debugging.
+- 📋 **F-16 (P1):** New task card `T-007-real-safety-configs.md` opens the non-coding workstream owned by the founder + a named Greek-language reviewer; placeholders in the card MUST be filled before work begins. Required by exit criterion #9.
+- ✅ **F-17 (P1):** Appendix A of `phase1-implementation-contract.md` defines canonical bounded-fallback texts for cases 6, 10, 12, 17, 20 (each keyed by case class + schemaVersion); `tests/safety/test_20_queries.py` carries `CANONICAL_TEXT_SUBSTRINGS` matching the appendix.
+- ✅ **F-18 (P2):** Run-trace persistence is unconditional (every served request, including hard-safety bypass, mints a runId and persists a minimal `run_traces` row); `BoundedFallbackResponse` now requires `runId`; `observability.md` documents the rule.
+- 📋 **F-19 (P2):** `tests/safety/test_20_queries_paraphrases.py` skeleton; paraphrase content delivered by T-007. `safety-config-format.md §Paraphrase Coverage` documents the gating rule.
+- ✅ **F-21 (P2):** `observability.md` redaction rules now explicitly cover `stages[].notes`; `run-trace.schema.json` constrains the field to `maxLength: 256` with a description prohibiting raw text.
+- ✅ **F-22 (P3):** Prometheus exporter aspiration removed from `observability.md` and deferred to Phase 2; `scripts/exit_criteria_dashboard.py` skeleton is the Phase 1 mechanism for tracking the 9 exit criteria.
+- 📋 **F-23 (P1):** Each Phase 1 task card (T-002 through T-005) now lists a focused E2E integration test in acceptance, so the pipeline gets exercised at every milestone instead of waiting for T-006.
+- ✅ **F-24 (P2):** `web/lib/i18n/errors.en.json` added to `scaffold-contract.md` repo tree and T-001 acceptance criteria.
+- ✅ **F-25 (P2):** `CHECK (~ '^sha256:[0-9a-f]{64}$')` constraints on `chunks.chunk_hash` and `sources.source_hash` in `db-schema.md`.
+- ✅ **F-26 (P3):** Redocly CLI pinned to exact `@redocly/cli@1.34.3` in `ci-safety-gate.yml`; `redocly bundle` step added before `lint` so any broken relative `$ref` fails the step rather than silently passing.
+- ✅ **F-27 (P2):** `scaffold-contract.md` clarifies Qdrant is a Railway custom-Docker service (not a managed plugin); `QDRANT_API_KEY` added to `.env.example`.
+- ✅ **F-28 (P2):** ADR 0005 documents Phase 1 application-level envelope encryption (AES-256-GCM, key in `SENSITIVE_LOG_DATA_KEY_BASE64`, key_version-tagged ciphertext); env var renamed in `scaffold-contract.md`. Phase 2 KMS migration is a tracked ticket.
+- ✅ **F-29 (P3):** `/webhooks/make` returns 501 with `x-phase: deferred-phase-2`; `MAKE_WEBHOOK_SECRET` comment updated to note the deferral.
+- ✅ **F-30 (P2):** Backend always-redacts on `/admin/queries` and `/admin/flagged`; raw view requires a separate `GET /admin/queries/{runId}/raw` endpoint with the `admin:raw_sensitive:read` scope (admin role only); each call writes `audit_entries` with `action='raw_sensitive_view'`.
+- ✅ **F-31 (P3):** `owner` role row in the auth-context table now grants `model_route:certify`; `PATCH /admin/model-routes/{routeId}/certify` endpoint added to OpenAPI requiring that scope.
+- ✅ **F-32 (P3):** `db-schema.md` carries a rationale paragraph for the `flagged_queries` vs `raw_sensitive_logs` split.
+- ✅ **F-33 (P3):** `code-gen-guide.md` notes that A1 and A2 are a single physical LLM call, with file-split rationale and an ADR gate on consolidation.
+- ✅ **F-34 (P3):** `scaffold-contract.md` carries a "Phase 2 Deferrals" section noting the six `ACTIVE_MODEL_ROUTE_*` vars are individually pinned for Phase 1 simplicity and may consolidate into a `system_config` table in Phase 2.
