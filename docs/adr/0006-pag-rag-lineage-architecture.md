@@ -66,3 +66,17 @@ The detailed SOP — including rollback, partial-tenant cutover, and dimension m
 This architecture is stronger than plain vector RAG for doctrinal-development, consensus, scholarly-dispute, and witness-aware queries. It also adds ingestion and review cost, so graph-driven answering is deliberately deferred until the closed-corpus MVP is stable.
 
 The project should avoid marketing claims like "deterministic lineage" unless the underlying edges are curated or formally approved. The correct claim is: deterministic handling of validated lineage metadata.
+
+## Phase 2 Embedding Upgrade: Recommended Candidates
+
+When the Phase 1 → Phase 2 transition begins, evaluate the following models against `text-embedding-3-small` using a held-out sample of ≥50 Polytonic Greek patristic chunk pairs before committing to a replacement. The concern is that `text-embedding-3-small`, while multilingual, was not trained heavily on Polytonic Greek orthography (diacritics, ligatures, archaic forms) and may underperform on Greek query → English chunk and English query → Greek chunk retrieval pairs.
+
+| Model | Strengths | Risk |
+|---|---|---|
+| `multilingual-e5-large-instruct` | Strong ancient-language coverage, instruction-tuned | Larger, slower, higher memory |
+| `openai/text-embedding-3-large` | Higher dimension (3072), better semantic precision | ~2× cost increase |
+| Domain fine-tuned (custom) | Best precision for Patristic Greek-English pairs | Requires labelled training data + infra |
+
+Evaluation criteria: cross-lingual recall@10 on Greek query → English chunk pairs, and English query → Greek chunk pairs, measured against a curated held-out set drawn from the actual tenant corpus. Minimum acceptable threshold: recall@10 ≥ 0.80 on both directions before certifying a replacement route.
+
+The dual-indexing + backfill + cutover SOP defined in the "Embedding Model Upgrade" section above applies unchanged to any embedding model swap.

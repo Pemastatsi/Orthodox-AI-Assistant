@@ -164,3 +164,17 @@ Sensitive reframing is transparent in the UI. The user sees that the system answ
 - Keep each coding session scoped to the task card.
 - Do not weaken safety, tenant isolation, or citation rules for convenience.
 - Update ADRs when changing locked decisions.
+
+## Known Architecture Gaps (address before Phase 2 begins)
+
+The following gaps were identified during Phase 1 architecture review. They do not block Phase 1 implementation but must be resolved before Phase 2 work begins:
+
+1. **Layout-aware PDF parsing** — `chunking_service.py` must use a layout-aware parser (not plain page-order extraction) to correctly link footnotes and scriptural citations to their body paragraphs. The library choice and chunk metadata requirements are specified in T-002. This must be decided before T-002 implementation begins.
+
+2. **Chunking strategy** — Fixed-size chunking is insufficient for Patristic texts. Semantic or hierarchical chunking by natural section boundaries is required to preserve argument integrity and pass A6 citation overlap thresholds. Specified in T-002; must be decided before implementation begins.
+
+3. **Multilingual embedding upgrade** — `text-embedding-3-small` is the Phase 1 certified baseline. Phase 2 must benchmark multilingual embedding models on Polytonic Greek ↔ English retrieval pairs before committing to a replacement. Candidate models and evaluation criteria are documented in ADR 0006. The existing upgrade SOP (dual-index → backfill → certify → cutover) applies.
+
+4. **Reranking step between A3 and A4** — A cross-encoder reranker is deferred to Phase 2. `a3_retrieval.py` must return `ScoredChunk` objects (not raw Qdrant hits) in Phase 1 so the reranker can be inserted without breaking A4's input contract. See `code-gen-guide.md` section 12.
+
+5. **Do not adopt pre-compilation or external Knowledge Artifact approaches** — Pre-compiling corpus summaries as persistent "Knowledge Artifacts" conflicts with ADR 0001 (every claim must trace to an approved chunk with a verifiable quote span) and the dynamic approval workflow (corpus changes continuously). Any future proposal to introduce a compilation stage must first produce an ADR update resolving the citation traceability conflict.

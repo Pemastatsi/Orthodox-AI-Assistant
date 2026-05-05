@@ -217,3 +217,30 @@ When implementation reveals that a contract is wrong, ambiguous, or insufficient
 3. Then update the code.
 
 Do not silently work around contracts. If the change is large, raise it before coding.
+
+## 12. Phase 2 Retrieval Enhancements (do not build in Phase 1)
+
+The following enhancements are deferred to Phase 2 but must be designed into A3's return type now so they can be added without breaking the A4 contract.
+
+### A3 Return Type Requirement (enforce in Phase 1)
+
+`a3_retrieval.py` must return a typed list of `ScoredChunk` objects rather than raw Qdrant hit dicts:
+
+```python
+@dataclass
+class ScoredChunk:
+    chunk: Chunk
+    score: float   # cosine similarity from Qdrant
+    rank: int      # 1-based rank within the returned set
+```
+
+This interface is required in Phase 1 so that a reranker can be inserted between A3 scoring and A4 admission in Phase 2 without changing A4's input contract.
+
+### Cross-Encoder Reranking (Phase 2)
+
+After Qdrant returns `k` candidates, a cross-encoder reranker re-scores each `ScoredChunk` against the `semanticQuery` before A4 admission gates. This improves precision for long Patristic arguments where a passage may be semantically adjacent but not the most directly relevant.
+
+- The reranker is invoked inside `a3_retrieval.py`, gated by a `RetrievalPlan.rerank: bool` field (default `False` in Phase 1, `True` in Phase 2 certified routes).
+- Candidates for evaluation: `cross-encoder/ms-marco-MiniLM-L-6-v2` (self-hosted, fast) or Cohere Rerank API (managed, latency cost).
+- The reranker must not alter the `ScoredChunk` schema — it updates `score` and `rank` only.
+- A4 admission gates operate on the reranked list identically to the unreranked list.
