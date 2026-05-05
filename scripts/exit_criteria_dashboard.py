@@ -42,12 +42,13 @@ def criterion_1_safety_suite_stability(db_url: str) -> tuple[str, str, str, bool
     will read from an audit_entries row written by the CI gate job.
 
     SQL (when implemented):
-        SELECT COUNT(DISTINCT DATE(created_at)) AS passing_days
+        SELECT COUNT(DISTINCT DATE(occurred_at)) AS passing_days
         FROM audit_entries
         WHERE action = 'ci_safety_suite_passed'
-          AND created_at >= NOW() - INTERVAL '14 days'
+          AND resource_type = 'ci_check'
+          AND occurred_at >= NOW() - INTERVAL '14 days'
           AND details->>'override' IS NULL
-        ORDER BY created_at DESC;
+        ORDER BY occurred_at DESC;
         -- Pass when passing_days = 14 (no gap allowed).
     """
     raise NotImplementedError("pending Phase 1 → 2 dashboard work: criterion_1_safety_suite_stability")
@@ -59,11 +60,17 @@ def criterion_2_internal_traffic_threshold(db_url: str) -> tuple[str, str, str, 
     Cache hits and misses both count. Includes hard-safety blocks (they persist
     a run_traces row per phase1-implementation-contract.md run-trace guarantee).
 
+    A run is "served end-to-end" when finished_at IS NOT NULL AND final_handling
+    IS NOT NULL (a value from the verified-response handling enum). Provider
+    failures appear as a stages[].outcome='error' row, not as a top-level column;
+    they are excluded by requiring final_handling IS NOT NULL because failed
+    runs do not write a final handling.
+
     SQL (when implemented):
         SELECT COUNT(DISTINCT run_id) AS served_count
         FROM run_traces
         WHERE finished_at IS NOT NULL
-          AND provider_error_code IS NULL;
+          AND final_handling IS NOT NULL;
         -- Pass when served_count >= 50.
     """
     raise NotImplementedError("pending Phase 1 → 2 dashboard work: criterion_2_internal_traffic_threshold")
@@ -86,7 +93,7 @@ def criterion_3_red_rate_ceiling(db_url: str) -> tuple[str, str, str, bool]:
                 COUNT(*) AS total_count
             FROM run_traces
             WHERE finished_at IS NOT NULL
-              AND provider_error_code IS NULL
+              AND final_handling IS NOT NULL
               AND final_handling != 'block_with_redirect'
               AND finished_at >= NOW() - INTERVAL '7 days'
         )
@@ -102,15 +109,21 @@ def criterion_3_red_rate_ceiling(db_url: str) -> tuple[str, str, str, bool]:
 
 def criterion_4_latency_target(db_url: str) -> tuple[str, str, str, bool]:
     """Exit criterion #4: p95 query latency < 8000 ms at /api/v1/query boundary,
-    last 7 days, cache misses included, ingestion-only requests excluded.
+    last 7 days, cache misses included.
+
+    Latency is computed from started_at/finished_at (no precomputed duration_ms
+    column). The run_traces table only holds query-pipeline runs (it persists
+    "for every query that reaches A1" per its schema description); ingestion
+    does not write to run_traces, so no `is_ingestion_only` filter is needed.
 
     SQL (when implemented):
         SELECT
-            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_latency_ms
+            PERCENTILE_CONT(0.95) WITHIN GROUP (
+                ORDER BY EXTRACT(EPOCH FROM (finished_at - started_at)) * 1000
+            ) AS p95_latency_ms
         FROM run_traces
         WHERE finished_at IS NOT NULL
-          AND provider_error_code IS NULL
-          AND is_ingestion_only = FALSE
+          AND final_handling IS NOT NULL
           AND finished_at >= NOW() - INTERVAL '7 days';
         -- Pass when p95_latency_ms < 8000.
     """
@@ -129,7 +142,8 @@ def criterion_5_tenant_isolation_invariant(db_url: str) -> tuple[str, str, str, 
                details->>'run_at' AS run_at
         FROM audit_entries
         WHERE action = 'ci_tenant_isolation_passed'
-        ORDER BY created_at DESC
+          AND resource_type = 'ci_check'
+        ORDER BY occurred_at DESC
         LIMIT 1;
         -- Pass when last_result = 'pass'.
     """
@@ -145,7 +159,7 @@ def criterion_6_founder_review_pass(db_url: str) -> tuple[str, str, str, bool]:
         SELECT
             ae.audit_id,
             ae.actor_user_id,
-            ae.created_at,
+            ae.occurred_at,
             jsonb_array_length(ae.details->'reviewedRunIds') AS reviewed_count,
             jsonb_array_length(ae.details->'sensitivityCategoriesCovered') AS sensitivity_count
         FROM audit_entries ae
@@ -155,7 +169,7 @@ def criterion_6_founder_review_pass(db_url: str) -> tuple[str, str, str, bool]:
           AND u.role = 'owner'
           AND jsonb_array_length(ae.details->'reviewedRunIds') >= 20
           AND jsonb_array_length(ae.details->'sensitivityCategoriesCovered') >= 3
-        ORDER BY ae.created_at DESC
+        ORDER BY ae.occurred_at DESC
         LIMIT 1;
         -- Pass when at least one row returned.
     """
@@ -186,25 +200,33 @@ def criterion_8_operational_basics(db_url: str) -> tuple[str, str, str, bool]:
     one successful worker.retention.completed event with deleted_count >= 0.
 
     SQL (when implemented):
-        -- (a) All finished runs have a run_trace row:
-        SELECT COUNT(*) AS runs_without_trace
-        FROM billing_usage bu
-        LEFT JOIN run_traces rt ON rt.run_id = bu.run_id
-        WHERE rt.run_id IS NULL;
-        -- Expect 0.
+        -- (a) All served runs persisted a run_trace row.  run_traces is the
+        --     unconditional persistence target per phase1-implementation-contract.md
+        --     "Run-trace persistence is unconditional"; we assert the table is
+        --     populated rather than diff against billing_usage (which is keyed
+        --     by tenant_id/period_start, not run_id, so a per-run join is not
+        --     possible against the schema).
+        SELECT COUNT(*) AS run_trace_rows
+        FROM run_traces;
+        -- Expect >= 1.
 
-        -- (b) At least one billing_usage row for served_answer_count:
-        SELECT COUNT(*) AS billing_periods
+        -- (b) At least one billing period has reported served_answer_count > 0.
+        --     billing_usage uses a column-per-meter shape (served_answer_count,
+        --     fresh_model_run_count, prompt_tokens, completion_tokens,
+        --     embedding_tokens), not a metric_name pivot.
+        SELECT COUNT(*) AS billing_periods_with_served_answers
         FROM billing_usage
-        WHERE metric_name = 'served_answer_count';
+        WHERE served_answer_count > 0
+          AND stripe_usage_record_id IS NOT NULL;
         -- Expect >= 1.
 
         -- (c) Retention worker has run at least once successfully:
-        SELECT MAX(created_at) AS last_retention_run
+        SELECT MAX(occurred_at) AS last_retention_run
         FROM audit_entries
-        WHERE action = 'worker.retention.completed'
+        WHERE action = 'retention_purged'
           AND details->>'deleted_count' IS NOT NULL;
-        -- Expect NOT NULL (at least one row).
+        -- Expect NOT NULL (at least one row). Action name is the canonical one
+        -- in docs/schemas/audit-entry.schema.json.
     """
     raise NotImplementedError("pending Phase 1 → 2 dashboard work: criterion_8_operational_basics")
 
@@ -215,13 +237,18 @@ def criterion_9_real_safety_configs(db_url: str) -> tuple[str, str, str, bool]:
     baseline '2026-05-01.1'; CI safety-suite-execution passes against real configs.
 
     SQL (when implemented):
-        -- Read from audit_entries row written when founder approves configs:
+        -- Read from audit_entries row written when founder approves configs.
+        -- Action name `safety_config_approved` and resource_type `safety_config`
+        -- are the canonical values in docs/schemas/audit-entry.schema.json
+        -- (renamed from earlier `safety_config_v1_approved` /
+        -- `founder_config_approval` per audit finding A-12 / T-007 acceptance).
         SELECT details->>'sensitivity_keywords_version' AS kw_version,
                details->>'pastoral_filters_version'     AS pf_version,
                details->>'greek_review_completed'       AS greek_reviewed
         FROM audit_entries
-        WHERE action = 'founder_config_approval'
-        ORDER BY created_at DESC
+        WHERE action = 'safety_config_approved'
+          AND resource_type = 'safety_config'
+        ORDER BY occurred_at DESC
         LIMIT 1;
         -- Pass when kw_version != '2026-05-01.1' AND pf_version != '2026-05-01.1'
         -- AND greek_reviewed = 'true'.

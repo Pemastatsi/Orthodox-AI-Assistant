@@ -57,15 +57,46 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["citationId", "chunkId", "sourceId", "title"],
+        "additionalProperties": false,
+        "required": [
+          "citationId",
+          "chunkId",
+          "sourceId",
+          "title",
+          "sourceHash",
+          "chunkHash",
+          "approved",
+          "corpusOrigin"
+        ],
         "properties": {
           "citationId": { "type": "string" },
           "chunkId": { "type": "string" },
           "sourceId": { "type": "string" },
           "title": { "type": "string" },
+          "work": { "type": ["string", "null"] },
+          "father": { "type": ["string", "null"] },
           "page": { "type": ["string", "null"] },
           "timestamp": { "type": ["string", "null"] },
-          "quote": { "type": ["string", "null"] }
+          "quote": { "type": ["string", "null"] },
+          "sourceHash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Source-level integrity hash carried from EvidencePacket admittedChunks.sourceHash."
+          },
+          "chunkHash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Chunk-level integrity hash carried from EvidencePacket admittedChunks.chunkHash."
+          },
+          "approved": {
+            "const": true,
+            "description": "Always true. A6 admits only approved chunks; this is restated on the user-facing citation for downstream consumers and audit."
+          },
+          "corpusOrigin": {
+            "type": "string",
+            "enum": ["tenant", "starter_corpus"],
+            "description": "Disclosure of the corpus the chunk came from. starter_corpus only appears when the tenant has the (Phase 2) feature enabled."
+          }
         }
       }
     },

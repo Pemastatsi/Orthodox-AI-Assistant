@@ -39,7 +39,7 @@ This task is required by Phase 1 → Phase 2 exit criterion #9 (`docs/contracts/
 - The paraphrase fuzz suite (`tests/safety/test_20_queries_paraphrases.py`) passes against the new configs (every paraphrase reaches the same `expected_handling` and `expected_sensitivity` as its canonical case).
 - Startup self-test for exit criterion #9 passes: when `APP_ENV='production'`, the application refuses to start if either YAML's `version` is still `2026-05-01.1`.
 - The PR description names the founder approver and the Greek-language reviewer (replacing the `<TBD>` placeholders above), and includes a short coverage matrix showing which rules cover each `sensitivityPrimary` × language combination.
-- An `audit_entries` row with `action='safety_config_v1_approved'` is written referencing both YAML hashes after merge (operationally enforced by the deployment pipeline; manual entry acceptable in private beta).
+- An `audit_entries` row with `action='safety_config_approved'` and `resource_type='safety_config'` is written referencing both YAML hashes after merge (operationally enforced by the deployment pipeline; manual entry acceptable in private beta). This action name is canonical in `docs/schemas/audit-entry.schema.json` and is the row consumed by `scripts/exit_criteria_dashboard.py`.
 
 ## Forbidden Scope
 

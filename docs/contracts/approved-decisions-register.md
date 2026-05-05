@@ -51,7 +51,7 @@ This register preserves approved decisions extracted from archived planning draf
 | 4. Flagged embeddings | Store flagged query embeddings; model upgrades require dimension-aware backfill. |
 | 5. Father/work grouping | Cross-reference panels group by father and work. |
 | 6. Prompt versioning | Admin-only, post-MVP free-form versions require preview, rollback, and safety gate. |
-| 7. Starter corpus | Treat starter corpus as virtual tenant; enforce uniqueness at DB layer. |
+| 7. Starter corpus | Treat starter corpus as virtual tenant; enforce uniqueness at DB layer. **Phase 1 status: dormant** — `tenant.config.starterCorpusEnabled` is accepted by config validation but Phase 1 retrieval ignores it (the Qdrant filter is always `tenant_id == Principal.tenantId`). Activation requires a follow-up ADR that defines the virtual-tenant retrieval path, the citation `corpusOrigin` disclosure, and an isolation test demonstrating that enabling starter corpus does not expose other tenants' approved chunks. |
 | 8. Regex post-filter | Pastoral forbidden phrases live in safety config; changes require safety-suite run. |
 | 9. Retrieval explainability | Evidence packets include retrieval explanation metadata. |
 | 10. Rate limiting | Per-tenant rate limiting is accepted. |

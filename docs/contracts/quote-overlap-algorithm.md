@@ -64,8 +64,8 @@ def make_shingles(tokens, n):
 
 ## Threshold
 
-- Default: **0.70**. Tenant-tunable via safe config field `quoteOverlapThreshold` (range 0.50–0.95). Value below 0.50 is rejected by config validation per ADR 0002 / safety policy.
-- A6 records the actual ratio per citation in the run trace so threshold changes are auditable.
+- **Phase 1: platform-fixed at 0.70.** Not tenant-tunable in Phase 1. Tenant-level tuning is reserved for Phase 2; reintroduction will require an ADR plus a `quoteOverlapThreshold` config field validated against an explicit safe range and bounded by the safety policy in ADR 0002.
+- A6 records the actual ratio per citation in `RunTrace.stages[].details.quoteOverlapRatio` so verification is auditable across runs.
 
 ## Test Vectors
 
@@ -83,11 +83,28 @@ After normalization both produce a claim shingle set of 4 shingles, all of which
 ### V2 — Partial paraphrase
 
 ```
-claim:  "The fathers teach prayer is constant communion with God."
-source: "Saint John writes that prayer is constant communion with God for those who seek Him."
+claim:  "Saint Basil writes that prayer requires deep humility."
+source: "Saint Basil writes that prayer requires patience and steadfastness."
 expected: 0.50
 ```
-Claim has 7 shingles (n=5); 3 of them match (`prayer is constant communion with`, etc., depending on tokenizer; reference implementation produces 3/6 ≈ 0.50 after normalization drops "the" boundaries).
+
+Worked example (deterministic, no stopword handling):
+
+- Normalized claim tokens (8): `["saint", "basil", "writes", "that", "prayer", "requires", "deep", "humility"]`
+- Claim shingles at n=5 (4 total):
+  1. `saint basil writes that prayer`
+  2. `basil writes that prayer requires`
+  3. `writes that prayer requires deep`
+  4. `that prayer requires deep humility`
+- Normalized source tokens (9): `["saint", "basil", "writes", "that", "prayer", "requires", "patience", "and", "steadfastness"]`
+- Source shingles at n=5 (5 total):
+  1. `saint basil writes that prayer`
+  2. `basil writes that prayer requires`
+  3. `writes that prayer requires patience`
+  4. `that prayer requires patience and`
+  5. `prayer requires patience and steadfastness`
+- Intersection: claim #1 ∈ source, claim #2 ∈ source → **2 matches**.
+- Ratio = `|intersection| / |claim_shingles|` = 2 / 4 = **0.50**.
 
 ### V3 — No overlap (different topic)
 

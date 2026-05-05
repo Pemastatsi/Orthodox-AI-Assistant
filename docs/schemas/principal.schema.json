@@ -28,6 +28,8 @@
           "admin:queries:read",
           "admin:flagged:read",
           "admin:audit:read",
+          "admin:raw_sensitive:read",
+          "model_route:certify",
           "tenant:config:read",
           "tenant:config:write",
           "billing:read"
