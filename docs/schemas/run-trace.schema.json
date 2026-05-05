@@ -47,7 +47,12 @@
           "notes": {
             "type": ["string", "null"],
             "maxLength": 256,
-            "description": "Short structured token only. MUST NOT contain raw query text, raw answer text, raw chunk text, secrets, or any field on the redaction inventory in observability.md. Use details (see parent) for any richer payload."
+            "description": "Short structured token only. MUST NOT contain raw query text, raw answer text, raw chunk text, secrets, or any field on the redaction inventory in observability.md. Use details for any richer payload."
+          },
+          "details": {
+            "type": ["object", "null"],
+            "additionalProperties": true,
+            "description": "Sanitized stage-specific telemetry. MUST NOT contain raw query/answer/chunk text or any field on the redaction inventory in observability.md. Examples: a3_retrieval may include retrieved chunk count and adapter-level filter shape; a6_verifier MUST include per-citation quoteOverlapRatio and threshold used; provider stages may include count_estimated when token counts are estimated."
           }
         }
       }

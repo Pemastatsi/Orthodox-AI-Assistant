@@ -45,7 +45,11 @@
           "page": { "type": ["string", "null"] },
           "timestamp": { "type": ["string", "null"] },
           "approved": { "const": true },
-          "visibility": { "type": "string" },
+          "visibility": {
+            "type": "string",
+            "enum": ["member", "scholar"],
+            "description": "Admitted evidence is restricted to user-facing visibility tiers. admin_only and suppressed chunks are never admittable per ADR 0001."
+          },
           "sourceHash": { "type": "string" },
           "chunkHash": { "type": "string" }
         }

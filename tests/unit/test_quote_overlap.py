@@ -35,8 +35,8 @@ REFERENCE_VECTORS = [
     ),
     (
         "V2",
-        "The fathers teach prayer is constant communion with God.",
-        "Saint John writes that prayer is constant communion with God for those who seek Him.",
+        "Saint Basil writes that prayer requires deep humility.",
+        "Saint Basil writes that prayer requires patience and steadfastness.",
         0.50,
     ),
     (

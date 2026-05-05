@@ -43,6 +43,7 @@ This document defines the canonical error codes used in the `ApiError` envelope 
 | `webhook_bad_signature` | 401 | no | no | Stripe / Clerk / Make.com HMAC verification failed. |
 | `webhook_replay` | 409 | no | no | Webhook idempotency key has already been processed. |
 | `precondition_failed` | 412 | no | yes | Optimistic-concurrency check failed (e.g., `If-Match` on `PATCH /tenant/config` did not match the current `configVersion`). The client should `GET` the resource, merge changes, and retry. |
+| `feature_deferred` | 501 | no | no | Endpoint exists for URL-contract stability but its handler is intentionally inactive in the current phase (e.g., `/webhooks/make` in Phase 1). The request body is ignored. Activation requires the documented sign-off in the relevant ADR. |
 | `internal_error` | 500 | no | yes | Catch-all for unexpected exceptions. The traceId is the only customer-facing handle. |
 
 ## Non-Code Reasons

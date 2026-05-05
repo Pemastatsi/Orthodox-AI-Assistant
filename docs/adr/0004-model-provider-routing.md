@@ -38,10 +38,19 @@ Provider adapters expose:
 A `model_routes` row may serve user traffic only when `certification_status='certified'`. The transition from any other status to `certified` is governed by:
 
 1. **Authority.** Only a user with `role='owner'` may PATCH `certification_status` to `certified`. Other admin actions (`draft`/`experiment`/`deprecated`) may be performed by `admin` or `owner`.
-2. **Passing definition.** A "passing" safety-suite run means: every one of the 20 canonical cases in `tests/safety/test_20_queries.py` produces both `outcome.handling == case.expected_handling` and `outcome.sensitivityPrimary == case.expected_sensitivity` when executed against the candidate route through the standard A1–A6 pipeline. No tolerance for YELLOW where the case expects GREEN, etc.
-3. **Recording.** The certifying owner sets `safety_suite_run_id` to the `run_traces.run_id` of the passing run; `certified_by` to their `users.user_id`; and `certified_at` to the timestamp. The PATCH writes an `audit_entries` row with `action='model_route_certified'`.
-4. **Startup enforcement.** Service startup loads the active route ids from `.env` (`ACTIVE_MODEL_ROUTE_*`) and refuses to start if any active id resolves to a row whose `certification_status != 'certified'` or whose `deprecated_at IS NOT NULL`.
-5. **Revocation.** A regression flips the row to `deprecated`; the service refuses the next deploy until a different certified route is named in `.env`. Revocation is `admin`+ but never required to be `owner` (you should be able to take a bad route out fast).
+2. **Passing definition.** A "passing" safety-suite run means: every one of the 20 canonical cases in `tests/safety/test_20_queries.py::CANONICAL_SAFETY_CASES` produces both `outcome.handling == case.expected_handling` and `outcome.sensitivityPrimary == case.expected_sensitivity` when executed against the candidate route through the standard A1–A6 pipeline. No tolerance for YELLOW where the case expects GREEN, etc.
+3. **Aggregation: `safety_suite_runs`.** A safety-suite execution produces 20 `run_traces` rows (one per case). The harness MUST insert a single `safety_suite_runs` row that aggregates them, with:
+   - `safety_suite_run_id`: ULID assigned at the start of the suite execution.
+   - `purpose`/`provider`/`model`/`prompt_version`/`schema_version`: copied from the candidate route under test.
+   - `case_count`: 20 (CHECK-constrained).
+   - `case_run_ids`: array of exactly 20 `run_traces.run_id` values, ordered by case `id`.
+   - `passed`: `true` only if every case satisfies the passing definition above; otherwise `false`.
+   - `failure_summary`: empty when `passed=true`; per-failed-case detail when `passed=false`.
+   - `initiated_by`: the `users.user_id` that started the suite.
+   On insert, an `audit_entries` row with `action='safety_suite_run_completed'`, `resource_type='safety_suite_run'`, `resource_id=safety_suite_run_id` MUST be written. See `docs/contracts/db-schema.md` §`safety_suite_runs`.
+4. **Recording on the route.** The certifying owner sets `model_routes.safety_suite_run_id` to the **`safety_suite_runs.safety_suite_run_id`** of the passing aggregate (NOT to a single `run_traces.run_id`); `certified_by` to their `users.user_id`; and `certified_at` to the timestamp. The PATCH writes an `audit_entries` row with `action='model_route_certified'`. The API MUST refuse the certification PATCH when the referenced `safety_suite_runs` row does not exist, has `passed=false`, or has a different `purpose`/`prompt_version`/`schema_version` triple than the route being certified.
+5. **Startup enforcement.** Service startup loads the active route ids from `.env` (`ACTIVE_MODEL_ROUTE_*`) and refuses to start if any active id resolves to a row whose `certification_status != 'certified'` or whose `deprecated_at IS NOT NULL`.
+6. **Revocation.** A regression flips the row to `deprecated`; the service refuses the next deploy until a different certified route is named in `.env`. Revocation is `admin`+ but never required to be `owner` (you should be able to take a bad route out fast).
 
 ## Provider Outage Policy (Phase 1)
 

@@ -258,7 +258,7 @@ CREATE TABLE model_routes (
     supports_batch        boolean NOT NULL DEFAULT false,
     supports_json_mode    boolean NOT NULL DEFAULT false,
     certification_status  text NOT NULL CHECK (certification_status IN ('draft','experiment','certified','deprecated')) DEFAULT 'draft',
-    safety_suite_run_id   text,
+    safety_suite_run_id   text,                                                          -- FK to safety_suite_runs added below; defined here without inline REFERENCES because safety_suite_runs is created later in the same migration
     certified_by          text REFERENCES users(user_id),
     certified_at          timestamptz,
     deprecated_at         timestamptz,
@@ -266,6 +266,41 @@ CREATE TABLE model_routes (
 );
 CREATE INDEX idx_model_routes_purpose_status ON model_routes(purpose, certification_status);
 ```
+
+### `safety_suite_runs`
+
+Aggregate row that groups one full pass of the canonical 20-case safety suite. Required by `model_routes.safety_suite_run_id`: a route cannot be certified without a `passed=true` row here. See ADR 0004 and `tests/safety/test_20_queries.py::CANONICAL_SAFETY_CASES` for the case list.
+
+```sql
+CREATE TABLE safety_suite_runs (
+    safety_suite_run_id   text PRIMARY KEY,                       -- ULID
+    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding')),
+    provider              text NOT NULL CHECK (provider IN ('anthropic','openai')),
+    model                 text NOT NULL,
+    prompt_version        text NOT NULL,                           -- FK to prompt_versions added below
+    schema_version        text NOT NULL,
+    case_count            integer NOT NULL CHECK (case_count = 20),
+    case_run_ids          text[] NOT NULL,                          -- exactly 20 run_traces.run_id entries, ordered by case id
+    passed                boolean NOT NULL,
+    failure_summary       jsonb,                                    -- empty when passed; per-case detail when failed
+    initiated_by          text NOT NULL REFERENCES users(user_id),
+    started_at            timestamptz NOT NULL,
+    finished_at           timestamptz NOT NULL,
+    created_at            timestamptz NOT NULL DEFAULT now(),
+    CHECK (cardinality(case_run_ids) = 20)
+);
+CREATE INDEX idx_safety_suite_purpose_passed ON safety_suite_runs(purpose, passed, finished_at DESC);
+
+-- FKs that close forward-references in this migration:
+ALTER TABLE model_routes
+    ADD CONSTRAINT model_routes_safety_suite_run_id_fkey
+    FOREIGN KEY (safety_suite_run_id) REFERENCES safety_suite_runs(safety_suite_run_id);
+ALTER TABLE safety_suite_runs
+    ADD CONSTRAINT safety_suite_runs_prompt_version_fkey
+    FOREIGN KEY (prompt_version) REFERENCES prompt_versions(prompt_version);
+```
+
+Each entry in `case_run_ids` MUST resolve to a valid `run_traces.run_id`; the application enforces this at insert time (no DB-level FK because `run_traces` is partitioned by tenant, while `safety_suite_runs` is platform-wide). On certification, an `audit_entries` row with `action='safety_suite_run_completed'` and `resource_type='safety_suite_run'` is written.
 
 ### `prompt_versions`
 
@@ -304,10 +339,12 @@ CREATE INDEX idx_billing_period_end ON billing_usage(period_end);
 
 1. Every row in a tenant-scoped table has `tenant_id` matching the parent (chunks → sources → tenants).
 2. `chunks.approved=true` implies `sources.approved=true` for the parent. Enforced in the repository on update; tests cover this in `tests/integration/test_corpus.py`.
-3. `flagged_queries.raw_sensitive_log_id` is non-null only when `sensitivity_primary` is set.
-4. `audit_entries` are append-only. There is no UPDATE or DELETE granted to the application role.
-5. `raw_sensitive_logs` are deleted only by the retention worker.
-6. `tenants.config.corpusVersion` is the active corpus pointer for cache-key invalidation per `cache-key.md`. It is set by the ingestion cutover step and never editable via the public tenant config API.
+3. **Source-approval cascade.** Approving a chunk on an unapproved source MUST auto-approve the parent source in the same transaction. The cascade copies the chunk approval's `approved_by`, `approved_at`, and `approval_note` (or a derived note such as `"auto-approved via first-chunk approval"`) to `sources`. Once a source is approved, subsequent chunk approvals do not touch the source row. Source approval is therefore not a separate API operation in Phase 1; the only entry point is `PATCH /corpus/{chunkId}` with `approved=true`. An admin-only source-level edit (visibility, note) MAY be added later via ADR but MUST NOT change `sources.approved` from `true` to `false` without an audit entry.
+4. `flagged_queries.raw_sensitive_log_id` is non-null only when `sensitivity_primary` is set.
+5. `audit_entries` are append-only. There is no UPDATE or DELETE granted to the application role.
+6. `raw_sensitive_logs` are deleted only by the retention worker.
+7. `tenants.config.corpusVersion` is the active corpus pointer for cache-key invalidation per `cache-key.md`. It is set by the ingestion cutover step and never editable via the public tenant config API.
+8. **Model-route certification grouping.** `model_routes.safety_suite_run_id` references `safety_suite_runs(safety_suite_run_id)`, NOT `run_traces(run_id)`. A `safety_suite_runs` row groups exactly 20 `run_traces.run_id` entries (one per case in `tests/safety/test_20_queries.py::CANONICAL_SAFETY_CASES`). A route may move to `certified` only when its referenced `safety_suite_runs` row has `passed=true` and was produced against the same `prompt_version`/`model`/`schema_version` triple recorded on the route. See ADR 0004.
 
 ## Migrations
 

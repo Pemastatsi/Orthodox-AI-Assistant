@@ -512,7 +512,12 @@ paths:
           application/json:
             schema: { type: object, additionalProperties: true }
       responses:
-        "200": { description: Accepted. }
+        "200":
+          description: Accepted. The receiver acknowledges receipt and durably enqueues the event for processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAck"
         "401": { $ref: "#/components/responses/WebhookBadSignature" }
         "409": { $ref: "#/components/responses/WebhookReplay" }
 
@@ -532,7 +537,12 @@ paths:
           application/json:
             schema: { type: object, additionalProperties: true }
       responses:
-        "200": { description: Accepted. }
+        "200":
+          description: Accepted. The receiver acknowledges receipt and durably enqueues the event for processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAck"
         "401": { $ref: "#/components/responses/WebhookBadSignature" }
         "409": { $ref: "#/components/responses/WebhookReplay" }
 
@@ -544,24 +554,25 @@ paths:
       security: []
       x-phase: deferred-phase-2
       description: |
-        URL contract is locked for Phase 2. The handler is not yet active; all requests
-        currently return 501. Activation requires founder sign-off and a Make.com integration spec.
+        URL contract is locked for Phase 2. The handler is not active in Phase 1 and ALL
+        requests — including those with valid HMAC headers and bodies — return 501 with
+        error code `feature_deferred`. The header and request-body specification below
+        documents the Phase 2 activation contract; Phase 1 implementations MUST NOT parse
+        signatures or bodies. Activation requires founder sign-off and a Make.com
+        integration spec.
       parameters:
-        - { name: X-Make-Timestamp, in: header, required: true, schema: { type: string } }
-        - { name: X-Make-Nonce, in: header, required: true, schema: { type: string } }
-        - { name: X-Make-Signature, in: header, required: true, schema: { type: string } }
-        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+        - { name: X-Make-Timestamp, in: header, required: false, schema: { type: string }, description: "Reserved for Phase 2 activation; ignored in Phase 1." }
+        - { name: X-Make-Nonce, in: header, required: false, schema: { type: string }, description: "Reserved for Phase 2 activation; ignored in Phase 1." }
+        - { name: X-Make-Signature, in: header, required: false, schema: { type: string }, description: "Reserved for Phase 2 activation; ignored in Phase 1." }
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string }, description: "Reserved for Phase 2 activation; ignored in Phase 1." }
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema: { type: object, additionalProperties: true }
       responses:
-        "200": { description: Accepted. }
-        "401": { $ref: "#/components/responses/WebhookBadSignature" }
-        "409": { $ref: "#/components/responses/WebhookReplay" }
         "501":
-          description: Make.com webhook handler is deferred to Phase 2; activation requires founder sign-off and a Make.com integration spec. The endpoint exists today only to lock the URL contract.
+          description: Make.com webhook handler is deferred to Phase 2; activation requires founder sign-off and a Make.com integration spec. The endpoint exists today only to lock the URL contract. Returns ApiError with `code='feature_deferred'`.
           content:
             application/json:
               schema:
@@ -647,6 +658,13 @@ components:
           schema: { $ref: "#/components/schemas/ApiError" }
 
   schemas:
+    # NOTE: This inline AnswerMode is a manual mirror of
+    # docs/schemas/answer-mode.schema.json. The two enum lists MUST stay
+    # byte-for-byte identical; a CI parity check (see scripts/verify_openapi_enums.py
+    # — to be added in T-001) fails the build when they drift. If you edit one,
+    # edit both. We do not use a JSON Schema $ref here because OpenAPI 3.1
+    # tooling support for cross-file $ref to JSON Schema files is uneven and
+    # we want every generator to read the enum without resolution.
     AnswerMode:
       type: string
       enum:
@@ -655,6 +673,19 @@ components:
         - historical_development
         - scholarly_dispute
         - institutional_policy
+
+    WebhookAck:
+      type: object
+      additionalProperties: false
+      required: [received]
+      description: Acknowledgement returned by /webhooks/{stripe,clerk}. The receiver durably enqueues the event before returning; the upstream provider may safely treat this as success and stop retrying.
+      properties:
+        received:
+          type: boolean
+          const: true
+        eventId:
+          type: ["string", "null"]
+          description: The provider-assigned event id when present in the request payload, echoed back for client-side correlation. May be null if the request body omitted it.
 
     ApiError:
       type: object

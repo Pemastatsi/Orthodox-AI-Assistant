@@ -69,7 +69,7 @@ def require_scope(scope: str) -> Callable:
 
 Content managers see sensitive/flagged content **redacted by default**. Raw sensitive views require admin role and produce an `audit_entries` row with `action='raw_sensitive_view'`.
 
-Backend enforcement: `GET /admin/queries` and `GET /admin/flagged` always return sensitive fields redacted. Raw (un-redacted) views are available **only** via `GET /admin/queries/{runId}/raw`, which requires the `admin:raw_sensitive:read` scope (admin role only) and writes an `audit_entries` row with `action='raw_sensitive_view'`, `actor_user_id` = the calling principal, `resource_type='run'`, `resource_id` = the run ID. Content managers and owners cannot read raw — by design. The audit row is queryable via `GET /admin/audit-log`.
+Backend enforcement: `GET /admin/queries` and `GET /admin/flagged` always return sensitive fields redacted. Raw (un-redacted) views are available **only** via `GET /admin/queries/{runId}/raw`, which requires the `admin:raw_sensitive:read` scope (admin role only) and writes an `audit_entries` row with `action='raw_sensitive_view'`, `actor_user_id` = the calling principal, `resource_type='run'`, `resource_id` = the run ID. Content managers and owners cannot read raw — by design. The audit row is queryable via `GET /admin/audit` (per `docs/api/openapi.yaml`).
 
 ## Webhook Auth
 

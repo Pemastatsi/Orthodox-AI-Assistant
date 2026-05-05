@@ -17,13 +17,19 @@
       "description": "Phase 1 must equal classifiedQuery.reframedQuery ?? classifiedQuery.rawQuery."
     },
     "answerMode": { "$ref": "answer-mode.schema.json" },
-    "tenantId": { "type": "string" },
+    "tenantId": {
+      "type": "string",
+      "description": "Adapter-injected. The Qdrant adapter MUST overwrite this with Principal.tenantId regardless of the value emitted by A2; the field is present in the schema so generated client code can deserialize the plan, but a model-emitted value MUST NOT reach Qdrant. See docs/contracts/auth-context.md and docs/contracts/code-gen-guide.md."
+    },
     "filters": {
       "type": "object",
       "additionalProperties": false,
       "required": ["approved", "tenantId"],
       "properties": {
-        "tenantId": { "type": "string" },
+        "tenantId": {
+          "type": "string",
+          "description": "Adapter-injected. Always equals Principal.tenantId at the Qdrant call boundary; any other value is treated as a bug."
+        },
         "approved": { "const": true },
         "visibility": {
           "type": "array",

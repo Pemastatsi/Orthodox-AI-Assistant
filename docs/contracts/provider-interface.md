@@ -117,11 +117,13 @@ If the provider returns content that fails schema validation, the adapter retrie
 ```python
 @dataclass(frozen=True)
 class StreamEvent:
-    type: Literal['progress', 'token', 'done', 'error']
+    type: Literal['progress', 'done', 'error']
     payload: dict   # shape depends on type
 ```
 
-The `query_orchestrator` consumes only `progress` and `done` events when `streamProgress=true`. `token` events are dropped before A6 verification — they are present only for non-user-facing flows (e.g., admin Prompt Lab preview when one is added in a later phase).
+The `query_orchestrator` consumes only `progress` and `done` events when `streamProgress=true`.
+
+**Phase 1 prohibition.** Phase 1 implementations of `stream_text` MUST NOT yield `token` events. The `token` literal is intentionally absent from the `StreamEvent.type` enum above; adapters that produce token events will fail type checking. The defensive "drop tokens before A6" pattern from earlier drafts is replaced with this stricter rule: token events do not exist in Phase 1, so there is nothing to drop. Reintroduction of token streaming requires an ADR update plus an A6 verification path that re-runs over the assembled answer text after the stream completes.
 
 ## Error Mapping
 

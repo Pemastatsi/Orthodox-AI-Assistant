@@ -186,6 +186,31 @@ All log lines go through `structlog` with the redaction filter from `core/loggin
 - Test files: `test_<unit_under_test>.py`. Safety tests live under `tests/safety/`.
 - React components: `PascalCase.tsx`. Hooks: `useCamelCase`. Files in `app/` follow Next.js routing.
 
+### 8.1 Field Naming Across Layers
+
+The same logical field is spelled differently in different layers. Each boundary translates explicitly; nothing is auto-converted by reflection. The rule is one-line:
+
+- **JSON wire payloads** (HTTP requests/responses, JSON Schemas under `docs/schemas/`, OpenAPI in `docs/api/openapi.yaml`, frontend zod validators): `camelCase`. Example: `tenantId`, `corpusVersion`, `quoteOverlapRatio`.
+- **PostgreSQL columns** (DDL in `docs/contracts/db-schema.md`, SQLAlchemy column names, raw SQL in scripts): `snake_case`. Example: `tenant_id`, `corpus_version`, `quote_overlap_ratio`.
+- **Qdrant payload keys and filter keys**: `snake_case`, identical to the Postgres column names. Example: `tenant_id`, `approved`, `corpus_version`. The Qdrant adapter MUST use these literal keys; tests assert the exact filter-dict shape.
+- **Python code outside the boundary layers**: `snake_case` for variables and function parameters (Python convention). Pydantic models expose `camelCase` aliases for JSON serialization via `Field(alias=...)` and `model_config = ConfigDict(populate_by_name=True)`.
+
+Translation responsibilities:
+
+| Boundary | Owner | Direction |
+|---|---|---|
+| HTTP ↔ Pydantic domain model | `app/api/` route handler via Pydantic alias config | both ways |
+| Pydantic domain model ↔ SQLAlchemy ORM row | `app/repositories/` repository class | both ways |
+| Pydantic domain model ↔ Qdrant payload/filter | `adapters/qdrant_adapter.py` | both ways |
+| Pydantic domain model ↔ Redis cache value | `services/cache_service.py` | both ways |
+
+Hard rules:
+
+- Never JSON-serialize a SQLAlchemy row directly. Always pass through the Pydantic model so the wire shape is camelCase.
+- Never construct a raw Qdrant filter dict in agent code. Build a `RetrievalPlan`, hand it to `qdrant_adapter`, and the adapter writes `{"tenant_id": principal.tenantId, "approved": True, ...}`.
+- Never read `tenant_id` from a request body or query string. Always derive it from `Principal.tenantId` (which is camelCase on the model and `tenant_id` after the adapter writes it). See `docs/contracts/auth-context.md`.
+- A unit test in each adapter package asserts the exact translated key set so a misspelling is caught at CI time, not in production.
+
 ## 9. Toolchain
 
 - **Python**: 3.12. Dependency manager: `uv`. Lint: `ruff`. Type-check: `mypy --strict` for `app/domain/`, `--standard` elsewhere. Test: `pytest` + `pytest-asyncio`. Logging: `structlog`. Settings: `pydantic-settings`. ORM: `sqlalchemy` 2.x async. Migrations: `alembic`.
