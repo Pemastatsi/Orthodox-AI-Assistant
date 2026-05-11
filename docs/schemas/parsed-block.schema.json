@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "parsed-block.schema.json",
+  "title": "ParsedBlock",
+  "description": "A single typographic block emitted by a Parser (see docs/contracts/parser-interface.md). The chunking service consumes these to detect headings and assemble Chunks per docs/contracts/chunking-contract.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "text",
+    "blockType",
+    "bold",
+    "pageNum"
+  ],
+  "properties": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The block's text content. Whitespace-only blocks must be omitted, not emitted with empty or whitespace text."
+    },
+    "blockType": {
+      "type": "string",
+      "enum": ["heading", "paragraph", "footnote", "caption", "other"],
+      "description": "Best-effort classification. 'other' is the catch-all for content the parser cannot confidently classify (page numbers, running headers, decorative elements)."
+    },
+    "fontSize": {
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0,
+      "description": "Font size in PDF points. Required when parser.supports_typography is True; null permitted only on the OCR path (TesseractParser)."
+    },
+    "bold": {
+      "type": "boolean",
+      "description": "True when the parser confidently identifies the block as bold. False is the safe default for parsers that cannot detect weight (OCR path)."
+    },
+    "bbox": {
+      "type": ["array", "null"],
+      "items": { "type": "number" },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[x0, y0, x1, y1] in PDF points. Null permitted only on the OCR path."
+    },
+    "pageNum": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-indexed PDF page number. Must match the enclosing ParsedPage.page_num."
+    }
+  }
+}
