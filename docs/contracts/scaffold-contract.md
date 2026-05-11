@@ -1,7 +1,7 @@
 # Scaffold Contract
 
 Status: Canonical
-Date: 2026-05-01
+Date: 2026-05-11
 
 This document is the meta-contract for T-001. It cites every upstream contract and turns the architecture in `docs/contracts/code-gen-guide.md` into a concrete repository scaffold. T-001 ships exactly what is listed below — no more, no less.
 
@@ -10,6 +10,9 @@ This document is the meta-contract for T-001. It cites every upstream contract a
 - [code-gen-guide.md](code-gen-guide.md) — directory layout, layering rules, naming conventions.
 - [auth-context.md](auth-context.md) — Clerk JWT resolution, Principal shape.
 - [provider-interface.md](provider-interface.md) — provider Protocol + error taxonomy.
+- [parser-interface.md](parser-interface.md) — Parser Protocol + ParsedBlock shape (ADR-0008).
+- [chunking-contract.md](chunking-contract.md) — hierarchical chunking algorithm (ADR-0009).
+- [vector-store-interface.md](vector-store-interface.md) — VectorStore Protocol + tenant-isolation invariant (ADR-0010).
 - [cache-key.md](cache-key.md) — canonical cache-key recipe + fixtures.
 - [error-taxonomy.md](error-taxonomy.md) — ApiError codes used in OpenAPI.
 - [observability.md](observability.md) — log shape, X-Run-Id propagation.
@@ -43,6 +46,14 @@ backend/
 │   ├── adapters/__init__.py
 │   ├── adapters/providers/__init__.py
 │   ├── adapters/providers/base.py # Protocol from provider-interface.md
+│   ├── adapters/parsers/__init__.py
+│   ├── adapters/parsers/base.py            # Parser Protocol per parser-interface.md (ADR-0008)
+│   ├── adapters/parsers/pdfplumber_parser.py  # stub (raises NotImplementedError; impl in T-002)
+│   ├── adapters/parsers/tesseract_parser.py   # stub (raises NotImplementedError; impl in T-002)
+│   ├── adapters/parsers/vision_parser.py      # Phase 2 stub; always raises NotImplementedError
+│   ├── adapters/vector_store/__init__.py
+│   ├── adapters/vector_store/base.py       # VectorStore Protocol per vector-store-interface.md (ADR-0010)
+│   ├── adapters/vector_store/qdrant_store.py  # stub (raises NotImplementedError; impl in T-002)
 │   ├── domain/__init__.py
 │   ├── domain/agents/__init__.py  # empty stubs for a1..a6 (raise NotImplementedError)
 │   ├── domain/services/__init__.py
@@ -159,11 +170,18 @@ QDRANT_URL=                      # in-network Railway URL or Qdrant Cloud endpoi
 QDRANT_COLLECTION=patristic      # or per-tenant collection name pattern
 QDRANT_API_KEY=                  # leave blank for self-hosted Qdrant without auth
 
+# --- Auth ---
+AUTH_PROVIDER=dev                # dev | clerk; default behavior in scaffold is dev for local. APP_ENV=production refuses to boot if AUTH_PROVIDER=dev (see auth-context.md §Development Mode).
+
 # --- Clerk ---
 CLERK_SECRET_KEY=sk_test_REPLACE_ME
 CLERK_PUBLISHABLE_KEY=pk_test_REPLACE_ME
 CLERK_JWT_ISSUER=https://REPLACE_ME.clerk.accounts.dev
 CLERK_AUTHORIZED_PARTIES=http://localhost:3000
+
+# --- PDF Parsing (T-002 ingestion) ---
+TESSERACT_BINARY_PATH=/usr/bin/tesseract
+TESSERACT_LANGUAGE_PACK_PATH=/usr/share/tesseract-ocr/4.00/tessdata
 
 # --- Stripe ---
 STRIPE_SECRET_KEY=sk_test_REPLACE_ME
@@ -256,6 +274,21 @@ down:
 - `mypy.ini`: `strict = True` for `app/domain/*`, `python_version = 3.12`, `plugins = pydantic.mypy`. `ignore_missing_imports` only for `qdrant_client.*` until Qdrant ships type stubs.
 - `pytest.ini`: `asyncio_mode = auto`, `testpaths = tests backend/tests`.
 
+## Development-Mode Auth (`AUTH_PROVIDER`)
+
+The placeholder in `app/core/auth.py` (per the existing tree) is governed by the `AUTH_PROVIDER` env var. The full behavior contract is in `auth-context.md` §Development Mode; this section records the scaffold-level wiring T-001 must emit.
+
+- `AUTH_PROVIDER=dev` (default in `.env.example` for local development):
+  - `app/core/auth.py` reads an `X-Dev-Principal` request header containing a base64-encoded JSON `Principal` (shape per `docs/schemas/principal.schema.json`). When the header is present and decodable, that Principal is used.
+  - When the header is absent, a hardcoded test Principal is returned with `tenantId="dev-tenant"`, `role="member"`, and all other fields populated with safe defaults documented in `auth-context.md`.
+  - No Clerk JWKS verification is performed.
+- `AUTH_PROVIDER=clerk` (required for staging and production):
+  - Full Clerk JWKS verification per `auth-context.md`. The `X-Dev-Principal` header is ignored.
+
+**Boot guard.** `app/main.py` performs a startup check: when `APP_ENV=production` AND `AUTH_PROVIDER=dev`, the application raises `ProductionAuthConfigError` and refuses to boot. This mirrors the existing safety-config production boot guard pattern.
+
+The constructor for `app/core/auth.py` also logs a single INFO line at startup with `auth_provider=<value>` and `app_env=<value>` so ops can confirm the resolved mode without grepping config.
+
 ## What T-001 Does Not Build
 
 - A1–A6 logic. Stubs only.
@@ -278,8 +311,11 @@ T-001 is complete when:
 6. `app/adapters/providers/base.py` defines the `LLMProvider` Protocol exactly per provider-interface.md.
 7. `app/domain/models/` contains a pydantic model per JSON schema in `docs/schemas/`, generated or hand-written, that round-trips a fixture instance.
 8. The CI workflow at `.github/workflows/ci-safety-gate.yml` runs to green on a PR that ships only this scaffold.
-9. No hardcoded secret, no `os.environ` read outside `core/config.py`, no provider SDK import outside `adapters/providers/`.
+9. No hardcoded secret, no `os.environ` read outside `core/config.py`, no provider SDK import outside `adapters/providers/`, no `pdfplumber`/`pytesseract` import outside `adapters/parsers/`, no `qdrant_client` import outside `adapters/vector_store/`.
 10. Frontend i18n: `web/lib/i18n/errors.en.json` exists with at minimum a stub entry for each error `code` listed in `error-taxonomy.md` (use `"<code>": "<short user-facing string>"`); the smoke test "unknown error code → fallback to `errors.en.json#unknown_error`" is set up in T-001 (test body may be a TODO until T-006).
+11. `app/adapters/parsers/base.py` defines the `Parser` Protocol and the `ParsedPage` / `ParsedBlock` dataclasses exactly per `parser-interface.md`. The three concrete parsers (`pdfplumber_parser.py`, `tesseract_parser.py`, `vision_parser.py`) exist as `NotImplementedError` stubs whose class shapes match the Protocol.
+12. `app/adapters/vector_store/base.py` defines the `VectorStore` Protocol and the `ChunkPayload` / `VectorFilter` / `ScoredChunk` dataclasses exactly per `vector-store-interface.md`, including the runtime `ValueError("tenant_id required")` guard on `search` and `delete_by_filter` and the "no mixed-tenant batches" guard on `upsert`. `qdrant_store.py` exists as a stub whose method shapes match the Protocol.
+13. `app/core/auth.py` honors `AUTH_PROVIDER=dev` by reading the `X-Dev-Principal` header (or returning the documented fallback Principal). `app/main.py` raises `ProductionAuthConfigError` at startup when `APP_ENV=production` AND `AUTH_PROVIDER=dev`.
 
 ## Notes on Discipline
 
