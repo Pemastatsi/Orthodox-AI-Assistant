@@ -1,7 +1,7 @@
 # Approved Decisions Register
 
 Status: Canonical
-Date: 2026-04-26
+Date: 2026-05-11
 
 This register preserves approved decisions extracted from archived planning drafts. Use it when a task needs a specific decision not covered in `AGENTS.md`, ADRs, schemas, or task cards.
 
@@ -65,3 +65,14 @@ This register preserves approved decisions extracted from archived planning draf
 | 18. CI safety gate | Theological safety regression runs in CI. |
 | 19. Shadow A/B | Rejected until post-production traffic and evaluation infrastructure exist. |
 | 20. Scoped approvals | Phase 3+ downward-only delegation; admins cannot grant beyond their scope. |
+
+## Architecture Decisions (Phase 1)
+
+These rows resolve the engineering decisions previously flagged as open in `AGENTS.md` §Known Architecture Gaps. They are referenced by ADRs 0008–0010 and by `parser-interface.md`, `chunking-contract.md`, and `vector-store-interface.md`.
+
+| Item | Decision |
+|---|---|
+| D-PDF-001. PDF parser library | Two-path hybrid behind a `Parser` Protocol: `pdfplumber` for born-digital PDFs (text layer present), `pytesseract` with the `grc` (Polytonic Greek) and `ell` (modern Greek) language packs for scanned PDFs. Dispatch heuristic lives in the chunking service: after `pdfplumber` extraction, if average extracted text is below 50 characters per page, the file is re-routed to the Tesseract path. MIT-licensed dependencies only (no AGPL exposure from `pymupdf`); no per-page OCR cost; corpus bytes never leave the server boundary. Phase 2 hook: `VisionParser` (LLM-with-vision) added as a third `Parser` implementation without touching the dispatch heuristic. See ADR-0008 and `parser-interface.md`. |
+| D-CHK-001. Chunking strategy | Hierarchical (heading-boundary) chunking with a sentence-boundary fallback for unheaded sections. Soft token cap 800–1200 (cl100k_base via `tiktoken`); hard cap 1500 tokens triggers a sentence-boundary split. Every chunk carries `sectionPath` (ordered enclosing heading strings), `pageStart`, `pageEnd`, and `parentChunkId` (NULL for top-level chunks, populated when a parent chunk is split by the sentence-boundary fallback). The `parentChunkId` field is the join key for the Phase 2 graph traversal layer described in ADR-0006 — preserving the hierarchy now is what unlocks that future architecture without re-ingestion. See ADR-0009 and `chunking-contract.md`. |
+| D-VS-001. VectorStore seam | Qdrant remains the Phase 1 vector store per ADR-0006. All agent and service code accesses the vector store only through a `VectorStore` Protocol modeled on the existing `LLMProvider` Protocol (`provider-interface.md`). The concrete `QdrantStore` implements the Protocol; a `PgvectorStore` can be added in Phase 2 as a drop-in replacement without touching agent or service code. The Protocol enforces the tenant-isolation invariant: every `search` and `delete_by_filter` call MUST include `tenantId` in the filter, mirroring the DB-level invariant from ADR-0003. See ADR-0010 and `vector-store-interface.md`. |
+| D-MDL-001. Active Phase 1 model routes | Three certified-track routes seed the `model_routes` table at Phase 1 cutover (all with `certification_status='experiment'` per ADR-0004; promotion to `certified` runs through the safety-suite gate in T-005): A1/A2 query analysis uses `anthropic:claude-sonnet-4-6` (low latency, reliable structured output); A5 composition uses `anthropic:claude-opus-4-7` (lowest hallucination risk for evidence-grounded composition); embeddings use `openai:text-embedding-3-small` (Phase 1 baseline per ADR-0006). An A6 verifier-judge route is intentionally absent; per decision register row G, the optional consistency judge is disabled when no certified `verifier_judge` route exists. See `db-schema.md` §First Migration Seed Data. |
