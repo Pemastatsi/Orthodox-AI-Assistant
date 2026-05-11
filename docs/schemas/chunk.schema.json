@@ -34,12 +34,35 @@
     },
     "father": { "type": ["string", "null"] },
     "work": { "type": ["string", "null"] },
-    "page": { "type": ["string", "null"] },
+    "page": {
+      "type": ["string", "null"],
+      "description": "Legacy single-page citation string. New chunks emitted under the hierarchical chunking contract populate pageStart/pageEnd instead; page may still be derived (e.g., 'pp. 12-14') for display."
+    },
     "timestamp": { "type": ["string", "null"] },
     "language": { "type": "string", "enum": ["en", "el", "mixed"], "default": "en" },
     "categories": {
       "type": "array",
       "items": { "type": "string" }
+    },
+    "sectionPath": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Ordered list of enclosing heading strings from document root. Empty for content preceding the first heading. Required for chunks produced under the hierarchical chunking contract (chunking-contract.md, ADR-0009)."
+    },
+    "pageStart": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "1-indexed PDF page number of the first ParsedBlock in this chunk. Required for chunks produced under the hierarchical chunking contract."
+    },
+    "pageEnd": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "1-indexed PDF page number of the last ParsedBlock in this chunk. Must be >= pageStart when both are set."
+    },
+    "parentChunkId": {
+      "type": ["string", "null"],
+      "description": "References chunks.chunkId of the parent when this chunk was produced by a sentence-boundary split inside a single oversized parent (chunking-contract.md §Chunk boundaries). NULL for top-level chunks. The join key for the Phase 2 graph traversal layer (ADR-0006)."
     },
     "embeddingModel": {
       "type": "string",

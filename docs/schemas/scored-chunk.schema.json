@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scored-chunk.schema.json",
+  "title": "ScoredChunk",
+  "description": "A retrieval hit: a full Chunk shape (per chunk.schema.json) plus a cosine-similarity score. Returned by VectorStore.search (docs/contracts/vector-store-interface.md). Composition over Chunk rather than field-duplication so the chunk shape has one source of truth.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "chunk",
+    "score"
+  ],
+  "properties": {
+    "chunk": {
+      "$ref": "chunk.schema.json",
+      "description": "The full Chunk shape; mirrors what is stored in the chunks table after the vector-store adapter joins the Postgres row back onto the vector payload."
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Cosine similarity between the query vector and the chunk's stored embedding. Higher is more similar."
+    }
+  }
+}

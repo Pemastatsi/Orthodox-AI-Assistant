@@ -1,7 +1,7 @@
 # Auth Context
 
 Status: Canonical
-Date: 2026-05-01
+Date: 2026-05-11
 
 This document defines how an incoming HTTP request is converted into a `Principal` (`docs/schemas/principal.schema.json`) and how tenant resolution behaves across edge cases. Implemented in `app/core/auth.py` and `app/core/middleware.py`.
 
@@ -103,6 +103,53 @@ A principal may read a run trace via `GET /runs/{runId}` when **all** of:
 - either (`user_id == principal.userId`) OR the principal holds the `admin:queries:read` scope (i.e., role is `admin`, `owner`, or `content_manager`).
 
 When the rule fails, the endpoint returns **HTTP 404** rather than 403, to avoid disclosing that a run ID exists in another user's history. The same rule applies to `/admin/queries/{runId}` and `/admin/queries/{runId}/raw`; the latter additionally requires the `admin:raw_sensitive:read` scope (admin role only) and writes an audit row.
+
+## Development Mode
+
+`app/core/auth.py` honors the `AUTH_PROVIDER` env var declared in `scaffold-contract.md`:
+
+| `AUTH_PROVIDER` | Behavior |
+|---|---|
+| `clerk` | Full Clerk JWKS verification per §Resolution Order above. The `X-Dev-Principal` header is ignored. **Required for staging and production.** |
+| `dev` | Clerk verification is skipped. The Principal is sourced from the `X-Dev-Principal` request header (see below) or, if absent, from a hardcoded fallback. **Development and integration tests only.** |
+
+### Header format (`AUTH_PROVIDER=dev`)
+
+When `AUTH_PROVIDER=dev`, requests MAY set:
+
+```
+X-Dev-Principal: <base64(utf8(json(Principal)))>
+```
+
+The decoded JSON must validate against `docs/schemas/principal.schema.json`. The minimum required fields a caller must provide are `tenantId` and `role`; the other fields may be omitted and the auth layer fills them with safe defaults:
+
+| Field | Default when omitted |
+|---|---|
+| `userId` | `"dev-user-{role}"` (e.g., `"dev-user-admin"`) |
+| `clerkUserId` | `"dev-clerk-user"` |
+| `clerkOrgId` | `"dev-clerk-org"` |
+| `scopes` | Derived from `role` per the §Roles and Scopes table above (same derivation as production). |
+| `dataRegion` | `"us"` |
+
+A missing or malformed header produces a fallback Principal with `tenantId="dev-tenant"`, `role="member"`, and the derived defaults above. A malformed header does NOT raise — dev mode is forgiving on purpose; tests that want to assert "header was malformed" should inspect the resolved Principal.
+
+### Boot guard
+
+`app/main.py` runs a startup check: when `APP_ENV='production'` AND `AUTH_PROVIDER='dev'`, the application raises `ProductionAuthConfigError` and refuses to boot. This mirrors the existing safety-config production boot guard in `safety-config-format.md` and prevents an accidental dev-mode deployment from authenticating arbitrary callers as the `dev-tenant`/`member` Principal.
+
+The same startup check logs a single INFO line: `auth.startup auth_provider=<value> app_env=<value>`. Ops grep this on every boot to confirm the resolved mode.
+
+### Testing posture
+
+- Unit and integration tests under `tests/unit/` and `tests/integration/` run with `AUTH_PROVIDER=dev` and construct Principals explicitly via the `X-Dev-Principal` header (or via `app/core/auth.py`'s `make_dev_principal()` test helper).
+- Clerk JWKS verification has its own dedicated test in `tests/integration/test_clerk_jwt.py`; this test is skipped unless `CLERK_SECRET_KEY` is set, and runs against a staging-Clerk fixture token.
+- The safety suite (`tests/safety/`) runs in `AUTH_PROVIDER=dev` for reproducibility.
+
+### Forbidden in dev mode
+
+- Deploying `AUTH_PROVIDER=dev` to staging or production. The boot guard exists precisely so this is impossible by accident; do not weaken the guard.
+- Allowing the `X-Dev-Principal` header to be present on requests to a staging/production deployment. Cleared by gateway/middleware before reaching `app/core/auth.py`.
+- Storing real customer data in a system whose `AUTH_PROVIDER` is `dev` — the auth layer cannot authoritatively distinguish callers in this mode.
 
 ## Forbidden Patterns
 

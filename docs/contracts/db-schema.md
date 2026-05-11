@@ -1,7 +1,7 @@
 # Database Schema
 
 Status: Canonical
-Date: 2026-05-02
+Date: 2026-05-11
 
 This document is the canonical Postgres DDL for Phase 1. The first Alembic migration (`backend/app/alembic/versions/0001_initial.py`) renders this file 1:1.
 
@@ -104,20 +104,28 @@ CREATE TABLE chunks (
     visibility          text NOT NULL CHECK (visibility IN ('member','scholar','admin_only','suppressed')) DEFAULT 'admin_only',
     father              text,
     work                text,
-    page                text,
+    page                text,                                          -- legacy single-page citation string; new chunks populate page_start/page_end instead
     timestamp           text,
     language            text NOT NULL DEFAULT 'en',
     categories          text[] NOT NULL DEFAULT '{}',
+    section_path        text[] NOT NULL DEFAULT '{}',                   -- chunking-contract.md §Required Chunk metadata; empty array for content before the first heading
+    page_start          integer CHECK (page_start IS NULL OR page_start >= 1),
+    page_end            integer CHECK (page_end IS NULL OR page_end >= 1),
+    parent_chunk_id     text REFERENCES chunks(chunk_id) ON DELETE SET NULL,  -- chunking-contract.md §Chunk boundaries; the join key for the Phase 2 graph traversal layer per ADR-0006
     embedding_model     text NOT NULL,
     embedding_dimension integer NOT NULL,
     corpus_version      text NOT NULL,
     review_note         text,
     created_at          timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (tenant_id, chunk_hash)
+    UNIQUE (tenant_id, chunk_hash),
+    CHECK (page_end IS NULL OR page_start IS NULL OR page_end >= page_start)
 );
 CREATE INDEX idx_chunks_tenant_approved ON chunks(tenant_id, approved, visibility);
 CREATE INDEX idx_chunks_source ON chunks(source_id);
+CREATE INDEX idx_chunks_parent ON chunks(parent_chunk_id) WHERE parent_chunk_id IS NOT NULL;
 ```
+
+The four columns `section_path`, `page_start`, `page_end`, and `parent_chunk_id` are populated by the hierarchical chunking service per `docs/contracts/chunking-contract.md` (ADR-0009). They are NULL-permitting (or empty-array-permitting) so chunks ingested before the chunking contract landed remain valid; the chunking service MUST populate all four on every new chunk it emits.
 
 ### `sessions`
 
@@ -353,3 +361,56 @@ The first migration creates everything above and the extensions. Subsequent migr
 - Has a `# Created by: <username>` line.
 - Has both `upgrade()` and `downgrade()` even when downgrade is a no-op (document why).
 - Adds an entry to `docs/adr/` only when changing semantics, not for additive columns with defaults.
+
+## First Migration Seed Data
+
+The first migration ends with the seed inserts below. These rows are required at startup so the route registry can resolve the env vars `ACTIVE_MODEL_ROUTE_A1A2`, `ACTIVE_MODEL_ROUTE_A5`, and `ACTIVE_MODEL_ROUTE_EMBEDDING` (declared in `docs/contracts/scaffold-contract.md`). The decision to ship these three specific routes is recorded in `approved-decisions-register.md` row D-MDL-001.
+
+### `prompt_versions`
+
+Seed three rows so `model_routes.prompt_version` has something to refer to (`model_routes` does not enforce a FK against `prompt_versions` at the DDL level, but `safety_suite_runs` does — and certification of these routes via T-005 requires the FK target to exist):
+
+```sql
+INSERT INTO prompt_versions (prompt_version, purpose, body, is_platform_owned, activated_at) VALUES
+  ('qa_analyze@2026-05-01.1',  'query_analyzer', '-- placeholder; real body lands in T-004', true, now()),
+  ('a5_compose@2026-05-01.1',  'compose',        '-- placeholder; real body lands in T-004', true, now()),
+  ('embedding_none@2026-05-01.1', 'embedding',   '', true, now());
+```
+
+The `embedding_none@2026-05-01.1` row is a sentinel: embedding models do not consume a system prompt, but `model_routes.prompt_version` is `NOT NULL`. The sentinel body is the empty string by convention; the route's prompt is never read at inference time.
+
+### `model_routes`
+
+Three rows seed the certified-track routes for Phase 1. All three start at `certification_status='experiment'` per ADR-0004; promotion to `certified` runs through the safety-suite gate in T-005.
+
+```sql
+-- Phase 1 active routes — see approved-decisions-register.md row D-MDL-001
+INSERT INTO model_routes (
+    route_id,
+    purpose,
+    provider,
+    model,
+    prompt_version,
+    schema_version,
+    supports_prompt_cache,
+    supports_batch,
+    supports_json_mode,
+    certification_status,
+    created_at
+) VALUES
+  -- A1/A2 query analysis: Sonnet for fast, reliable structured output
+  ('qa_analyze_anthropic@2026-05-01.1', 'query_analyzer', 'anthropic', 'claude-sonnet-4-6',
+   'qa_analyze@2026-05-01.1', '1.0', true, false, true, 'experiment', now()),
+
+  -- A5 evidence composition: Opus for lowest hallucination risk on grounded composition
+  ('a5_compose_anthropic@2026-05-01.1', 'compose', 'anthropic', 'claude-opus-4-7',
+   'a5_compose@2026-05-01.1', '1.0', true, false, true, 'experiment', now()),
+
+  -- Embeddings: Phase 1 baseline per ADR-0006
+  ('embedding_openai@2026-05-01.1', 'embedding', 'openai', 'text-embedding-3-small',
+   'embedding_none@2026-05-01.1', '1.0', false, false, false, 'experiment', now());
+```
+
+**Verifier-judge route is intentionally absent.** Per decision register row G, A6's deterministic citation and quote-overlap checks run unconditionally; the optional consistency-judge LLM call runs only when a certified `verifier_judge` route exists. `ACTIVE_MODEL_ROUTE_VERIFIER` in `.env.example` is left blank, the registry returns no certified `verifier_judge` row, and A6 skips the optional judge.
+
+These route IDs MUST match the values referenced by `ACTIVE_MODEL_ROUTE_A1A2`, `ACTIVE_MODEL_ROUTE_A5`, and `ACTIVE_MODEL_ROUTE_EMBEDDING` in `scaffold-contract.md` §.env.example exactly. A startup self-test in `app/main.py` looks up each of the three env-var route IDs in `model_routes` and refuses to boot if any row is missing.
