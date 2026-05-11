@@ -169,9 +169,9 @@ Sensitive reframing is transparent in the UI. The user sees that the system answ
 
 The following gaps were identified during Phase 1 architecture review. They do not block Phase 1 implementation but must be resolved before Phase 2 work begins:
 
-1. **Layout-aware PDF parsing** — `chunking_service.py` must use a layout-aware parser (not plain page-order extraction) to correctly link footnotes and scriptural citations to their body paragraphs. The library choice and chunk metadata requirements are specified in T-002. This must be decided before T-002 implementation begins.
+1. **Layout-aware PDF parsing — RESOLVED.** See ADR-0008 and `docs/contracts/parser-interface.md`. Two-path hybrid (`pdfplumber` for born-digital files, `pytesseract` with `grc`+`ell` language packs for scanned files) behind a `Parser` Protocol, dispatched by a `< 50 chars/page` heuristic owned by the chunking service. Decision row: `approved-decisions-register.md` D-PDF-001.
 
-2. **Chunking strategy** — Fixed-size chunking is insufficient for Patristic texts. Semantic or hierarchical chunking by natural section boundaries is required to preserve argument integrity and pass A6 citation overlap thresholds. Specified in T-002; must be decided before implementation begins.
+2. **Chunking strategy — RESOLVED.** See ADR-0009 and `docs/contracts/chunking-contract.md`. Hierarchical heading-boundary chunking with a sentence-boundary fallback; 800–1200 token soft cap, 1500 hard cap; every chunk carries `sectionPath`, `pageStart`, `pageEnd`, `parentChunkId`. The `parentChunkId` field is the join key for the ADR-0006 Phase 2 graph traversal layer. Decision row: `approved-decisions-register.md` D-CHK-001.
 
 3. **Multilingual embedding upgrade** — `text-embedding-3-small` is the Phase 1 certified baseline. Phase 2 must benchmark multilingual embedding models on Polytonic Greek ↔ English retrieval pairs before committing to a replacement. Candidate models and evaluation criteria are documented in ADR 0006. The existing upgrade SOP (dual-index → backfill → certify → cutover) applies.
 
