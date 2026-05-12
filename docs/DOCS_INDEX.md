@@ -133,6 +133,8 @@ These files are retained for context only. They are not normal coding inputs.
 | `docs/reference/patristic_engineering_spec.pdf` | reference | Future feature roadmap. |
 | `docs/reference/patristic_strategic_features.pdf` | reference | Strategic feature context. |
 | `docs/reference/UI_Build_Plan.pdf` | reference | UI ideas. MVP prompt editor/study packet guidance is superseded. |
+| `docs/reference/audits/README.md` | reference | Conventions for non-canonical scope/design audits. |
+| `docs/reference/audits/2026-05-12-scholar-tier-cartography-scope-audit.md` | reference | Section-by-section audit of an uploaded "Scholar Tier / Dynamic Theological Cartography" scope document against current ADRs and contracts. Surfaces aligned / deferred / conflicting / harvestable items; makes no decisions. |
 
 ## Archive
 
@@ -158,6 +160,7 @@ These files are superseded planning drafts. They have headers warning future age
 | Agent architecture PDF | `AGENTS.md`, Phase 1 contract, ADR 0004, task cards T-003 and T-004. |
 | UI build plan PDF | Task card T-006; superseded where it conflicts with no free-form prompt editing and no MVP study packets. |
 | `pag_rag_design.html` | ADR 0006, code-gen-guide.md. |
+| Scholar Tier / Dynamic Theological Cartography scope (uploaded 2026-05-12) | Audited in `docs/reference/audits/2026-05-12-scholar-tier-cartography-scope-audit.md`. Cites ADR 0001, ADR 0002, ADR 0006, ADR 0007, ADR 0009, `AGENTS.md`, `docs/contracts/frontend-components.md`, `docs/contracts/phase1-implementation-contract.md`, `docs/schemas/chunk.schema.json`. No canonical files amended. |
 
 ## Resolved Contradictions
 
