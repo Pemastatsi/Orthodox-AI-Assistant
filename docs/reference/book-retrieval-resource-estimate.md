@@ -113,6 +113,37 @@ The canonical docs do not specify an average book size. The estimates below depe
 - **FastAPI:** 2–4 replicas × (2 vCPU / 2 GB) behind a load balancer
 - **Object storage:** 50 GB blob (S3/R2-compatible)
 
+### Monthly cost (5K books)
+
+List prices as of model knowledge cutoff (Jan 2026). Cloud contracts typically include committed-use or startup discounts. Verify against current Railway / OpenAI / Anthropic pricing before procurement.
+
+| Line item | Monthly | Basis |
+|---|---|---|
+| Qdrant container (Railway, 4 vCPU / 8 GB / 50 GB) | **$40–80** | Railway compute + storage list |
+| Postgres (Railway managed, 4 vCPU / 8 GB / 50 GB) | **$50–100** | Railway Postgres tier |
+| Redis (Railway managed, 2 GB) | **$10–20** | Railway Redis tier |
+| FastAPI replicas (2–4 × 2 vCPU / 2 GB) | **$40–80** | Railway compute |
+| Object storage (PDFs, ~25 GB on R2/S3) | **$1–5** | R2 $0.015/GB; S3 $0.023/GB |
+| Bandwidth/egress (API JSON traffic) | **$5–20** | usage-dependent |
+| Observability (Sentry/Grafana Cloud free tier or paid) | **$20–50** | Vendor list |
+| **Fixed infra subtotal** | **~$170–355/mo** | |
+| **One-time embedding cost** | **~$10** | 500 M tokens × $0.02/1M |
+
+**Variable LLM cost per fresh query** (Anthropic list prices, snapshot):
+- A1+A2 (`claude-sonnet-4-6`, ~1 K in / 200 out): **~$0.006**
+- A5 Composer (`claude-opus-4-7`, ~5 K in / 500 out): **~$0.11**
+- **Per fresh answer: ~$0.10–0.12.** Cached answers (1-hour TTL per AGENTS.md): ~$0.
+
+Monthly LLM spend at different query volumes (assuming 30 % cache hit rate after warm-up):
+
+| Fresh queries/mo | Monthly LLM cost | Notes |
+|---|---|---|
+| 500 | ~$60 | Early beta / internal use |
+| 2,000 | ~$240 | First paying tenant (Starter/Community tier) |
+| 10,000 | ~$1,200 | Multiple tenants warming up |
+
+**Total monthly all-in (5 K-book corpus, ~2 K fresh queries/mo):** **~$400–600/month** + variable LLM cost above.
+
 ---
 
 ## 5. 150,000-book estimate (30× scale)
@@ -174,6 +205,40 @@ Per query (rough, per AGENTS.md routes):
 
 This is billed back through Stripe `served_answer_count`; not infrastructure cost per se, but it dominates unit economics at 150 K-book scale.
 
+### Monthly cost (150 K books)
+
+At this scale Railway managed services hit their practical ceilings; the numbers below assume migration to a hyperscaler (AWS / GCP / Azure) or Qdrant Cloud + a managed Postgres equivalent. Reserved-instance / committed-use discounts of 30–50 % typically apply at this commitment level — list-price ranges shown.
+
+| Line item | Monthly | Basis |
+|---|---|---|
+| Qdrant cluster (3–5 nodes × 8 vCPU / 32 GB / 200 GB SSD) | **$600–2,000** | Self-managed on cloud VMs; Qdrant Cloud is 1.5–2× higher |
+| Postgres primary + replica (2 × 16 vCPU / 64 GB / 500 GB SSD) | **$500–1,000** | Managed Postgres (RDS / Cloud SQL) |
+| Redis cluster (16–32 GB managed) | **$100–200** | ElastiCache / MemoryStore |
+| FastAPI workers (8–16 replicas × 4 vCPU / 4 GB) | **$300–800** | Container service (ECS / Cloud Run / Fly) |
+| Background workers (ingest, embedding queue, batch) | **$100–300** | Lower-tier compute |
+| Load balancer + WAF | **$30–80** | ALB / Cloud Load Balancer |
+| Object storage (PDFs, ~1 TB on R2/S3 standard) | **$15–30** | R2 $0.015/GB; S3 $0.023/GB |
+| Bandwidth/egress (higher API traffic) | **$50–200** | usage-dependent |
+| Observability (logs, traces, APM at scale) | **$200–500** | Datadog / Grafana Cloud / Honeycomb |
+| Backups + snapshot storage | **$50–150** | DB snapshots + Qdrant snapshots |
+| **Fixed infra subtotal** | **~$1,950–5,260/mo** | |
+| **One-time embedding cost** | **~$300** | 15 B tokens × $0.02/1M |
+
+**Variable LLM spend** dominates at this scale. Same per-query economics (~$0.10–0.12/fresh, ~$0/cached). Assume 30 % cache hit after warm-up:
+
+| Fresh queries/mo | Monthly LLM cost | Implied tenant mix |
+|---|---|---|
+| 35,000 | ~$4,200 | ~10 Institution-tier tenants @ 5K queries/mo |
+| 70,000 | ~$8,400 | Growth phase, mixed tiers |
+| 200,000 | ~$24,000 | Mature multi-tenant Enterprise SaaS |
+
+**Total monthly all-in (150 K-book corpus, 70 K fresh queries/mo):** **~$10,000–14,000/month**.
+
+**Unit economics check** (per `patristic-build-plan.md` tier table, lines 1042–1045):
+- Institution tier: $350/mo for 5,000 queries → effective price $0.07/query
+- Server cost per fresh query at this scale: ~$0.12 LLM + ~$0.02 amortized infra = ~$0.14
+- **Gross margin without cache is negative.** Cache hit rate (currently 1-hour TTL per AGENTS.md) is the single biggest lever for profitability. At 50 % cache hit, effective cost drops to ~$0.07 — break-even with Institution pricing. Phase 3 prompt-versioning + corpus-revision-aware cache should lift this further.
+
 ---
 
 ## 6. Side-by-side summary
@@ -185,8 +250,12 @@ This is billed back through Stripe `served_answer_count`; not infrastructure cos
 | **Storage total** | **~70–85 GB** | **~2–3 TB** | ~35× |
 | **RAM total** | **~24–32 GB** | **~256–512 GB** | ~12–16× |
 | **vCPU total** | **~12–16** | **~64–128** | ~5–8× |
-| One-time embedding cost | ~$10 | ~$300 | 30× |
+| **Fixed infra cost** | **~$170–355/mo** | **~$1,950–5,260/mo** | ~11–15× |
+| **One-time embedding cost** | **~$10** | **~$300** | 30× |
+| **Variable LLM cost (typical usage)** | ~$60–240/mo (500–2K queries) | ~$4,200–8,400/mo (35K–70K queries) | usage-driven |
+| **All-in monthly (typical)** | **~$400–600/mo** | **~$10,000–14,000/mo** | ~20–30× |
 | Vector store viability | Single Qdrant node, no quant | Cluster (3–5 nodes) + int8 quant OR pgvector migration | architectural change |
+| Hosting | Railway (managed) | Hyperscaler (AWS/GCP/Azure) + Qdrant Cloud or self-managed cluster | provider change |
 | Phase mapping | Late Phase 1 / Phase 2 | Phase 2+ (per ADR-0010 hint) | — |
 
 The RAM ratio is sub-linear (~12–16× for 30× data) because (a) HNSW graph overhead grows roughly linearly with vectors but only the hot working set needs to be resident, and (b) quantization compresses the vector portion 4× at 150K-scale. Storage ratio is super-linear (~35×) because backups, logs, and source PDFs all grow, plus a richer index footprint.
@@ -204,14 +273,18 @@ CPU ratio is sub-linear (~5–8×) because vector-search cost scales as `log(N)`
 ## 8. Assumptions, gaps, and what's NOT covered
 
 - **Average book size is a derived assumption (250 pp × 300 words/pp × 1.3 tokens/word → 100 K tokens → 100 chunks).** Canonical docs do not specify this. Verify against the actual corpus profile before procurement.
-- Network egress, CDN, and frontend (Next.js) hosting are excluded. The estimate covers the retrieval data plane only.
-- Anthropic/OpenAI API spend is variable and metered through Stripe; treated separately from infrastructure sizing.
+- **Pricing is a list-price snapshot** as of model knowledge cutoff (Jan 2026). Anthropic, OpenAI, Railway, AWS, GCP, and observability vendors update pricing periodically; committed-use, startup-credit, and volume discounts of 20–50 % are common. Re-quote before signing contracts.
+- Network egress, CDN, and frontend (Next.js) hosting are listed only at a high level. The estimate covers the retrieval data plane.
+- Anthropic/OpenAI API spend is variable and metered through Stripe (`served_answer_count`); treated as a separate cost row from fixed infra.
 - Phase 1 architecture is explicitly **not** designed for 150 K books. Numbers for that tier require either Qdrant clustering, pgvector migration, or managed vector DB — each with different cost shapes. The estimate uses Qdrant cluster + int8 quantization as the reference scenario.
-- Disaster recovery, multi-region, and cross-tenant isolation hardening (beyond ADR-0003 baseline) not sized.
-- Object storage costs (PDFs) are listed as a tier but pricing varies by provider (R2, S3, B2). Treat as cheap relative to vector/DB tiers.
+- Disaster recovery, multi-region failover, and cross-tenant isolation hardening (beyond ADR-0003 baseline) not sized.
+- **Cache hit rate is the single biggest lever on unit economics** at 150 K-book scale. The 30 % assumption in this estimate is a guess; instrument `cache_hit_rate` from day 1 to validate.
+- Anthropic prompt caching (input-cache discounts on repeated A1/A2/A5 contexts) is not modeled here; if enabled, it can reduce variable LLM cost by another 30–60 %.
 
 ## 9. Next useful actions
 
 1. Sample 10–20 representative books from the seed corpus and measure actual `chunks_per_book` to replace the 100 assumption.
 2. If 150 K-book scale is on the roadmap, open an ADR amendment for ADR-0010 capturing the cluster/quantization or pgvector migration decision.
 3. Run a load test at 500 K vectors (the 5K-book point) against the current single-node Qdrant config to validate the <100 ms SLO before extrapolating further.
+4. Instrument cache hit rate per AGENTS.md cache-key definition and report it in the margin dashboard from launch — it dominates the 150K-tier P&L.
+5. Re-quote Anthropic, OpenAI, Railway, and target hyperscaler pricing before any procurement decision; the numbers in §4 and §5 are list-price snapshots, not negotiated rates.
