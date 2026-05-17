@@ -17,7 +17,7 @@ This document defines the abstract interface every vector-store adapter implemen
 ```python
 from typing import Protocol, runtime_checkable
 from dataclasses import dataclass
-from app.domain.models import ChunkPayload, VectorFilter, ScoredChunk
+from app.domain.models import ChunkPayload, VectorFilter, ScoredChunk, SparseVector
 
 @runtime_checkable
 class VectorStore(Protocol):
@@ -29,6 +29,7 @@ class VectorStore(Protocol):
         self,
         *,
         query_vector: list[float],
+        sparse_query: SparseVector | None = None,
         filters: VectorFilter,
         top_k: int,
     ) -> list[ScoredChunk]: ...
@@ -45,6 +46,8 @@ class VectorStore(Protocol):
                                          # must match every payload's embedding length
 ```
 
+`sparse_query` is `None` for dense-only retrieval (the original behavior). When passed, the adapter issues a single Qdrant `Query` API request with both dense and sparse prefetch branches, fused server-side via Reciprocal Rank Fusion (RRF). The tenant filter applies to both branches identically. See ADR-0011 for the architectural rationale and ADR-0012 for the complementary reranker step that consumes the hybrid result.
+
 `embedding_dimension` is read at startup to validate that the configured vector store matches the active embedding `ModelRoute` (per ADR-0006). A mismatch fails the startup boot check.
 
 ## `ChunkPayload`
@@ -52,6 +55,11 @@ class VectorStore(Protocol):
 What gets stored alongside the vector. This is a strict subset of `Chunk` (per `chunk.schema.json`) plus the embedding itself. Defined in `app/domain/models.py`:
 
 ```python
+@dataclass(frozen=True)
+class SparseVector:
+    indices: list[int]        # term-id positions in the sparse index
+    values: list[float]       # corresponding weights
+
 @dataclass(frozen=True)
 class ChunkPayload:
     chunk_id: str
@@ -67,6 +75,7 @@ class ChunkPayload:
     visibility: str           # 'member' | 'scholar' | 'admin_only' | 'suppressed'
     embedding_model: str      # certified ModelRoute.routeId for purpose='embedding'
     embedding: list[float]    # length == VectorStore.embedding_dimension
+    sparse_embedding: SparseVector | None  # BM25-style sparse vector; None for legacy chunks pre-ADR-0011
 ```
 
 `ChunkPayload` mirrors the fields the vector store needs to (a) filter on (`tenant_id`, `approved`, `visibility`), (b) return for citation display (`source_id`, `source_hash`, `section_path`, `page_start`, `page_end`), and (c) reconstruct as a `ScoredChunk` (`text`, `chunk_id`, `parent_chunk_id`). The exhaustive `Chunk` shape (categories, language, father, work, reviewNote, createdAt) is NOT stored in the vector payload; it stays in Postgres and is joined back when A4 builds the evidence packet.
