@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "scored-chunk.schema.json",
   "title": "ScoredChunk",
-  "description": "A retrieval hit: a full Chunk shape (per chunk.schema.json) plus a cosine-similarity score. Returned by VectorStore.search (docs/contracts/vector-store-interface.md). Composition over Chunk rather than field-duplication so the chunk shape has one source of truth.",
+  "description": "A retrieval hit: a full Chunk shape (per chunk.schema.json) plus a cosine-similarity score and an optional reranker score. Returned by VectorStore.search (docs/contracts/vector-store-interface.md) and optionally re-emitted by Reranker.rerank (docs/contracts/reranker-interface.md, ADR-0012). Composition over Chunk rather than field-duplication so the chunk shape has one source of truth.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,16 @@
       "type": "number",
       "minimum": 0.0,
       "maximum": 1.0,
-      "description": "Cosine similarity between the query vector and the chunk's stored embedding. Higher is more similar."
+      "description": "Retrieval score. For dense-only retrieval, cosine similarity in [0.0, 1.0]. For hybrid retrieval (ADR-0011), the server-side RRF-fused score (normalized into [0.0, 1.0] by the adapter). Higher is more similar."
+    },
+    "rerankScore": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Optional reranker output (ADR-0012). Populated by a certified Reranker route when active; null otherwise. A4 sorts by rerankScore when present, falling back to score. Cross-encoder rerankers return continuous floats in [0.0, 1.0]; managed-API rerankers (e.g., Cohere) are normalized into the same range by the adapter. Writing to this field is forbidden outside the reranker adapter."
     }
   }
 }
