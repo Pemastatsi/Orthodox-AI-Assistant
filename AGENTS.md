@@ -112,6 +112,8 @@ Pastoral, medical, political, comparative, and canonical-dispute queries must no
 
 Sensitive reframing is transparent in the UI. The user sees that the system answered a teaching-oriented version of the question.
 
+Tenants may record their ecclesiastical jurisdiction via `tenant.config.ecclesiasticalJurisdiction` (enum: `oca`, `rocor`, `ecumenical_patriarchate`, `goarch`, `moscow_patriarchate`, `antiochian`, `serbian`, `romanian`, `bulgarian`, `georgian`, `albanian`, `polish`, `czech_slovak`, `ukrainian_orthodox`, `japanese`, `coptic`, `ethiopian`, `eritrean`, `armenian`, `syriac`, `malankara`, `assyrian`, `monastic_athonite`, `monastic_other`, `academic`, `pan_orthodox`, `other`). The field is independent of `calendarProfile` — a tenant may select a GOARCH jurisdiction with a revised-Julian fixed-feast calendar and a Julian Paschalion, for example. Phase 1 records the field, surfaces it in citation context, and includes it in the cache key; the `institutional_policy` answer mode consumes it in Phase 2+ to scope guidance to the tenant's canonical and pastoral norms. The catch-all `other` requires `ecclesiasticalJurisdictionOther` (free text) to be set.
+
 ## Prompt And Model Rules
 
 - Base closed-corpus prompt is platform-controlled.

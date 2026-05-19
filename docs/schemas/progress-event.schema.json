@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "progress-event.schema.json",
+  "title": "ProgressEvent",
+  "description": "Typed JSON payload (the SSE 'data:' line) for events emitted on POST /query when streamProgress=true. The SSE 'event:' line names the variant (progress | done | error). Each variant is validated against the corresponding $defs entry. Progress events are emitted zero or more times during a fresh model run; a single terminal done event carries the full VerifiedResponse; an error event may terminate the stream with a typed ApiError. Cache hits emit a single done event with no preceding progress events. See docs/contracts/code-gen-guide.md section Server-Sent Events for the wire format and docs/contracts/frontend-components.md for the StageStatus consumer.",
+  "oneOf": [
+    { "$ref": "#/$defs/ProgressVariant" },
+    { "$ref": "#/$defs/DoneVariant" },
+    { "$ref": "#/$defs/ErrorVariant" }
+  ],
+  "$defs": {
+    "ProgressVariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "SSE 'event: progress' payload. Emitted at the start of each substantive pipeline stage during a fresh run. Never emitted on a cache hit.",
+      "required": ["stage", "elapsedMs"],
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "a1_a2_query_analyzer",
+            "a3_retrieval",
+            "a4_evidence_packager",
+            "a5_composer",
+            "a6_verifier"
+          ],
+          "description": "Canonical stage identifier. Matches the run-trace.schema.json stages enum subset that represents substantive pipeline work (cache_lookup and cache_store are recorded in the run trace but never surfaced as progress events to keep cache hits non-leaky)."
+        },
+        "elapsedMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cumulative milliseconds since request receipt, measured server-side. Monotonic across events within a single run. The client may layer its own arrival timestamp on top (for UI freshness signals) but should not reorder events by client time."
+        },
+        "modelRouteId": {
+          "type": ["string", "null"],
+          "description": "Optional. Certified ModelRoute.routeId for stages that called a provider (typically a1_a2_query_analyzer, a5_composer, and the optional a6_verifier judge). Omitted for deterministic stages (a3_retrieval, a4_evidence_packager) and when the run path did not invoke a model."
+        }
+      }
+    },
+    "DoneVariant": {
+      "$ref": "verified-response.schema.json",
+      "description": "SSE 'event: done' payload. Emitted exactly once at the terminal stage of every run (fresh or cache hit). The payload is the full VerifiedResponse including citations, runTrace, and verification.passed."
+    },
+    "ErrorVariant": {
+      "$ref": "api-error.schema.json",
+      "description": "SSE 'event: error' payload. Emitted at most once and terminates the stream. The shape is the standard ApiError envelope so client error handling is uniform across the JSON-response and SSE-response paths."
+    }
+  }
+}
