@@ -1,5 +1,17 @@
 # Claude Design Prompt: Orthodox AI Assistant End-State Frontend
 
+> **SUPERSEDED — 2026-05-19**
+> This file is retained as a historical design exploration. Its feature ideas have been extracted, canonicalized, and superseded by:
+> - **ADR 0013** (`docs/adr/0013-rich-output-format-strategy.md`) — five-tier output model.
+> - **ADR 0014** (`docs/adr/0014-artifact-provider-abstraction.md`) — artifact provider interfaces.
+> - **ADR 0015** (`docs/adr/0015-multi-meter-billing.md`) — multi-meter billing model.
+> - **ADR 0016** (`docs/adr/0016-workflow-approval-gates.md`) — workflow approval gates.
+> - **Phase 2 contracts** (`docs/contracts/artifact-spec-contract.md`, `rich-output-rendering.md`, etc.).
+> - **Phase 2 task cards** (`docs/task_cards/phase2/T-101` through `T-125`).
+> - **`docs/phase2-roadmap.md`** — implementation phasing and exit criteria.
+>
+> Do NOT use this file as an active implementation reference. The canonical sources above govern.
+
 Use this prompt to create a complete future-state product design for the Orthodox AI Assistant / Patristic Library Assistant across all planned phases. This is broader than the Phase 1 private-beta prompt in `docs/claude-design-frontend-prompt.md`.
 
 ## Prompt To Paste Into Claude Design
