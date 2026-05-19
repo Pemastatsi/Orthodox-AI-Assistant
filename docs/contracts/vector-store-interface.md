@@ -123,8 +123,9 @@ These checks are tested directly in `tests/unit/test_vector_store_isolation.py`.
 ### `QdrantStore` (Phase 1)
 
 - Wraps the `qdrant-client` Python SDK.
-- The choice between **one collection per tenant** (`chunks_{tenant_id}`) and **one shared collection** with a tenant payload filter is left to T-002. The Protocol accommodates either; the chosen pattern is recorded in `approved-decisions-register.md` as a follow-up to D-VS-001 once measured.
-- Issues a single Qdrant `points/search` request per `search` call with payload filters expanded from `VectorFilter`.
+- Uses **one shared Qdrant collection** named via `QDRANT_COLLECTION_PREFIX` (default `chunks`) with `tenant_id` as a required payload field. Tenant isolation is enforced by the Protocol invariant: every `search`, `upsert`, and `delete_by_filter` call must carry a non-empty `VectorFilter.tenant_id`, which the adapter pushes into the Qdrant filter as `must: [{ key: tenant_id, match: { value: <tid> } }]`. The topology rationale, the alternative considered (one collection per tenant), and the promotion criteria for switching to per-tenant collections are recorded in ADR-0013.
+- Initializes the collection at adapter startup via an idempotent `ensure_collection()` helper that provisions: cosine-distance dense vectors sized to the active embedding `ModelRoute`, one named sparse vector `text_bm25` (per ADR-0011), and payload indexes on `tenant_id`, `approved`, `visibility`, and `source_id`.
+- Issues a single Qdrant `points/search` (or `points/query` for hybrid) request per `search` call with payload filters expanded from `VectorFilter`.
 - Hydrates `ScoredChunk.chunk` by joining the Postgres `chunks` table on `chunk_id` (the join is a single `SELECT ... WHERE chunk_id = ANY(:ids)` query, batched once per `search` call).
 
 ### `PgvectorStore` (Phase 2)
@@ -179,8 +180,9 @@ Searching for vectors is exclusively an A3 retrieval concern. A4, A5, and A6 rec
 - ADR-0010 — rationale for the Protocol seam and the tenant-isolation invariant.
 - ADR-0006 — selects Qdrant; not amended by this contract.
 - ADR-0003 — DB-layer tenant invariant this Protocol mirrors.
+- ADR-0013 — Qdrant collection topology (shared collection with `tenant_id` payload filter).
 - `docs/contracts/provider-interface.md` — the `LLMProvider` pattern this contract follows.
 - `docs/contracts/code-gen-guide.md` — Forbidden Patterns; the import-rule lint extends to `qdrant_client`.
 - `docs/schemas/chunk.schema.json` — the `Chunk` shape that `ScoredChunk` composes.
 - `docs/schemas/scored-chunk.schema.json` — the on-disk JSON shape, `$ref`s `chunk.schema.json`.
-- `docs/contracts/approved-decisions-register.md` row D-VS-001.
+- `docs/contracts/approved-decisions-register.md` row D-VS-001 (and its ADR-0013 follow-up).
