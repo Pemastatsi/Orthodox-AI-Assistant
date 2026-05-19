@@ -36,6 +36,62 @@
       "type": "string",
       "description": "Tool + version used for text extraction (e.g., 'pypdf@4.2.0')."
     },
+    "corpusOrigin": {
+      "type": ["string", "null"],
+      "description": "Upstream corpus the source originated from. Drives Phase 3 cross-institution attribution and Phase 4 manuscript-partnership accounting. Use the catch-all 'tenant_upload' when no canonical upstream applies. The 'monastery_archive:<name>' prefix identifies a specific monastery archive (e.g., 'monastery_archive:simonopetra').",
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "enum": [
+            "tlg",
+            "migne_pg",
+            "migne_pl",
+            "ccsg",
+            "sources_chretiennes",
+            "goarch_publications",
+            "oca_publications",
+            "antiochian_publications",
+            "rocor_publications",
+            "moscow_patriarchate_publications",
+            "romanian_patriarchate_publications",
+            "serbian_patriarchate_publications",
+            "ecumenical_patriarchate_publications",
+            "coptic_patriarchate_publications",
+            "ethiopian_patriarchate_publications",
+            "armenian_patriarchate_publications",
+            "syriac_patriarchate_publications",
+            "academic_journal",
+            "tenant_upload",
+            "other"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^monastery_archive:[a-z0-9_]+$"
+        }
+      ]
+    },
+    "digitizationProvenance": {
+      "type": ["string", "null"],
+      "description": "Physical or digital provenance of the source text. Determines citation confidence and unblocks Phase 4 manuscript-witness graph work.",
+      "enum": [
+        null,
+        "manuscript",
+        "manuscript_facsimile",
+        "critical_edition",
+        "scholarly_edition",
+        "paperback",
+        "hardcover",
+        "publisher_pdf",
+        "scanned_pdf",
+        "web_html",
+        "born_digital",
+        "audio_transcript",
+        "video_transcript",
+        "unknown"
+      ]
+    },
     "approved": { "type": "boolean", "default": false },
     "approvalNote": { "type": ["string", "null"] },
     "approvedBy": { "type": ["string", "null"] },

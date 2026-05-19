@@ -69,26 +69,33 @@ CREATE INDEX idx_users_email ON users(tenant_id, email) WHERE email IS NOT NULL;
 
 ```sql
 CREATE TABLE sources (
-    source_id          text PRIMARY KEY,
-    tenant_id          text NOT NULL REFERENCES tenants(tenant_id) ON DELETE RESTRICT,
-    title              text NOT NULL,
-    father             text,
-    work               text,
-    language           text NOT NULL CHECK (language IN ('en','el','mixed')) DEFAULT 'en',
-    source_type        text NOT NULL CHECK (source_type IN ('pdf','txt','md','docx')),
-    source_hash        text NOT NULL CHECK (source_hash ~ '^sha256:[0-9a-f]{64}$'),  -- 'sha256:<hex>' per decision J
-    extraction_method  text NOT NULL,
-    approved           boolean NOT NULL DEFAULT false,
-    approval_note      text,
-    approved_by        text REFERENCES users(user_id),
-    approved_at        timestamptz,
-    corpus_version     text NOT NULL,
-    metadata           jsonb NOT NULL DEFAULT '{}'::jsonb,
-    created_at         timestamptz NOT NULL DEFAULT now(),
+    source_id                text PRIMARY KEY,
+    tenant_id                text NOT NULL REFERENCES tenants(tenant_id) ON DELETE RESTRICT,
+    title                    text NOT NULL,
+    father                   text,
+    work                     text,
+    language                 text NOT NULL CHECK (language IN ('en','el','mixed')) DEFAULT 'en',
+    source_type              text NOT NULL CHECK (source_type IN ('pdf','txt','md','docx')),
+    source_hash              text NOT NULL CHECK (source_hash ~ '^sha256:[0-9a-f]{64}$'),  -- 'sha256:<hex>' per decision J
+    extraction_method        text NOT NULL,
+    corpus_origin            text,                       -- nullable; values per source.schema.json#/properties/corpusOrigin (enum + 'monastery_archive:<name>' pattern). Enforced at the API/Pydantic layer rather than as a CHECK constraint so the monastery-archive prefix pattern stays expressive.
+    digitization_provenance  text CHECK (digitization_provenance IS NULL OR digitization_provenance IN (
+        'manuscript','manuscript_facsimile','critical_edition','scholarly_edition',
+        'paperback','hardcover','publisher_pdf','scanned_pdf','web_html','born_digital',
+        'audio_transcript','video_transcript','unknown'
+    )),
+    approved                 boolean NOT NULL DEFAULT false,
+    approval_note            text,
+    approved_by              text REFERENCES users(user_id),
+    approved_at              timestamptz,
+    corpus_version           text NOT NULL,
+    metadata                 jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at               timestamptz NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, source_hash)
 );
 CREATE INDEX idx_sources_tenant_approved ON sources(tenant_id, approved);
 CREATE INDEX idx_sources_corpus_version ON sources(tenant_id, corpus_version);
+CREATE INDEX idx_sources_corpus_origin ON sources(tenant_id, corpus_origin) WHERE corpus_origin IS NOT NULL;
 ```
 
 ### `chunks`
