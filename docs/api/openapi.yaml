@@ -87,9 +87,13 @@ paths:
         "200":
           description: |
             Verified answer or bounded fallback. When `streamProgress: true` is requested,
-            the server may switch to a Server-Sent Events stream over the same path. The SSE
-            event grammar is documented out-of-band in `docs/contracts/code-gen-guide.md` §SSE;
-            the typed JSON contract here is the cache-hit and final-event shape.
+            the server may switch to a Server-Sent Events stream over the same path. SSE
+            event payloads are typed against `components.schemas.ProgressEvent` (mirrored
+            from `docs/schemas/progress-event.schema.json`); the SSE wire grammar lives in
+            `docs/contracts/code-gen-guide.md` §Server-Sent Events because OpenAPI 3.1
+            does not model the `text/event-stream` media type natively. The typed JSON
+            contract on this response is the cache-hit and terminal `done`-event shape
+            (a full `VerifiedResponse`).
           headers:
             X-Run-Id:
               schema: { type: string }
@@ -673,6 +677,60 @@ components:
         - historical_development
         - scholarly_dispute
         - institutional_policy
+
+    # NOTE: ProgressEvent and ProgressVariant are the SSE-payload manual mirrors of
+    # docs/schemas/progress-event.schema.json. The stage enum and ProgressVariant
+    # field shape MUST stay byte-for-byte aligned with the JSON Schema; the same
+    # CI parity check that gates AnswerMode also gates these. The OpenAPI 3.1
+    # spec does not model the SSE media type natively, so the /query operation
+    # cannot declare text/event-stream as a content type — these schemas exist
+    # so the typed client (web/lib/api-client.ts) can validate SSE data: payloads
+    # against a single named contract.
+    ProgressEvent:
+      description: |
+        SSE 'data:' payload for POST /query when streamProgress=true. The 'event:'
+        SSE field disambiguates which variant applies: 'progress' →
+        ProgressVariant; 'done' → VerifiedResponse; 'error' → ApiError. See
+        docs/contracts/code-gen-guide.md §Server-Sent Events for the wire
+        grammar and docs/schemas/progress-event.schema.json for the canonical
+        JSON Schema.
+      oneOf:
+        - $ref: "#/components/schemas/ProgressVariant"
+        - $ref: "#/components/schemas/VerifiedResponse"
+        - $ref: "#/components/schemas/ApiError"
+
+    ProgressVariant:
+      type: object
+      additionalProperties: false
+      required: [stage, elapsedMs]
+      description: |
+        SSE 'event: progress' payload. Emitted zero or more times during a
+        fresh model run; never emitted on a cache hit.
+      properties:
+        stage:
+          type: string
+          enum:
+            - a1_a2_query_analyzer
+            - a3_retrieval
+            - a4_evidence_packager
+            - a5_composer
+            - a6_verifier
+          description: |
+            Canonical stage identifier. The cache_lookup and cache_store
+            stages from run-trace.schema.json are deliberately omitted from
+            this enum so cache hits do not leak hit/miss timing.
+        elapsedMs:
+          type: integer
+          minimum: 0
+          description: |
+            Cumulative milliseconds since request receipt, server-measured,
+            monotonic across events within a single run.
+        modelRouteId:
+          type: ["string", "null"]
+          description: |
+            Optional. Certified ModelRoute.routeId when the stage invoked a
+            provider (typically a1_a2_query_analyzer, a5_composer, optional
+            a6_verifier judge). Omitted for deterministic stages.
 
     WebhookAck:
       type: object

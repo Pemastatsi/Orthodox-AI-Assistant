@@ -131,13 +131,13 @@ Component prop contracts are in `docs/contracts/frontend-components.md`.
 
 ### Server-Sent Events (SSE) for /query progress
 
-The `POST /query` endpoint accepts an optional `streamProgress: true` body field. When set, the server may upgrade the response to `text/event-stream` over the same path (clients send `Accept: text/event-stream`). The OpenAPI contract (`docs/api/openapi.yaml`) does **not** model the SSE media type — the typed JSON shape there is the cache-hit and final-event payload only. SSE event grammar:
+The `POST /query` endpoint accepts an optional `streamProgress: true` body field. When set, the server may upgrade the response to `text/event-stream` over the same path (clients send `Accept: text/event-stream`). The OpenAPI contract (`docs/api/openapi.yaml`) models the SSE event payloads via `progress-event.schema.json` (registered under `components.schemas.ProgressEvent`); the typed JSON shape there is the cache-hit and final-event payload only because OpenAPI itself does not model the SSE media type natively. SSE event grammar:
 
-- `event: progress` — JSON payload `{ "stage": "<a1|a3|a4|a5|a6>", "elapsedMs": <int> }`. Sent zero or more times during a fresh model run; never sent for cache hits.
-- `event: done` — JSON payload is the full `VerifiedResponse` per `verified-response.schema.json`. Sent exactly once at the end.
-- `event: error` — JSON payload is the standard `ApiError` envelope. Sent at most once; terminates the stream.
+- `event: progress` — JSON payload validated against `progress-event.schema.json#/$defs/ProgressVariant`. Fields: `stage` (enum: `a1_a2_query_analyzer | a3_retrieval | a4_evidence_packager | a5_composer | a6_verifier`), `elapsedMs` (cumulative ms since request receipt, monotonic across events within a run), optional `modelRouteId` (populated for stages that called a provider). Emitted zero or more times during a fresh model run; never emitted for cache hits.
+- `event: done` — JSON payload is the full `VerifiedResponse` per `verified-response.schema.json` (referenced from the schema as `progress-event.schema.json#/$defs/DoneVariant`). Emitted exactly once at the terminal stage of every run.
+- `event: error` — JSON payload is the standard `ApiError` envelope per `api-error.schema.json` (referenced as `progress-event.schema.json#/$defs/ErrorVariant`). Emitted at most once and terminates the stream.
 
-Cache hits return a single `done` event followed by stream close; no `progress` events are emitted. Frontend implementation (`web/lib/api-client.ts`) must consume the stream via `EventSource` or fetch+ReadableStream; see `frontend-components.md` for `<ChatComposer>` behavior.
+Cache hits return a single `done` event followed by stream close; no `progress` events are emitted. Frontend implementation (`web/lib/api-client.ts`) consumes the stream via `EventSource` or `fetch`+`ReadableStream`, parses each `data:` line as JSON, and validates against the variant matching the `event:` name. See `frontend-components.md` for `<ChatComposer>` and `<StageStatus>` behavior. The frontend may layer its own arrival timestamp (`at: string`) onto the in-memory state without sending it across the wire — `elapsedMs` is the wire-level ordering signal.
 
 ## 4. Layering Rules (Hard)
 
