@@ -188,3 +188,11 @@ Adapters read provider credentials only via `app/core/config.py`, which reads fr
 - Streaming raw text to the user before A6 has run (this is checked in tests).
 - Logging request bodies that include raw chunk text or raw user query — those go to the run trace, not the log line.
 - Any `# noqa` or `# type: ignore` in adapter code without a linked issue.
+
+---
+
+## See Also: Artifact Provider Interface (Phase 2)
+
+Phase 2 introduces a parallel provider abstraction for artifact rendering. See `docs/contracts/artifact-provider-interface.md` for the `ArtifactProvider` base protocol and sub-protocols (`GraphRenderer`, `ExportProvider`, `TTSProvider`, `SlideRenderer`, `MapRenderer`, `MorphologyProvider`, `IconographyProvider`, `ChantProvider`).
+
+Artifact providers use the same `model_routes` table and ADR-0004 certification lifecycle, with `purpose` values in the `artifact_*` namespace. Active artifact routes are configured via `ACTIVE_ARTIFACT_ROUTE_*` env vars. Adapters live in `app/adapters/artifact_providers/`; the same import boundary rule applies: provider SDK imports are confined to their adapter module.

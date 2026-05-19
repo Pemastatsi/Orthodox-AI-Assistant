@@ -237,3 +237,28 @@ Every server component pair has a sibling `loading.tsx` (Next.js convention) sho
 - Adding a "view as originally asked" toggle on `<ReframingDisclosure>`.
 - Polling for run status faster than every 2 seconds in `/runs/[runId]`.
 - Layout shift from late-arriving stage progress (the stage area must reserve its height).
+
+---
+
+## Phase 2 Components and Routes
+
+Phase 2 introduces rich-output artifacts (Tiers 2–5 per ADR 0013). The full Phase 2 component contracts — props, behavior, accessibility rules, rendering constraints — are defined in `docs/contracts/rich-output-rendering.md`. That document is canonical for all Phase 2 components; this document remains the canonical source for Phase 1 components.
+
+### New Routes Summary (Phase 2)
+
+| Route | Layout | Server/Client | Required scope |
+|---|---|---|---|
+| `/artifacts/[artifactId]` | RootLayout | mixed | `query:read` |
+| `/artifacts/[artifactId]/export` | RootLayout | client | `query:read` |
+| `/admin/artifacts` | AdminLayout | server | `admin:artifacts:read` |
+| `/admin/artifacts/[artifactId]/review` | AdminLayout | mixed | `admin:artifacts:approve` |
+| `/admin/model-routes/artifacts` | AdminLayout | mixed | `model_route:read` |
+| `/workbench` | WorkbenchLayout | client | `query:read` |
+| `/workbench/[sessionId]` | WorkbenchLayout | client | `query:read` |
+
+### New Components Summary (Phase 2)
+
+`<ArtifactPanel>`, `<LineageGraphView>`, `<CouncilTimelineView>`, `<CitationNetworkView>`, `<DisputeMapView>`, `<ManuscriptWitnessTreeView>`, `<MindMapView>`, `<DocumentPreview>`, `<SlidePreview>`, `<AudioOverviewPlayer>`, `<ExportButton>`, `<BilingualPanel>`, `<LiturgicalOverlay>`, `<IconCard>`, `<MonasteryMap>`, `<WorkflowApprovalQueue>`, `<ProvenanceDrawer>`, `<ArtifactStatusBadge>`, `<ArtifactGenerationForm>`.
+
+All Phase 2 components follow the same conventions as Phase 1: TypeScript strict, no `any`, data via `api-client.ts`, zod validation, React Server Components by default.
+- Layout shift from late-arriving stage progress (the stage area must reserve its height).
