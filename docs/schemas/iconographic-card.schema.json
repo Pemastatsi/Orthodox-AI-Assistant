@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "iconographic-card",
+  "title": "IconographicCard",
+  "description": "Reference card for an Orthodox icon from the curated licensed set.",
+  "type": "object",
+  "required": ["iconId", "title", "tradition", "licenseType", "imageUrl", "thumbnailUrl", "theologicalConcepts", "corpusCrossRef", "altText"],
+  "properties": {
+    "iconId": { "type": "string", "description": "ULID" },
+    "title": { "type": "string" },
+    "titleGr": { "type": ["string", "null"] },
+    "tradition": { "type": "string", "enum": ["byzantine", "russian", "greek", "serbian", "coptic", "other"] },
+    "approximateDate": { "type": ["string", "null"] },
+    "artist": { "type": ["string", "null"] },
+    "collection": { "type": "string" },
+    "licenseType": { "type": "string", "description": "SPDX identifier or 'public_domain'" },
+    "imageUrl": { "type": "string", "description": "Platform CDN URL only; never a third-party URL" },
+    "thumbnailUrl": { "type": "string" },
+    "theologicalConcepts": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "corpusCrossRef": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "chunk_id values from the tenant corpus that this icon illustrates"
+    },
+    "altText": { "type": "string" },
+    "feastDay": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audio-overview",
+  "title": "AudioOverviewArtifact",
+  "description": "Two-voice TTS audio overview with citation timestamps.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "title": { "type": "string" },
+    "audioUrl": { "type": "string", "description": "Signed URL to mp3 file. Expires in 24 hours." },
+    "transcriptUrl": { "type": "string", "description": "Signed URL to AudioScript JSON" },
+    "durationSeconds": { "type": "integer", "minimum": 1 },
+    "chapterMarkers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chunkId", "startSeconds", "spokeCitation"],
+        "properties": {
+          "chunkId": { "type": "string" },
+          "startSeconds": { "type": "number", "minimum": 0 },
+          "spokeCitation": { "type": "string" }
+        }
+      }
+    },
+    "ttsRouteId": { "type": "string" },
+    "languageCode": { "type": "string" },
+    "voiceA": { "type": "string" },
+    "voiceB": { "type": "string" },
+    "synthesisTimestamp": { "type": "string", "format": "date-time" },
+    "billedMinutes": { "type": "integer", "minimum": 1, "description": "ceil(durationSeconds/60)" }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bilingual-passage",
+  "title": "BilingualPassageArtifact",
+  "description": "Greek+English side-by-side passage with token-level morphological analysis.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "sourceChunkId": { "type": "string" },
+    "greekText": { "type": "string", "description": "Unicode NFC polytonic Greek" },
+    "translationText": { "type": "string" },
+    "translationSource": { "type": "string" },
+    "alignedTokens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["greekToken", "greekPosition", "alignmentConfidence"],
+        "properties": {
+          "greekToken": { "type": "string" },
+          "greekTokenNormalized": { "type": "string" },
+          "greekPosition": { "type": "integer", "minimum": 0 },
+          "englishTokens": { "type": "array", "items": { "type": "string" } },
+          "englishPositions": { "type": "array", "items": { "type": "integer" } },
+          "alignmentConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "morphology": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["lemma", "partOfSpeech"],
+                "properties": {
+                  "lemma": { "type": "string" },
+                  "partOfSpeech": { "type": "string", "enum": ["noun", "verb", "adjective", "adverb", "preposition", "conjunction", "particle", "pronoun", "article", "interjection"] },
+                  "case": { "type": ["string", "null"], "enum": ["nominative", "genitive", "dative", "accusative", "vocative", null] },
+                  "number": { "type": ["string", "null"], "enum": ["singular", "plural", "dual", null] },
+                  "gender": { "type": ["string", "null"], "enum": ["masculine", "feminine", "neuter", null] },
+                  "tense": { "type": ["string", "null"], "enum": ["present", "imperfect", "aorist", "perfect", "pluperfect", "future", "future_perfect", null] },
+                  "mood": { "type": ["string", "null"], "enum": ["indicative", "subjunctive", "optative", "imperative", "infinitive", "participle", null] },
+                  "voice": { "type": ["string", "null"], "enum": ["active", "middle", "passive", "middle_passive", null] },
+                  "person": { "type": ["string", "null"], "enum": ["first", "second", "third", null] },
+                  "strongsNumber": { "type": ["string", "null"] },
+                  "lsjReference": { "type": ["string", "null"] }
+                }
+              }
+            ]
+          },
+          "glosses": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "morphologyDatasetId": { "type": "string" },
+    "alignmentConfidenceScore": { "type": "number", "minimum": 0, "maximum": 1 },
+    "coverageNote": { "type": ["string", "null"] }
+  }
+}

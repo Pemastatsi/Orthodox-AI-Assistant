@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slide-deck",
+  "title": "SlideDeckArtifact",
+  "description": "Presentation slide deck with speaker notes and citation refs.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "title": { "type": "string" },
+    "slideCount": { "type": "integer", "minimum": 1 },
+    "slides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slideIndex", "slideType", "heading", "citationRefs"],
+        "properties": {
+          "slideIndex": { "type": "integer", "minimum": 0 },
+          "slideType": { "type": "string", "enum": ["title", "section_divider", "content", "quote", "sources"] },
+          "heading": { "type": "string" },
+          "bodyPoints": { "type": "array", "items": { "type": "string" }, "maxItems": 7 },
+          "quoteText": { "type": ["string", "null"] },
+          "quoteAttribution": { "type": ["string", "null"] },
+          "speakerNotes": { "type": "string" },
+          "citationRefs": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "slideFormat": { "type": "string", "enum": ["widescreen_16_9", "standard_4_3"] },
+    "rendererRouteId": { "type": "string" }
+  }
+}

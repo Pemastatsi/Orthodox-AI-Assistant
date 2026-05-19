@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "study-packet",
+  "title": "StudyPacketArtifact",
+  "description": "Evidence-grounded study bundle with reading list, citations, and discussion questions.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "title": { "type": "string" },
+    "introduction": { "type": "string", "description": "One-paragraph overview of the topic" },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sectionId", "heading", "body", "citationRefs"],
+        "properties": {
+          "sectionId": { "type": "string" },
+          "heading": { "type": "string" },
+          "body": { "type": "string" },
+          "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "keyQuotes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["quote", "chunkId"],
+              "properties": {
+                "quote": { "type": "string" },
+                "chunkId": { "type": "string" },
+                "attribution": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "readingList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sourceTitle", "author", "chunkIds"],
+        "properties": {
+          "sourceTitle": { "type": "string" },
+          "author": { "type": ["string", "null"] },
+          "relevance": { "type": "string" },
+          "difficultyLevel": { "type": "string", "enum": ["introductory", "intermediate", "advanced"] },
+          "chunkIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "discussionQuestions": { "type": "array", "items": { "type": "string" } },
+    "glossary": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["term", "definition"],
+        "properties": {
+          "term": { "type": "string" },
+          "termGr": { "type": ["string", "null"] },
+          "definition": { "type": "string" },
+          "citationRef": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

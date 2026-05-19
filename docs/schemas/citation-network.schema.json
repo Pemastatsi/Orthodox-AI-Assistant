@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "citation-network",
+  "title": "CitationNetworkArtifact",
+  "description": "Force-directed graph of father-cites-father citation relationships, derived from chunk metadata.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nodeId", "fatherName", "citationCount"],
+        "properties": {
+          "nodeId": { "type": "string" },
+          "fatherName": { "type": "string" },
+          "fatherNameGr": { "type": ["string", "null"] },
+          "century": { "type": ["string", "null"] },
+          "tradition": { "type": ["string", "null"] },
+          "citationCount": { "type": "integer", "minimum": 0, "description": "Total inbound citations in corpus" },
+          "chunkIds": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edgeId", "citingFatherId", "citedFatherId", "frequency"],
+        "properties": {
+          "edgeId": { "type": "string" },
+          "citingFatherId": { "type": "string" },
+          "citedFatherId": { "type": "string" },
+          "frequency": { "type": "integer", "minimum": 1, "description": "Number of citations in corpus" },
+          "weight": { "type": "number", "minimum": 0, "maximum": 1, "description": "Normalized frequency" },
+          "exemplarChunkId": { "type": ["string", "null"], "description": "A representative chunk for this citation relationship" }
+        }
+      }
+    },
+    "minEdgeWeight": { "type": "number", "minimum": 0, "maximum": 1, "description": "Filter threshold applied before rendering" }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mind-map",
+  "title": "MindMapArtifact",
+  "description": "Hierarchical outline derived deterministically from the verified Q&A response. No LLM call.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "rootLabel": { "type": "string", "description": "The central topic (from the verified response title or query)" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nodeId", "label", "depth", "citationRefs"],
+        "properties": {
+          "nodeId": { "type": "string" },
+          "parentNodeId": { "type": ["string", "null"], "description": "null for root" },
+          "label": { "type": "string" },
+          "bodyText": { "type": ["string", "null"], "description": "Supporting detail text, if any" },
+          "depth": { "type": "integer", "minimum": 0 },
+          "citationRefs": { "type": "array", "items": { "type": "string" } },
+          "isExpanded": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}

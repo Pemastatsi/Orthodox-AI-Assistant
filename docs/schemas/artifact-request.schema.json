@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "artifact-request",
+  "title": "ArtifactRequest",
+  "description": "Request to generate a new artifact from an existing Q&A run.",
+  "type": "object",
+  "required": ["tenantId", "requestingUserId", "artifactType", "sourceRunId", "locale", "outputFormats"],
+  "properties": {
+    "tenantId": { "type": "string" },
+    "requestingUserId": { "type": "string" },
+    "artifactType": {
+      "type": "string",
+      "enum": [
+        "lineage_graph", "council_timeline", "citation_network",
+        "dispute_map", "manuscript_witness_tree", "mind_map",
+        "study_packet", "sermon_outline", "slide_deck",
+        "catechism_lesson_plan", "parish_bulletin_insert",
+        "bishop_briefing", "syllabus_bundle", "feast_day_bundle", "parish_faq_draft",
+        "audio_overview",
+        "bilingual_passage", "liturgical_overlay", "iconographic_card",
+        "monastery_map", "disputation_response"
+      ]
+    },
+    "sourceRunId": {
+      "type": "string",
+      "description": "Must reference a completed run_traces row belonging to the same tenant."
+    },
+    "locale": { "type": "string", "description": "BCP 47 locale" },
+    "outputFormats": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["pdf", "docx", "pptx", "html", "json", "mp3"] },
+      "minItems": 1
+    },
+    "generationOptions": {
+      "type": "object",
+      "description": "Artifact-type-specific options (e.g. targetMinutes for audio, slideCount for slide_deck).",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

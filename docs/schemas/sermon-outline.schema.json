@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sermon-outline",
+  "title": "SermonOutlineArtifact",
+  "description": "Structured sermon/homily outline from a Gospel pericope with patristic commentary.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "title": { "type": "string" },
+    "pericope": {
+      "type": "object",
+      "required": ["reference", "text"],
+      "properties": {
+        "reference": { "type": "string", "description": "e.g. 'Matthew 5:1-12'" },
+        "text": { "type": "string" },
+        "language": { "type": "string", "default": "en" }
+      }
+    },
+    "liturgicalOccasion": { "type": ["string", "null"] },
+    "introduction": {
+      "type": "object",
+      "required": ["text", "citationRefs"],
+      "properties": {
+        "text": { "type": "string" },
+        "citationRefs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "points": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["heading", "body", "citationRefs"],
+        "properties": {
+          "heading": { "type": "string" },
+          "body": { "type": "string" },
+          "patristicCommentary": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["quote", "attribution", "chunkId"],
+              "properties": {
+                "quote": { "type": "string" },
+                "attribution": { "type": "string" },
+                "chunkId": { "type": "string" }
+              }
+            }
+          },
+          "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        }
+      }
+    },
+    "conclusion": {
+      "type": "object",
+      "required": ["text", "citationRefs"],
+      "properties": {
+        "text": { "type": "string" },
+        "doxology": { "type": ["string", "null"] },
+        "citationRefs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "targetAudience": { "type": "string", "enum": ["clergy", "laity", "youth", "catechumens", "academic"] }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "geographic-overlay",
+  "title": "GeographicOverlayArtifact",
+  "description": "Map artifact with ecclesiastical geographical overlays.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "viewport": {
+      "type": "object",
+      "required": ["centerLat", "centerLng", "zoom"],
+      "properties": {
+        "centerLat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "centerLng": { "type": "number", "minimum": -180, "maximum": 180 },
+        "zoom": { "type": "integer", "minimum": 1, "maximum": 18 }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["layerType", "markers"],
+        "properties": {
+          "layerType": {
+            "type": "string",
+            "enum": ["patriarchate", "monastery", "holy_land", "council_location", "corpus_reference"]
+          },
+          "layerLabel": { "type": "string" },
+          "visible": { "type": "boolean", "default": true },
+          "markers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["markerId", "lat", "lng", "name"],
+              "properties": {
+                "markerId": { "type": "string" },
+                "lat": { "type": "number" },
+                "lng": { "type": "number" },
+                "name": { "type": "string" },
+                "nameGr": { "type": ["string", "null"] },
+                "tradition": { "type": ["string", "null"] },
+                "description": { "type": ["string", "null"] },
+                "citationRefs": { "type": "array", "items": { "type": "string" } },
+                "iconType": { "type": "string", "enum": ["church", "monastery", "patriarchate", "council", "site", "other"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "tileProvider": { "type": "string", "description": "e.g. 'self_hosted_leaflet' or 'mapbox_v1'" }
+  }
+}

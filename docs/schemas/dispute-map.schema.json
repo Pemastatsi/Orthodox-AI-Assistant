@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dispute-map",
+  "title": "DisputeMapArtifact",
+  "description": "Side-by-side theological position comparison with evidence anchors.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "topic": { "type": "string", "description": "The theological topic under comparison" },
+    "positions": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["positionId", "tradition", "summary", "claims", "citationRefs"],
+        "properties": {
+          "positionId": { "type": "string" },
+          "tradition": {
+            "type": "string",
+            "enum": ["orthodox", "catholic", "protestant", "heterodox", "secular", "other"]
+          },
+          "traditionLabel": { "type": "string", "description": "Display name (e.g. 'Eastern Orthodox', 'Roman Catholic')" },
+          "summary": { "type": "string", "description": "One-paragraph position summary" },
+          "claims": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["claimText", "citationRefs", "status"],
+              "properties": {
+                "claimText": { "type": "string" },
+                "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                "status": { "type": "string", "enum": ["supported", "contested", "insufficient_evidence"] }
+              }
+            }
+          },
+          "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        }
+      }
+    },
+    "commonGround": {
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "description": "Points of agreement across all positions, if any"
+    },
+    "keyDisagreements": {
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "description": "Core points of disagreement"
+    }
+  }
+}

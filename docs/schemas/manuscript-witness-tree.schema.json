@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manuscript-witness-tree",
+  "title": "ManuscriptWitnessTreeArtifact",
+  "description": "Textual transmission lineage from manuscript families through critical editions to modern translations.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "textTitle": { "type": "string" },
+    "textTitleGr": { "type": ["string", "null"] },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nodeId", "nodeType", "label", "citationRefs"],
+        "properties": {
+          "nodeId": { "type": "string" },
+          "nodeType": {
+            "type": "string",
+            "enum": ["manuscript_family", "manuscript", "critical_edition", "modern_translation", "patristic_citation"]
+          },
+          "label": { "type": "string" },
+          "siglum": { "type": ["string", "null"], "description": "Manuscript siglum (e.g. 'א', 'B', 'P46')" },
+          "century": { "type": ["string", "null"] },
+          "language": { "type": ["string", "null"] },
+          "repository": { "type": ["string", "null"], "description": "Holding institution" },
+          "editor": { "type": ["string", "null"], "description": "Editor for critical editions" },
+          "translator": { "type": ["string", "null"], "description": "Translator for modern translations" },
+          "publicationYear": { "type": ["integer", "null"] },
+          "transcriptionConfidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+          "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edgeId", "parentNodeId", "childNodeId", "relationshipType"],
+        "properties": {
+          "edgeId": { "type": "string" },
+          "parentNodeId": { "type": "string" },
+          "childNodeId": { "type": "string" },
+          "relationshipType": {
+            "type": "string",
+            "enum": ["derives_from", "copied_from", "edited_from", "translated_from", "cites"]
+          },
+          "notes": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

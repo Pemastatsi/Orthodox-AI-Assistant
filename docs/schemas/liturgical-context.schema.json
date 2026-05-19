@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "liturgical-context",
+  "title": "LiturgicalContext",
+  "description": "Liturgical calendar context for a given date and calendar style.",
+  "type": "object",
+  "required": ["date", "calendarStyle", "feastType", "fastingRule"],
+  "properties": {
+    "date": { "type": "string", "format": "date" },
+    "calendarStyle": { "type": "string", "enum": ["julian_old", "revised_julian", "coptic", "custom"] },
+    "feastName": { "type": ["string", "null"] },
+    "feastNameGr": { "type": ["string", "null"] },
+    "feastType": {
+      "type": ["string", "null"],
+      "enum": ["great", "lesser", "post_feast", "fore_feast", "afterfeast", "fast", "none", null]
+    },
+    "saintOfTheDay": { "type": "array", "items": { "type": "string" } },
+    "fastingRule": {
+      "type": "string",
+      "enum": ["no_fast", "fish_allowed", "wine_oil_allowed", "strict_fast", "xerophagy"]
+    },
+    "gospelPericope": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["reference", "text"],
+          "properties": {
+            "reference": { "type": "string" },
+            "text": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "epistlePericope": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["reference", "text"],
+          "properties": {
+            "reference": { "type": "string" },
+            "text": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "toneOfWeek": { "type": ["integer", "null"], "minimum": 1, "maximum": 8 },
+    "scriptureRefs": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

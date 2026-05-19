@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "council-timeline",
+  "title": "CouncilTimelineArtifact",
+  "description": "Interactive timeline of ecumenical and local councils with linked decisions.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["eventId", "year", "councilName", "councilType", "citationRefs"],
+        "properties": {
+          "eventId": { "type": "string" },
+          "year": { "type": "integer", "description": "AD year; negative for BC" },
+          "yearDisplay": { "type": "string", "description": "Human-readable date (e.g. '325 AD', 'c. 341 AD')" },
+          "councilName": { "type": "string" },
+          "councilNameGr": { "type": ["string", "null"] },
+          "councilType": { "type": "string", "enum": ["ecumenical", "local", "pan_orthodox", "patriarchal", "other"] },
+          "location": { "type": ["string", "null"] },
+          "presidingAuthority": { "type": ["string", "null"] },
+          "keyDecisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["decision", "citationRefs"],
+              "properties": {
+                "decision": { "type": "string" },
+                "canonNumbers": { "type": "array", "items": { "type": "string" } },
+                "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+              }
+            }
+          },
+          "highlightedFathers": { "type": "array", "items": { "type": "string" } },
+          "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        }
+      }
+    },
+    "highlightEra": { "type": ["string", "null"], "description": "e.g. 'Trinitarian', 'Christological', 'Iconoclast'" },
+    "filterType": { "type": ["string", "null"], "description": "Filter to council type if set" }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lineage-graph",
+  "title": "LineageGraphArtifact",
+  "description": "Patristic doctrinal influence graph artifact.",
+  "allOf": [{ "$ref": "artifact" }],
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nodeId", "nodeType", "label", "citationRefs"],
+        "properties": {
+          "nodeId": { "type": "string" },
+          "nodeType": { "type": "string", "enum": ["person", "work", "concept", "council", "passage", "tradition"] },
+          "label": { "type": "string" },
+          "labelGr": { "type": ["string", "null"] },
+          "century": { "type": ["string", "null"], "description": "e.g. '4th', '14th'" },
+          "description": { "type": ["string", "null"] },
+          "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "tradition": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edgeId", "sourceNodeId", "targetNodeId", "edgeType", "citationRefs"],
+        "properties": {
+          "edgeId": { "type": "string" },
+          "sourceNodeId": { "type": "string" },
+          "targetNodeId": { "type": "string" },
+          "edgeType": {
+            "type": "string",
+            "enum": ["cites", "builds_on", "contrasts_with", "derives_from", "translation_of", "paraphrases", "supports", "contested_by", "excerpted_in", "same_passage_as"]
+          },
+          "weight": { "type": "number", "minimum": 0, "maximum": 1, "description": "Citation frequency normalized 0–1" },
+          "citationRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "label": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "focusConcept": { "type": ["string", "null"], "description": "The theological concept or query topic this graph centers on" },
+    "maxDepth": { "type": "integer", "minimum": 1, "maximum": 8 }
+  }
+}
