@@ -5,8 +5,8 @@ Read this file first in every implementation session. Do not read archived PDFs 
 ## Source Hierarchy
 
 1. `AGENTS.md` is the always-read implementation brief.
-2. `docs/task_cards/phase1/*.md` defines the current coding task.
-3. `docs/contracts/phase1-implementation-contract.md` defines Phase 1 behavior.
+2. `docs/task_cards/phase1/*.md` defines Phase 1 coding tasks. `docs/task_cards/phase2/*.md` defines Phase 2 coding tasks.
+3. `docs/contracts/phase1-implementation-contract.md` defines Phase 1 behavior. Phase 2 behavior is governed by ADRs 0013–0016 and the Phase 2 contracts.
 4. `docs/adr/*.md` defines locked architectural decisions.
 5. `docs/api/openapi.yaml` and `docs/schemas/*.json` define public contracts.
 6. `tests/fixtures/` and `tests/safety/` define executable expectations.
@@ -164,6 +164,34 @@ Sensitive reframing is transparent in the UI. The user sees that the system answ
 - Keep each coding session scoped to the task card.
 - Do not weaken safety, tenant isolation, or citation rules for convenience.
 - Update ADRs when changing locked decisions.
+
+## Phase 2 Direction
+
+Phase 2 introduces a Rich Output layer on top of the Phase 1 Q&A foundation. All Phase 2 capabilities are governed by ADRs 0013–0016 and the Phase 2 contracts.
+
+### Five Output Tiers (ADR 0013)
+- **Tier 1:** Markdown + Mermaid + LaTeX rich-text answers.
+- **Tier 2:** Interactive visual artifacts — Patristic Lineage Graph, Council Timeline, Citation Network, Dispute Map, Manuscript Witness Tree, Mind Map.
+- **Tier 3:** Generated documents — Study Packet, Sermon Outline, Slide Deck, Catechism Lesson Plan, Parish Bulletin, Bishop Briefing, Syllabus Bundle, Feast-Day Bundle, Parish FAQ.
+- **Tier 4:** Two-voice TTS audio overviews with citation timestamps.
+- **Tier 5:** Orthodox-unique multimedia — Bilingual Greek+English with morphology, Liturgical Calendar Overlay, Iconographic Reference Cards, Byzantine Chant integration, Holy Land + Monastery Map, Disputation Simulator.
+
+### Key Phase 2 Architectural Rules
+- **Closed-corpus provenance (ADR 0013):** Every artifact carries `citationRefs` back to approved evidence chunks; no artifact can contain an unverified claim.
+- **Artifact provider abstraction (ADR 0014):** All rendering goes through certified `ArtifactProvider` interfaces; no direct library calls in business logic. Same certification model as LLM routes (ADR 0004).
+- **Multi-meter billing (ADR 0015):** Three Stripe meters — `served_answer_count` (Q&A), `generated_artifact_count` (documents + complex graphs), `audio_minutes_generated` (TTS). All features available on all paid tiers; only volume caps differ.
+- **Workflow approval gates (ADR 0016):** High-stakes documents (Bishop Briefing, Syllabus Bundle, Catechism Lesson Plan, Parish FAQ, Parish Bulletin, Feast-Day Bundle) require admin/owner approval before export.
+
+### Phase 2 Billing Tiers (EUR)
+Scholar €19/month · Parish €59/month · Seminary €179/month · Enterprise €600–1,500 custom.
+All tiers: full feature access. Differentiator is volume cap per meter, not feature set.
+
+### Phase 2 Task Cards
+Organized in four implementation waves under `docs/task_cards/phase2/`:
+- **Wave 2.0 (T-101–T-107):** Foundation — rich-text rendering, export foundation, artifact provider abstraction, study packet workflow, patristic lineage graph, audio overview, multi-meter billing.
+- **Wave 2.1 (T-108–T-114):** Visual depth — council timeline, dispute map, citation network, manuscript witness tree, slide deck export, sermon builder, mind map.
+- **Wave 2.2 (T-115–T-120):** Orthodox-unique multimedia — bilingual side-by-side, liturgical calendar overlay, iconographic reference cards, Byzantine chant, Holy Land map, disputation simulator.
+- **Wave 2.3 (T-121–T-125):** Workflow library — bishop briefing, syllabus bundle, catechism lesson plan, parish bulletin, feast-day bundle.
 
 ## Known Architecture Gaps (address before Phase 2 begins)
 
