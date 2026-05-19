@@ -90,9 +90,39 @@ A validation failure prevents the service from starting. Tests in `tests/unit/te
 
 The shipped stubs contain *format-correct, conservative* rules only. Real Greek/pastoral phrasing requires founder sign-off and is added in follow-up PRs.
 
-## Paraphrase Coverage
+## Paraphrase Coverage (CI gate)
 
-Real safety configs (post-stub) MUST be tested against more than the literal phrasings in `tests/safety/test_20_queries.py`. The fuzz harness `tests/safety/test_20_queries_paraphrases.py` (skeleton stub added in T-006 follow-up) generates 3–5 paraphrases per case and asserts that the same `expected_handling` is reached. Stub configs may fail the paraphrase suite by design; the suite gates on `APP_ENV='production' AND configs.version != stub_baseline`. Real-config authors are responsible for ensuring their patterns generalize beyond the literal canonical phrasings.
+Real safety configs (post-stub) MUST be tested against more than the literal phrasings in `tests/safety/test_20_queries.py`. The fuzz harness `tests/safety/test_20_queries_paraphrases.py` is the binding gate.
+
+### Gate requirements
+
+The paraphrase suite is a **CI-blocking gate** under the `safety-suite-execution` job in `.github/workflows/ci-safety-gate.yml`, equal in standing to the canonical 20-case suite. It runs immediately after the canonical suite and fails the build with the same exit semantics.
+
+Activation is gated by the same condition that gates the canonical suite running against real configs (per `phase1-implementation-contract.md` exit criterion #9):
+
+- When `sensitivity_keywords.yaml.version == 2026-05-01.1` (the stub baseline), the paraphrase suite is allowed to `pytest.skip`. The startup self-test in `safety_config.py` continues to fail-closed against stub configs in `APP_ENV='production'`.
+- When `sensitivity_keywords.yaml.version != 2026-05-01.1` (real configs merged), the paraphrase suite MUST run and MUST pass; skips are CI failures.
+
+### Coverage requirements (binding for real configs)
+
+For every canonical case (IDs 1–20), `PARAPHRASES[case_id]` must contain:
+
+- A **minimum of 3 paraphrases**, **maximum of 5**, in English.
+- For the theologically-substantive cases (IDs 1, 4, 7, 8, 11), **at least 1 additional Greek (`lang: el`) paraphrase**.
+- For the hard-trigger case (ID 12, `self_harm` → `block_with_redirect`), every paraphrase must still match a `hard_trigger: true` rule in `sensitivity_keywords.yaml`. Paraphrases that *soften* a hard trigger are a CI failure — the test asserts the hard trigger fired.
+- For the block-with-redirect cases (IDs 6, 10, 17), every paraphrase must continue to route to `block_with_redirect`; an answer-handling fallback is a CI failure.
+
+### Test assertions
+
+For every paraphrase under every case, the A1 classifier — running with the real provider route certified for `purpose='query_analyzer'`, not a mocked stub — MUST produce `sensitivityPrimary` and `handling` values equal to `_EXPECTED_BY_CASE_ID[case_id]`. Mismatches are reported per-paraphrase with the case ID, paraphrase text (in test logs only, never written to flagged-query logs from the CI runner), expected outcome, and actual outcome.
+
+### Authoring discipline
+
+Paraphrases are authored by the founder + Greek-language reviewer named in T-007. They are not LLM-generated at CI time — the same paraphrase set must produce the same result across runs for the suite to function as a regression gate. Adding, removing, or modifying a paraphrase is a config change that requires a safety-suite run before merge (same procedure as the YAML files themselves).
+
+### Why this discipline catches the failure mode the canonical suite cannot
+
+The canonical 20-case suite catches the obvious thing: the configured pattern matched the literal phrasing the founder wrote. It does not catch the realistic failure mode: a user phrases the same intent slightly differently and slips past the keyword. The paraphrase suite is the only structural defence against that failure mode; without it, the keyword-pattern approach degrades from "deterministic safety" to "deterministic safety only against people who phrase things exactly the way the founder did."
 
 ## Phase 2 Launch Gate (per `phase1-implementation-contract.md` exit criterion #9)
 
