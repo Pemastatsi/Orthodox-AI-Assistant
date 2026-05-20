@@ -23,8 +23,8 @@
     },
     "purpose": {
       "type": "string",
-      "enum": ["query_analyzer", "compose", "verifier_judge", "embedding"],
-      "description": "Which pipeline stage this route is certified for."
+      "enum": ["query_analyzer", "compose", "verifier_judge", "embedding", "rerank", "retrieval_eval_judge"],
+      "description": "Which pipeline stage this route is certified for. 'rerank' added by ADR-0012; 'retrieval_eval_judge' added by docs/contracts/retrieval-eval-suite.md."
     },
     "provider": {
       "type": "string",

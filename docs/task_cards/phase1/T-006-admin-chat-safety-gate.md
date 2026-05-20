@@ -54,6 +54,11 @@ during T-006 implementation; this task card is the requirement source.
 
 ## Acceptance Tests
 
+- `docs/contracts/frontend-components.md` is updated with the scholarly_dispute side-by-side
+  column prop contract — column count, per-column position-label prop names, per-column
+  citation/composition/confidence-badge bindings, accessibility semantics, empty-column
+  handling, and the mobile vertical-stack breakpoint — **before** the `<AnswerPanel>` change
+  is implemented. The contract precedes the code; the code conforms to the contract.
 - Member can ask a question and receive a verified answer or bounded fallback.
 - Citations render with source title and page or timestamp when available.
 - Reframed sensitive answers disclose reframing.

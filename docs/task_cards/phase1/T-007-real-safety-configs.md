@@ -2,7 +2,7 @@
 
 ## Goal
 
-Replace the stub `config/sensitivity_keywords.yaml` and `config/pastoral_filters.yaml` with founder-approved, Greek-language-reviewed rules that cover every `sensitivityPrimary` category and every `riskFlags` value used in the system. This task is **non-coding work** owned by the founder and a named Greek-language reviewer; no application code changes are part of T-007 itself.
+Replace the stub `config/sensitivity_keywords.yaml` and `config/pastoral_filters.yaml` with founder-approved rules that cover every `sensitivityPrimary` category and every `riskFlags` value used in the system, including Greek-language coverage for the patterns the Orthodox-Ethos corpus actually exercises. This task is **non-coding work** owned by the founder; no application code changes are part of T-007 itself.
 
 This task is required by Phase 1 → Phase 2 exit criterion #9 (`docs/contracts/phase1-implementation-contract.md`). Falling short blocks Phase 2 scoping.
 
@@ -18,13 +18,12 @@ This task is required by Phase 1 → Phase 2 exit criterion #9 (`docs/contracts/
 
 ## Owners
 
-- **Founder:** `<TBD: founder to specify>` — final approver of every rule change. Signs off on cultural and theological appropriateness.
-- **Greek-language reviewer:** `<TBD: founder to specify>` — verifies that Greek-language patterns (Koine, Modern, transliterated) are correct, comprehensive, and free of false positives common in Orthodox theological discourse.
+- **Founder (`role='owner'`):** final approver of every rule change. Signs off on cultural, theological, and linguistic appropriateness — including Greek-language patterns (Koine, Modern, transliterated). The founder is responsible for ensuring the rules don't false-positive on common Orthodox theological discourse; informal Greek-reading review is encouraged but is not a contractual gate.
 - **Engineering reviewer:** the on-call code reviewer ensures YAML structure matches `safety-config-format.md` and that startup validation passes.
 
 ## Target Merge Date
 
-`<TBD: founder to specify>` — must land before any Phase 2 scoping decision. Recommend setting at least 6 weeks before the planned Phase 1 → 2 evaluation to allow for paraphrase-suite iteration.
+Must land before any Phase 1 → 2 scoping decision. Recommend allowing at least 6 weeks before the planned evaluation window to iterate on the paraphrase suite against the new configs.
 
 ## Files In Scope
 
@@ -38,18 +37,18 @@ This task is required by Phase 1 → Phase 2 exit criterion #9 (`docs/contracts/
 - The 20-query suite (`tests/safety/test_20_queries.py` and the live harness `backend/tests/safety/test_20_queries_harness.py`) passes against the new configs in CI.
 - The paraphrase fuzz suite (`tests/safety/test_20_queries_paraphrases.py`) passes against the new configs (every paraphrase reaches the same `expected_handling` and `expected_sensitivity` as its canonical case).
 - Startup self-test for exit criterion #9 passes: when `APP_ENV='production'`, the application refuses to start if either YAML's `version` is still `2026-05-01.1`.
-- The PR description names the founder approver and the Greek-language reviewer (replacing the `<TBD>` placeholders above), and includes a short coverage matrix showing which rules cover each `sensitivityPrimary` × language combination.
-- An `audit_entries` row with `action='safety_config_approved'` and `resource_type='safety_config'` is written referencing both YAML hashes after merge (operationally enforced by the deployment pipeline; manual entry acceptable in private beta). This action name is canonical in `docs/schemas/audit-entry.schema.json` and is the row consumed by `scripts/exit_criteria_dashboard.py`.
+- The PR description includes (a) a short coverage matrix showing which rules cover each `sensitivityPrimary` × language combination, and (b) the `audit_entries.audit_id` of the `safety_config_approved` row inserted by the founder, along with the new `sensitivity_keywords.yaml` and `pastoral_filters.yaml` `version` strings.
+- An `audit_entries` row with `action='safety_config_approved'` and `resource_type='safety_config'` is written by the founder (or by the deployment pipeline acting on behalf of `role='owner'`) referencing both YAML hashes after merge. `details` MUST include `sensitivity_keywords_version`, `pastoral_filters_version`, and the SHA-256 hash of each file. This action name is canonical in `docs/schemas/audit-entry.schema.json` and is the row consumed by `scripts/exit_criteria_dashboard.py::criterion_9_real_safety_configs`.
 
 ## Forbidden Scope
 
 - Do not change `safety-config-format.md` itself; the format is a contract.
 - Do not soften the startup self-test to "warn instead of fail" — exit criterion #9 demands a hard fail.
 - Do not use the real configs in unit tests that should rely on the stub format-only baseline.
-- Do not commit the configs without sign-off from both named reviewers.
+- Do not commit the configs without founder sign-off (recorded as the `safety_config_approved` audit row).
 
 ## Notes for Future Sessions
 
 - This card is the answer to audit finding F-16 (P1). The audit observed that the configs were still at the stub baseline and that no task card scheduled real-config delivery.
 - The stub configs match the literal phrasings in `tests/safety/test_20_queries.py` only by coincidence. Real configs must generalize beyond literal phrasings — see `safety-config-format.md §Paraphrase Coverage`.
-- Greek-language false positives are the most common failure mode in Orthodox theological discourse (e.g., quotations from the Fathers about "death" should not trigger self-harm rules; theological discussion of "schism" should not trigger canonical-dispute-active). The Greek-language reviewer is the gatekeeper here.
+- Greek-language false positives are the most common failure mode in Orthodox theological discourse (e.g., quotations from the Fathers about "death" should not trigger self-harm rules; theological discussion of "schism" should not trigger canonical-dispute-active). The founder is responsible for catching these — soliciting informal Greek-reading review before signoff is the recommended hedge, but the audit row records founder approval, not a separate reviewer.

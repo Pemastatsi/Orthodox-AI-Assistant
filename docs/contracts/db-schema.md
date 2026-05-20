@@ -264,7 +264,7 @@ The `action` column is constrained at the API layer (not in DDL) to the enum in 
 ```sql
 CREATE TABLE model_routes (
     route_id              text PRIMARY KEY,
-    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding')),
+    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding','rerank','retrieval_eval_judge')),
     provider              text NOT NULL CHECK (provider IN ('anthropic','openai')),
     model                 text NOT NULL,
     prompt_version        text NOT NULL,
@@ -289,7 +289,7 @@ Aggregate row that groups one full pass of the canonical 20-case safety suite. R
 ```sql
 CREATE TABLE safety_suite_runs (
     safety_suite_run_id   text PRIMARY KEY,                       -- ULID
-    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding')),
+    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding','rerank','retrieval_eval_judge')),
     provider              text NOT NULL CHECK (provider IN ('anthropic','openai')),
     model                 text NOT NULL,
     prompt_version        text NOT NULL,                           -- FK to prompt_versions added below
@@ -418,6 +418,10 @@ INSERT INTO model_routes (
    'embedding_none@2026-05-01.1', '1.0', false, false, false, 'experiment', now());
 ```
 
-**Verifier-judge route is intentionally absent.** Per decision register row G, A6's deterministic citation and quote-overlap checks run unconditionally; the optional consistency-judge LLM call runs only when a certified `verifier_judge` route exists. `ACTIVE_MODEL_ROUTE_VERIFIER` in `.env.example` is left blank, the registry returns no certified `verifier_judge` row, and A6 skips the optional judge.
+**Optional routes are intentionally unseeded.** The first migration seeds only the three required routes (`query_analyzer`, `compose`, `embedding`). Three further purposes — `verifier_judge`, `rerank`, and `retrieval_eval_judge` — have no seeded rows; their corresponding env vars in `scaffold-contract.md` §`.env.example` are blank-by-default and their consumers degrade cleanly when no certified row exists:
+
+- Per decision register row G, A6's deterministic citation and quote-overlap checks run unconditionally; the optional consistency-judge LLM call runs only when a certified `verifier_judge` route exists.
+- Per ADR-0012, A3 returns dense-or-hybrid scores directly when no certified `rerank` route exists; the cross-encoder reranker activates only on certification.
+- Per `docs/contracts/retrieval-eval-suite.md`, the Ragas-style judge metrics (faithfulness, answer_relevancy, etc.) run only when a certified `retrieval_eval_judge` route exists; deterministic retrieval metrics (Recall@K, Precision@K, MRR, nDCG@K) always run.
 
 These route IDs MUST match the values referenced by `ACTIVE_MODEL_ROUTE_A1A2`, `ACTIVE_MODEL_ROUTE_A5`, and `ACTIVE_MODEL_ROUTE_EMBEDDING` in `scaffold-contract.md` §.env.example exactly. A startup self-test in `app/main.py` looks up each of the three env-var route IDs in `model_routes` and refuses to boot if any row is missing.

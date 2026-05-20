@@ -49,17 +49,19 @@ Canonical graph tables:
 
 Existing Qdrant payload fields such as `related_chunks`, `references_father`, and `builds_on` remain lightweight retrieval hints. The authoritative version of a relation lives in PostgreSQL and must carry review status.
 
-## Embedding Model Upgrade (Placeholder — Detailed SOP in Phase 2)
+## Embedding Model Upgrade
 
-Phase 1 uses `openai:text-embedding-3-small`. When upgrading to a different embedding model the rough flow is:
+Phase 1 uses `openai:text-embedding-3-small`. The detailed runbook for upgrading to a different embedding model — dual-index provisioning, backfill, retrieval-eval + safety-suite certification gates, cutover, rollback, snapshot pinning, and old-index decommissioning — lives in **`docs/contracts/embedding-upgrade-sop.md`** and is constrained by ADR-0011 (hybrid retrieval) and ADR-0013 (collection topology). That SOP is the authoritative procedure; do not rederive it.
 
-1. Add the new model to `model_routes` with `purpose='embedding'`, `certification_status='draft'`.
-2. Run a dual-index window: index a representative chunk sample under both the old and new vectors; compare retrieval quality on the per-tenant retrieval evaluation set defined in ADR 0007 (recall@k, MRR, no-result follow-up rate).
-3. Backfill all approved chunks with the new vectors via `workers/tasks/embedding.py` in batched mode; do not delete old vectors until cutover is complete (Qdrant tolerates extra payload but `chunk.embeddingDimension` must match the active route).
-4. Owner certifies the new route per ADR 0004; `.env`'s `ACTIVE_MODEL_ROUTE_EMBEDDING` is updated atomically with a deploy.
-5. Cutover bumps `corpusVersion` (cache flush) and deprecates the old route after a stability window.
+Summary flow (the SOP elaborates each step):
 
-The detailed SOP — including rollback, partial-tenant cutover, and dimension mismatch handling — is added in Phase 2 alongside the multi-tenant ingestion stress-test plan.
+1. Provision a parallel index (Option A: second named vector on the existing collection; Option B: second collection) at the new model's dimension.
+2. Backfill all approved chunks under the new `ModelRoute` via `workers/tasks/embedding_backfill.py`.
+3. Run the retrieval-eval suite (`docs/contracts/retrieval-eval-suite.md`) AND the safety suite against the new route; promote to `certified` only when both pass.
+4. Cutover atomically by switching the active route (env-var pinned in Phase 1; a redeploy is the cutover). `corpusVersion` bumps automatically via the cache-key invalidation rule in `docs/contracts/cache-key.md`.
+5. Park the old index for the retention window; decommission only after a second founder signoff.
+
+Rollback is the cutover in reverse and is available throughout the retention window.
 
 ## Consequences
 

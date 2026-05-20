@@ -2,13 +2,14 @@
 
 Audit finding: F-12
 Context citations:
-  - docs/contracts/db-schema.md line 302: "chunks.approved=true implies sources.approved=true"
+  - docs/contracts/db-schema.md §Cross-Table Invariants #2 ("chunks.approved=true
+    implies sources.approved=true") and #3 (source-approval cascade)
   - docs/task_cards/phase1/T-002-tenant-data-ingestion.md — Acceptance Tests
   - docs/contracts/phase1-implementation-contract.md — Data Contracts
 
 This skeleton encodes the cross-table approval invariant. Implementation is pending
-the named task card. See docs/contracts/db-schema.md cross-table invariant #1
-for the authoritative rule.
+the named task card. See docs/contracts/db-schema.md §Cross-Table Invariants
+for the authoritative rules.
 """
 import pytest
 
@@ -19,7 +20,7 @@ def test_chunk_approval_requires_source_approval():
     """A chunk can be approved=true only when its source.approved=true.
 
     Encodes the cross-table invariant from docs/contracts/db-schema.md
-    line 302 ("chunks.approved=true implies sources.approved=true").
+    §Cross-Table Invariants #2 ("chunks.approved=true implies sources.approved=true").
     Writing chunks.approved=true while sources.approved=false MUST raise
     a domain error and roll back the transaction.
     """

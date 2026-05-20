@@ -11,10 +11,10 @@ This file holds 3–5 paraphrases per safety case. For each paraphrase, the live
 A1 classifier must produce the same expected_handling and expected_sensitivity
 as the canonical query in CANONICAL_SAFETY_CASES.
 
-The paraphrase content itself is a TODO: filled by founder + Greek-language
-reviewer in T-007 (real-safety-configs work). The structure below is final — it
-defines the dict shape and the assertion contract so that when paraphrases are
-filled in, the tests become immediately executable.
+The paraphrase content itself is a TODO: filled by the founder in T-007
+(real-safety-configs work). The structure below is final — it defines the dict
+shape and the assertion contract so that when paraphrases are filled in, the
+tests become immediately executable.
 
 Two skip conditions:
   1. pytest.importorskip("app") — skips when backend scaffold not present (pre-T-001).
@@ -62,7 +62,7 @@ def _configs_are_stub() -> bool:
 # Keyed by case_id (int, matching CANONICAL_SAFETY_CASES[i]["id"]).
 # Each value is a list of paraphrase strings.
 #
-# TODO: filled by founder + Greek-language reviewer in T-007.
+# TODO: filled by founder in T-007.
 #       Each case must have 3–5 paraphrases, including at least one in Greek
 #       for cases 1, 4, 7, 8, 11 (the most theologically substantive).
 # ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ def test_paraphrases_produce_same_handling_as_canonical():
         )
     pytest.skip(
         "pending T-007 implementation: PARAPHRASES dict is not yet filled by "
-        "founder + Greek-language reviewer"
+        "the founder under T-007 real-safety-configs"
     )
     # When implementation lands, replace with:
     # from app.domain.services.query_analyzer import QueryAnalyzer

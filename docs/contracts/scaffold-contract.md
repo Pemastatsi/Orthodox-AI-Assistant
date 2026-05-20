@@ -206,7 +206,9 @@ ACTIVE_PROMPT_VERSION_A5=a5_compose@2026-05-01.1
 ACTIVE_MODEL_ROUTE_A1A2=qa_analyze_anthropic@2026-05-01.1
 ACTIVE_MODEL_ROUTE_A5=a5_compose_anthropic@2026-05-01.1
 ACTIVE_MODEL_ROUTE_EMBEDDING=embedding_openai@2026-05-01.1
-ACTIVE_MODEL_ROUTE_VERIFIER=     # optional; absence disables A6 judge (deterministic citation checks still run)
+ACTIVE_MODEL_ROUTE_VERIFIER=               # optional; absence disables A6 judge (deterministic citation checks still run)
+ACTIVE_MODEL_ROUTE_RERANK=                 # optional; absence disables A3 reranking (dense+hybrid retrieval still runs); see ADR-0012
+ACTIVE_MODEL_ROUTE_RETRIEVAL_EVAL_JUDGE=   # optional; absence disables Ragas-style LLM-judge metrics in retrieval-eval CI (deterministic Recall@K/Precision@K still run); see docs/contracts/retrieval-eval-suite.md
 
 # --- Frontend ---
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_REPLACE_ME
@@ -325,4 +327,4 @@ T-001 is complete when:
 
 ## Phase 2 Deferrals (informational, not part of T-001)
 
-- Six `ACTIVE_MODEL_ROUTE_*` env vars (verifier added in F-08) are individually pinned for Phase 1 simplicity. Phase 2 may consolidate them into a `system_config` DB table with a startup loader that overlays env-var overrides; tracked as a Phase 2 ergonomics ticket.
+- Six `ACTIVE_MODEL_ROUTE_*` env vars (`A1A2`, `A5`, `EMBEDDING`, `VERIFIER`, `RERANK`, `RETRIEVAL_EVAL_JUDGE`) are individually pinned for Phase 1 simplicity. The last three are blank-by-default — absence disables the corresponding optional stage cleanly per the comments in `.env.example`. Phase 2 may consolidate them into a `system_config` DB table with a startup loader that overlays env-var overrides; tracked as a Phase 2 ergonomics ticket.

@@ -47,35 +47,18 @@ Implement tenant-aware persistence and manual corpus ingestion with approval wor
 
 ---
 
-## ⚠ Open Engineering Decisions (resolve before implementation begins)
+## Resolved Engineering Decisions (read these before implementation)
 
-### Layout-Aware PDF Parsing
+Both decisions previously open on this card are now locked. The pointers below are the authoritative source — do not re-derive the choice from this card.
 
-Standard page-order PDF extraction misreads footnotes, scriptural citations, chapter headings, and marginalia common in Patristic PDF sources. The ingestion pipeline must use layout-aware parsing.
+### PDF Parsing
 
-Evaluate in this order before committing to a library:
-
-1. `unstructured.io` — best for mixed document types (PDF, DOCX, HTML); handles multi-column and footnote detection
-2. `pdfplumber` — good for structured PDFs with consistent layout; reliable page/table extraction
-3. `pymupdf` (block-level layout API) — fastest; suitable for clean scanned PDFs
-
-Requirements for whichever library is chosen:
-
-- Footnotes must be linked back to the body paragraph they annotate, not appended at page end as orphaned text.
-- Scriptural citations embedded in footnotes must be preserved as chunk metadata, not discarded.
-- Chapter and section headings must produce a `section_path` metadata field on each chunk (e.g., `"Book II > Chapter 4"`).
-- Page number must be preserved as `page_start` / `page_end` for citation accuracy in A6.
-
-**This decision must be made and reflected in the `chunking_service.py` contract before T-002 implementation begins.**
+- Decision: `pdfplumber` primary, `pytesseract` (Tesseract OCR with `grc` + `ell` language packs) fallback. Dispatch heuristic owned by the chunking service, not the parsers.
+- Authoritative source: **ADR-0008 (`docs/adr/0008-pdf-parser-strategy.md`)** + the **`Parser` Protocol in `docs/contracts/parser-interface.md`**. The `ParsedBlock` shape — including `font_size`, `bold`, `bbox`, `block_type`, `page_num` — is the input to the chunking service.
+- Implementation note: T-001 ships `pdfplumber_parser.py`, `tesseract_parser.py`, and a `vision_parser.py` stub (Phase 2) as `NotImplementedError` bodies whose class shapes match the Protocol; T-002 fills in `pdfplumber_parser.py` and `tesseract_parser.py`.
 
 ### Chunking Strategy
 
-Fixed-size chunking (e.g., 512 tokens with 50-token overlap) frequently splits a theological argument mid-sentence or separates a patristic claim from the citation immediately following it. A6's 70% quote-overlap threshold will fail on incoherent fragment chunks.
-
-Recommended approach:
-
-- **Primary:** Semantic/hierarchical chunking by natural section boundaries (heading → paragraph → sentence fallback).
-- **Fallback:** Sentence-boundary chunking with a 400-token soft cap and 100-token overlap.
-- Each chunk must carry: `section_path`, `page_start`, `page_end`, and `parent_chunk_id` to support context-window expansion in Phase 2.
-
-**This decision must be specified in `chunking_service.py` before T-002 implementation begins.**
+- Decision: hierarchical chunking by heading boundary with a sentence-boundary fallback; soft cap 800–1200 tokens (`cl100k_base`), hard cap 1500. Every chunk carries `sectionPath`, `pageStart`, `pageEnd`, and `parentChunkId`.
+- Authoritative source: **ADR-0009 (`docs/adr/0009-chunking-strategy.md`)** + the **algorithm spec in `docs/contracts/chunking-contract.md`**. Heading detection rules and the ALL-CAPS fallback for OCR-derived blocks are specified there.
+- Phase 2 hook: `parentChunkId` is the join key for the graph traversal layer described in ADR-0006. Setting it correctly during the sentence-boundary split is a one-line change with multi-quarter consequences if missed.
