@@ -18,13 +18,13 @@ This task is required by Phase 1 → Phase 2 exit criterion #9 (`docs/contracts/
 
 ## Owners
 
-- **Founder:** `<TBD: founder to specify>` — final approver of every rule change. Signs off on cultural and theological appropriateness.
+- **Founder:** Peter Kyriacos Stavrinides (Founder) — final approver of every rule change. Signs off on cultural and theological appropriateness.
 - **Greek-language reviewer:** `<TBD: founder to specify>` — verifies that Greek-language patterns (Koine, Modern, transliterated) are correct, comprehensive, and free of false positives common in Orthodox theological discourse.
 - **Engineering reviewer:** the on-call code reviewer ensures YAML structure matches `safety-config-format.md` and that startup validation passes.
 
 ## Target Merge Date
 
-`<TBD: founder to specify>` — must land before any Phase 2 scoping decision. Recommend setting at least 6 weeks before the planned Phase 1 → 2 evaluation to allow for paraphrase-suite iteration.
+`TBD: pin once Phase 1 → 2 evaluation date is set, then back off 6 weeks` — must land before any Phase 2 scoping decision. Recommend setting at least 6 weeks before the planned Phase 1 → 2 evaluation to allow for paraphrase-suite iteration.
 
 ## Files In Scope
 
