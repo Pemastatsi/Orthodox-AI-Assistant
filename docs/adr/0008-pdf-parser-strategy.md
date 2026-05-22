@@ -16,12 +16,14 @@ Phase 1 must also keep the corpus inside the server boundary (CLAUDE.md §9, ADR
 
 ## Decision
 
-PDF parsing is performed by two concrete parsers behind a `Parser` Protocol (specified in `docs/contracts/parser-interface.md`):
+PDF parsing is performed by two concrete parsers behind a `Parser` Protocol (specified in `docs/contracts/parser-interface.md`), with one Phase-1 alternate route (`LogiosParser`) and one Phase-2 fallback (`VisionParser`) reserved behind the same Protocol:
 
 | Path | Implementation | When chosen |
 |---|---|---|
 | Digital | `PdfplumberParser` wrapping the `pdfplumber` library | First attempt for every file |
 | Scanned | `TesseractParser` wrapping `pytesseract` with `tesseract-ocr-grc` + `tesseract-ocr-ell` language packs | Selected when the digital path returns insufficient text |
+| Scanned (Polytonic Greek alternate) | `LogiosParser` (REC-012) — polytonic-Greek-specific OCR, CER 1.05% / WER 4.69% on Polytonic Greek per arXiv:2506.21474 (2025-06) | Per-source flag opt-in (`sources.parser_kind = 'logios'`); default off until benchmarked on Orthodox-Ethos sources |
+| Scanned (degraded) | `VisionParser` Phase-2 fallback — Claude vision or equivalent for heavily-degraded layouts | Phase-2 only; per-tenant egress flag (default off); per-source re-approval required after re-extraction |
 
 **Dispatch heuristic.** The chunking service (`app/domain/services/chunking_service.py`), not the parsers themselves, owns dispatch:
 
@@ -35,9 +37,10 @@ The 50-character threshold is a tunable MVP default; T-002 implementers may adju
 **Library selection rationale.**
 
 - `pdfplumber` (MIT) gives per-word bounding boxes, per-character font size, and a bold flag derived from the font name. ADR-0009's heading detection (`block.bold` OR `font_size > median_body_font * 1.3`) relies on these fields. `pdfplumber` is pure Python (no native compile step in the container) and has been stable for >5 years.
-- `pytesseract` (Apache 2.0) wraps Tesseract OCR, which ships with language data files for both modern Greek (`ell`) and Polytonic Greek (`grc`). Tesseract runs locally inside the worker container — no network egress, no per-page cost. Accuracy on clean modern Greek scans is ~92–95%; Polytonic accuracy is lower on degraded scans and is tracked as a Phase 2 quality target.
+- `pytesseract` (Apache 2.0) wraps Tesseract OCR, which ships with language data files for both modern Greek (`ell`) and Polytonic Greek (`grc`). Tesseract runs locally inside the worker container — no network egress, no per-page cost. Accuracy on clean modern Greek scans is ~92–95%; Polytonic accuracy is lower on degraded scans (CER ≈9.7% / WER ≈21.3% per the NT-Greek-OCR study, 2021).
+- `LogiosParser` (REC-012) — open-weight Polytonic Greek OCR specialized for the language; reported CER 1.05% / WER 4.69% per arXiv:2506.21474 (2025-06). Local execution; no network egress; closed-corpus posture preserved. Activation is per-source via `sources.parser_kind = 'logios'` rather than via the dispatch heuristic — Logios is deliberately opt-in until per-tenant benchmarking validates it against the existing Tesseract baseline.
 
-**Phase 2 hook.** A `VisionParser` implementation (LLM-with-vision for multi-column or heavily-degraded layouts) can be added as a third `Parser` implementation. Adding it does not change the dispatch heuristic — instead, the heuristic gains a third branch (e.g., "if Tesseract confidence below threshold, fall through to `VisionParser`"). Phase 1 ships a `NotImplementedError` stub of `VisionParser` so the seam is visible in the codebase.
+**Phase 2 hook.** A `VisionParser` implementation (LLM-with-vision for multi-column or heavily-degraded layouts) can be added as a fourth `Parser` implementation. Adding it does not change the default dispatch heuristic — activation requires (a) a per-tenant egress flag (default off, since vision LLMs require corpus bytes to leave the server boundary), and (b) per-source re-approval after re-extraction, because the resulting text may differ subtly from the original Tesseract output and invalidate already-approved citations. Phase 1 ships a `NotImplementedError` stub of `VisionParser` so the seam is visible in the codebase.
 
 ## Consequences
 

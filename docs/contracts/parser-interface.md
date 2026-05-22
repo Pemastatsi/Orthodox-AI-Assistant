@@ -113,14 +113,24 @@ The 50-character threshold is the MVP default per ADR-0008. T-002 implementers m
 - Emits `block_type='paragraph'` for body content; `'heading'` only when the ALL-CAPS heuristic in `chunking-contract.md` matches.
 - Tesseract is invoked with `--psm 1` (automatic page segmentation with OSD) to handle the column layouts common in Migne editions.
 
+### `LogiosParser` (REC-012, alternate Polytonic Greek route)
+
+- Wraps the open-weight Logios OCR model specialized for Polytonic Greek.
+- `supports_typography = False` (same posture as `TesseractParser`).
+- Emits `font_size=None`, `bbox=None`, `bold=False`; `block_type='paragraph'` for body and `'heading'` only when the ALL-CAPS heuristic in `chunking-contract.md` matches.
+- Local execution; no network egress (closed-corpus posture preserved).
+- Activation is per-source via `sources.parser_kind = 'logios'` rather than via the dispatch heuristic in `chunking_service.py`. The intent is opt-in benchmarking before broad enablement, since Logios re-extraction of an already-ingested source produces subtly different text and may invalidate already-approved citations.
+- Reports CER 1.05% / WER 4.69% on Polytonic Greek (arXiv:2506.21474, 2025-06) versus Tesseract's CER ≈9.7% on the same domain.
+
 ### `VisionParser` (Phase 2 stub)
 
 - Phase 1 implementation is a stub that raises `NotImplementedError` on instantiation if any code attempts to register it as the active parser.
 - Phase 2 will implement this against an LLM-with-vision route for complex multi-column layouts. The Protocol surface does not change.
+- Phase 2 activation requires (a) a per-tenant egress flag (default off — vision LLMs require corpus bytes to leave the server boundary, breaking the closed-corpus posture absent explicit tenant consent), and (b) per-source re-approval after re-extraction, since the resulting text may differ from prior parser output.
 
 ## Constraints
 
-- **No LLM calls.** No parser may call an LLM or any external API. Tesseract runs locally inside the worker container.
+- **No LLM calls on the Phase 1 dispatch path.** `PdfplumberParser`, `TesseractParser`, and `LogiosParser` all run locally with no LLM or external-API calls. The `VisionParser` Phase-2 stub is the only `Parser` that may call an LLM; activation requires the per-tenant egress flag and per-source re-approval as documented above.
 - **No database writes.** Parsers are pure functions of `(file_bytes, mime_type)`.
 - **No filesystem writes** except to a tempdir for Tesseract's intermediate files (cleaned up before return).
 - **No `os.environ` reads.** Configuration (Tesseract language packs path, etc.) is injected via the parser constructor from `app/core/config.py`, per the same rule that governs `LLMProvider` adapters.

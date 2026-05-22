@@ -46,8 +46,20 @@ Canonical graph tables:
 - `graph_entities`: persons, works, concepts, councils, passages, sources, and tradition tags.
 - `chunk_entity_mentions`: reviewed mentions linking chunks to graph entities.
 - `lineage_edges`: reviewed relations such as `quotes`, `references`, `builds_on`, `contrasts_with`, `same_passage_as`, `translation_of`, `paraphrases`, `supports`, and `contested_by`.
+- `graph_candidates` (REC-013, Phase 1 capture): unreviewed candidate edges emitted at ingestion. The schema mirrors `lineage_edges` but adds `extraction_method` (`'regex' | 'llm' | 'hybrid'`), `extractor_route_id` (FK to `model_routes` when LLM-extracted), `confidence` (float, 0–1), and a `review_status` enum starting at `'candidate'`. Candidate edges never enter `EvidencePacket.lineageContext`; promotion to `lineage_edges` requires admin approval through a Phase-2 admin UI. See `docs/contracts/db-schema.md` §`graph_candidates` for the DDL.
 
 Existing Qdrant payload fields such as `related_chunks`, `references_father`, and `builds_on` remain lightweight retrieval hints. The authoritative version of a relation lives in PostgreSQL and must carry review status.
+
+### Phase 1 candidate-edge emission (REC-013)
+
+Candidate edges are emitted at ingestion time rather than backfilled after Phase-2 launch. The ingestion worker runs a two-stage extraction:
+
+1. **Deterministic stage** — regex over the chunk text catches citation-style edges (e.g., `quotes`, `cites`, `translation_of`) with high precision. Emits `extraction_method='regex'`.
+2. **LLM residual stage** — for passages where the regex stage finds no edges, a single LLM call against a `ModelRoute` with `purpose='edge_extraction'` (D-MDL-003, default Haiku 4.5) proposes additional candidate edges. Emits `extraction_method='llm'` or `'hybrid'` when both stages contribute.
+
+The LLM stage runs **at ingestion only** — it never sees the user's question and never runs on the answer path. This preserves ADR-0007's boundary (chunk-side ingestion enrichment is not query rewriting; see ADR-0007 §Clarification).
+
+Candidate edges are invisible to A4/A5 until promoted, so A6's lineage gate still requires approved edges only and the closed-corpus invariant is intact. Re-running the extraction on a new `corpusVersion` is supported and idempotent (candidate edges keyed on `(source_chunk_id, target_chunk_id, relation_type, extraction_method)` are deduplicated).
 
 ## Embedding Model Upgrade (Placeholder — Detailed SOP in Phase 2)
 

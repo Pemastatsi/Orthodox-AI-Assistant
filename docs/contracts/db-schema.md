@@ -331,6 +331,38 @@ CREATE TABLE prompt_versions (
 );
 ```
 
+### `graph_candidates` (REC-013, Phase 1 capture per ADR-0006)
+
+Holds candidate (unreviewed) lineage edges emitted at ingestion. Promotion to `lineage_edges` requires admin approval through a Phase-2 UI. Candidate edges never enter `EvidencePacket.lineageContext` and are invisible to A4/A5.
+
+```sql
+CREATE TABLE graph_candidates (
+    candidate_id          text PRIMARY KEY,                    -- ULID
+    tenant_id             text NOT NULL REFERENCES tenants(tenant_id),
+    source_chunk_id       text NOT NULL REFERENCES chunks(chunk_id),
+    target_chunk_id       text REFERENCES chunks(chunk_id),    -- nullable when target is an external citation not yet ingested
+    target_external_ref   text,                                -- e.g., "Athanasius, Contra Arianos III.4" when target_chunk_id is NULL
+    relation_type         text NOT NULL,                       -- 'quotes' | 'cites' | 'translation_of' | 'paraphrases' | 'builds_on' | 'contrasts_with' | 'supports' | 'contested_by'
+    extraction_method     text NOT NULL,                       -- 'regex' | 'llm' | 'hybrid'
+    extractor_route_id    text REFERENCES model_routes(route_id),  -- NULL when extraction_method='regex'
+    confidence            real NOT NULL DEFAULT 0.0,           -- 0-1; regex hits default to 1.0, LLM hits use model-reported confidence
+    review_status         text NOT NULL DEFAULT 'candidate',   -- 'candidate' | 'approved' | 'rejected'
+    reviewed_by_user_id   text REFERENCES users(user_id),
+    reviewed_at           timestamptz,
+    corpus_version        text NOT NULL,
+    created_at            timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, source_chunk_id, COALESCE(target_chunk_id, ''), COALESCE(target_external_ref, ''), relation_type, extraction_method)
+);
+
+CREATE INDEX idx_graph_candidates_tenant_status ON graph_candidates (tenant_id, review_status);
+CREATE INDEX idx_graph_candidates_source_chunk ON graph_candidates (source_chunk_id) WHERE review_status = 'candidate';
+```
+
+- The `UNIQUE` constraint makes re-extraction on a new `corpus_version` idempotent — duplicates by `(source, target, relation, method)` are rejected at insertion.
+- Approval promotes a row into `lineage_edges` and sets `review_status='approved'`. Rejection sets `review_status='rejected'` and never deletes; rejected rows are retained for audit and to suppress re-emission.
+- `extraction_method='regex'` rows MUST set `extractor_route_id` to NULL; `'llm'` and `'hybrid'` rows MUST reference a valid `model_routes` row.
+- Tenant isolation: every read and write predicate-filters on `tenant_id` per app-layer convention. When ADR-0016 (Postgres RLS) lands, this table will be among the multi-tenant tables receiving `ENABLE ROW LEVEL SECURITY`.
+
 ### `billing_usage`
 
 ```sql
