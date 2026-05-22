@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Model Comparison — Orthodox AI Assistant</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222636;
+      --border: #2e3348;
+      --accent: #6c8ebf;
+      --accent2: #8b6cbf;
+      --gold: #c9a84c;
+      --green: #4caf7d;
+      --red: #e05c5c;
+      --yellow: #d4a94c;
+      --text: #dde2f0;
+      --text-muted: #7a8099;
+      --text-dim: #4e5470;
+      --radius: 10px;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.65;
+      padding: 40px 24px 80px;
+    }
+
+    .container { max-width: 1060px; margin: 0 auto; }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 52px; }
+    header .eyebrow {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(108,142,191,0.12);
+      border: 1px solid rgba(108,142,191,0.25);
+      border-radius: 20px;
+      padding: 4px 14px;
+      margin-bottom: 18px;
+    }
+    header h1 {
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 10px;
+    }
+    header p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    header p strong { color: var(--text); }
+
+    /* ── Section headings ── */
+    .section-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 14px;
+    }
+
+    /* ── Fact-check banner ── */
+    .factcheck-banner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 26px;
+      margin-bottom: 40px;
+    }
+    .factcheck-banner h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .factcheck-banner h2 span.icon { font-size: 1.1rem; }
+    .factcheck-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .fact-item {
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--border);
+      font-size: 13.5px;
+    }
+    .fact-item.ok { border-left-color: var(--green); }
+    .fact-item.warn { border-left-color: var(--yellow); }
+    .fact-item.err { border-left-color: var(--red); }
+    .fact-item .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .fact-item.ok .label { color: var(--green); }
+    .fact-item.warn .label { color: var(--yellow); }
+    .fact-item.err .label { color: var(--red); }
+    .fact-item p { color: var(--text-muted); line-height: 1.5; }
+    .fact-item p strong { color: var(--text); }
+
+    /* ── Model cards (top row) ── */
+    .model-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 780px) { .model-cards { grid-template-columns: 1fr; } }
+
+    .model-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .model-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .model-card.opus::before { background: linear-gradient(90deg, #6c8ebf, #8b6cbf); }
+    .model-card.composer::before { background: linear-gradient(90deg, #4caf7d, #3d9e6e); }
+    .model-card.minimax::before { background: linear-gradient(90deg, #d4a94c, #c97c4c); }
+
+    .model-card .provider {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .model-card.opus .provider { color: var(--accent); }
+    .model-card.composer .provider { color: var(--green); }
+    .model-card.minimax .provider { color: var(--gold); }
+
+    .model-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 14px;
+    }
+
+    .stat-row { display: flex; flex-direction: column; gap: 8px; }
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 12.5px;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat:last-child { border-bottom: none; }
+    .stat .key { color: var(--text-muted); }
+    .stat .val { color: var(--text); font-weight: 500; font-family: var(--font-mono); font-size: 12px; }
+    .stat .val.hi { color: var(--green); }
+    .stat .val.mid { color: var(--yellow); }
+    .stat .val.lo { color: var(--red); }
+
+    /* ── Benchmark table ── */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-bottom: 32px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    thead { background: var(--surface2); }
+    thead th {
+      padding: 14px 18px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    thead th:first-child { color: var(--text); }
+    tbody tr { border-top: 1px solid var(--border); }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    tbody td {
+      padding: 12px 18px;
+      color: var(--text-muted);
+      vertical-align: middle;
+    }
+    tbody td:first-child { color: var(--text); font-weight: 500; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+    .badge.hi { background: rgba(76,175,125,0.15); color: var(--green); }
+    .badge.mid { background: rgba(212,169,76,0.15); color: var(--yellow); }
+    .badge.lo { background: rgba(224,92,92,0.15); color: var(--red); }
+    .badge.neu { background: rgba(108,142,191,0.12); color: var(--accent); }
+    .badge.unconf { background: rgba(78,84,112,0.3); color: var(--text-dim); font-style: italic; }
+
+    /* ── Winner pill ── */
+    .winner-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .winner-pill.opus { background: rgba(108,142,191,0.15); color: var(--accent); border: 1px solid rgba(108,142,191,0.3); }
+    .winner-pill.composer { background: rgba(76,175,125,0.12); color: var(--green); border: 1px solid rgba(76,175,125,0.25); }
+    .winner-pill.minimax { background: rgba(201,168,76,0.12); color: var(--gold); border: 1px solid rgba(201,168,76,0.25); }
+    .winner-pill.tie { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* ── Project recommendation ── */
+    .recommendation {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 32px;
+    }
+    .recommendation-header {
+      background: linear-gradient(135deg, rgba(108,142,191,0.12), rgba(139,108,191,0.08));
+      border-bottom: 1px solid var(--border);
+      padding: 22px 26px;
+    }
+    .recommendation-header h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .recommendation-header p { color: var(--text-muted); font-size: 13.5px; }
+
+    .rec-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0;
+    }
+    .rec-col {
+      padding: 24px 26px;
+      border-right: 1px solid var(--border);
+    }
+    .rec-col:last-child { border-right: none; }
+    .rec-col h4 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .rec-col.primary h4 { color: var(--accent); }
+    .rec-col.secondary h4 { color: var(--green); }
+    .rec-col.tertiary h4 { color: var(--gold); }
+    .rec-col .model-name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .rec-col .reason { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+
+    .rec-bullets { list-style: none; margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+    .rec-bullets li {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      padding-left: 18px;
+      position: relative;
+    }
+    .rec-bullets li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--text-dim);
+    }
+
+    /* ── Verdict strip ── */
+    .verdict {
+      background: linear-gradient(135deg, rgba(108,142,191,0.08), rgba(139,108,191,0.05));
+      border: 1px solid rgba(108,142,191,0.2);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 32px;
+    }
+    .verdict-icon { font-size: 1.6rem; flex-shrink: 0; margin-top: 2px; }
+    .verdict-body h3 { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .verdict-body p { color: var(--text-muted); font-size: 13.5px; line-height: 1.65; }
+    .verdict-body p strong { color: var(--text); }
+
+    /* ── Sources ── */
+    .sources {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+    .sources h4 {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+    .sources ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .sources li { font-size: 12.5px; }
+    .sources a { color: var(--accent); text-decoration: none; }
+    .sources a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="eyebrow">Model Comparison · May 2026</div>
+    <h1>Minimax M2.7 vs Composer 2.5 vs Claude Opus 4.7</h1>
+    <p>Fact-checked against live sources &nbsp;·&nbsp; Benchmarked against the <strong>Orthodox AI Assistant</strong> project</p>
+  </header>
+
+  <!-- ── Fact-Check ── -->
+  <div class="section-label">Fact-Check Results</div>
+  <div class="factcheck-banner">
+    <h2><span class="icon">&#x2713;</span> What the original comparison got right — and wrong</h2>
+    <div class="factcheck-grid">
+
+      <div class="fact-item ok">
+        <div class="label">Confirmed</div>
+        <p><strong>Opus 4.7 release &amp; price:</strong> April 16, 2026. $5/$25 per million tokens. Unchanged from Opus 4.6.</p>
+      </div>
+
+      <div class="fact-item ok">
+        <div class="label">Confirmed</div>
+        <p><strong>Composer 2.5 release:</strong> May 18, 2026. Based on Moonshot Kimi K2.5. Heavy Cursor RL post-training.</p>
+      </div>
+
+      <div class="fact-item ok">
+        <div class="label">Confirmed</div>
+        <p><strong>Composer 2.5 benchmarks:</strong> SWE-Bench Multilingual 79.8%, CursorBench 63.2%, Terminal-Bench 69.3% — all verified.</p>
+      </div>
+
+      <div class="fact-item ok">
+        <div class="label">Confirmed</div>
+        <p><strong>Composer 2.5 pricing:</strong> ~$0.50/$2.50 standard, $3/$15 fast. ~10x cheaper than Opus per token.</p>
+      </div>
+
+      <div class="fact-item ok">
+        <div class="label">Confirmed</div>
+        <p><strong>Minimax M2.7 SWE-Pro:</strong> 56.22% and Terminal Bench 2: 57.0% — both confirmed. Also scores 78% on SWE-Bench Verified.</p>
+      </div>
+
+      <div class="fact-item ok">
+        <div class="label">Confirmed</div>
+        <p><strong>Minimax self-evolution:</strong> Correctly described as a "self-evolving agent model" in official MiniMax documentation.</p>
+      </div>
+
+      <div class="fact-item warn">
+        <div class="label">Inaccurate</div>
+        <p><strong>Minimax M2.7 release date:</strong> Listed as "~April 2026" but actual release was <strong>March 18, 2026</strong> (open-sourced April 12).</p>
+      </div>
+
+      <div class="fact-item warn">
+        <div class="label">Overstated</div>
+        <p><strong>"20–50x cheaper" for Minimax:</strong> Input pricing is ~$0.30/M vs Opus $5/M — that's ~<strong>16x cheaper</strong>, not 20–50x. Output savings vary.</p>
+      </div>
+
+      <div class="fact-item warn">
+        <div class="label">Unverified</div>
+        <p><strong>Opus 4.7 "1M context window":</strong> Not confirmed by search sources. Likely accurate given Claude's track record, but treat as unverified.</p>
+      </div>
+
+      <div class="fact-item warn">
+        <div class="label">Missing context</div>
+        <p><strong>Composer 2.5 ranking:</strong> The comparison omits that Composer 2.5 sits <strong>3rd</strong> on the Artificial Analysis Coding Agent Index — behind Opus 4.7 and GPT-5.5 variants.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Model Cards ── -->
+  <div class="section-label">At a Glance</div>
+  <div class="model-cards">
+
+    <div class="model-card opus">
+      <div class="provider">Anthropic</div>
+      <h3>Claude Opus 4.7</h3>
+      <div class="stat-row">
+        <div class="stat"><span class="key">Released</span><span class="val">Apr 16, 2026</span></div>
+        <div class="stat"><span class="key">Input price</span><span class="val lo">$5.00 / 1M tokens</span></div>
+        <div class="stat"><span class="key">Output price</span><span class="val lo">$25.00 / 1M tokens</span></div>
+        <div class="stat"><span class="key">SWE-Bench Verified</span><span class="val hi">87.6%</span></div>
+        <div class="stat"><span class="key">SWE-Bench Multilingual</span><span class="val hi">80.5%</span></div>
+        <div class="stat"><span class="key">Terminal-Bench 2.0</span><span class="val hi">69.4%</span></div>
+        <div class="stat"><span class="key">GPQA Diamond</span><span class="val hi">94.2%</span></div>
+        <div class="stat"><span class="key">Index rank (AA)</span><span class="val hi">#1</span></div>
+        <div class="stat"><span class="key">API availability</span><span class="val hi">Full public API</span></div>
+        <div class="stat"><span class="key">Open source</span><span class="val lo">No</span></div>
+      </div>
+    </div>
+
+    <div class="model-card composer">
+      <div class="provider">Cursor</div>
+      <h3>Composer 2.5</h3>
+      <div class="stat-row">
+        <div class="stat"><span class="key">Released</span><span class="val">May 18, 2026</span></div>
+        <div class="stat"><span class="key">Input price (std)</span><span class="val hi">$0.50 / 1M tokens</span></div>
+        <div class="stat"><span class="key">Output price (std)</span><span class="val hi">$2.50 / 1M tokens</span></div>
+        <div class="stat"><span class="key">SWE-Bench Multilingual</span><span class="val hi">79.8%</span></div>
+        <div class="stat"><span class="key">CursorBench v3.1</span><span class="val hi">63.2%</span></div>
+        <div class="stat"><span class="key">Terminal-Bench 2.0</span><span class="val hi">69.3%</span></div>
+        <div class="stat"><span class="key">Base model</span><span class="val">Kimi K2.5 (MoE)</span></div>
+        <div class="stat"><span class="key">Index rank (AA)</span><span class="val mid">#3</span></div>
+        <div class="stat"><span class="key">API availability</span><span class="val lo">Cursor IDE only</span></div>
+        <div class="stat"><span class="key">Open source</span><span class="val lo">No</span></div>
+      </div>
+    </div>
+
+    <div class="model-card minimax">
+      <div class="provider">MiniMax</div>
+      <h3>MiniMax M2.7</h3>
+      <div class="stat-row">
+        <div class="stat"><span class="key">Released</span><span class="val">Mar 18, 2026</span></div>
+        <div class="stat"><span class="key">Input price</span><span class="val hi">~$0.30 / 1M tokens</span></div>
+        <div class="stat"><span class="key">Output price</span><span class="val hi">Low (est.)</span></div>
+        <div class="stat"><span class="key">SWE-Pro</span><span class="val mid">56.22%</span></div>
+        <div class="stat"><span class="key">SWE-Bench Verified</span><span class="val mid">78.0%</span></div>
+        <div class="stat"><span class="key">Terminal Bench 2</span><span class="val mid">57.0%</span></div>
+        <div class="stat"><span class="key">Speed</span><span class="val hi">~100 TPS</span></div>
+        <div class="stat"><span class="key">Index rank</span><span class="val lo">Not ranked</span></div>
+        <div class="stat"><span class="key">API availability</span><span class="val hi">Public API + OSS</span></div>
+        <div class="stat"><span class="key">Open source</span><span class="val hi">Yes</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Benchmark Table ── -->
+  <div class="section-label">Head-to-Head Benchmarks (Verified)</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Benchmark</th>
+          <th>Claude Opus 4.7</th>
+          <th>Composer 2.5</th>
+          <th>Minimax M2.7</th>
+          <th>Winner</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>SWE-Bench Verified</td>
+          <td><span class="badge hi">87.6%</span></td>
+          <td><span class="badge neu">—</span></td>
+          <td><span class="badge mid">78.0%</span></td>
+          <td><span class="winner-pill opus">Opus 4.7</span></td>
+        </tr>
+        <tr>
+          <td>SWE-Bench Multilingual</td>
+          <td><span class="badge hi">80.5%</span></td>
+          <td><span class="badge hi">79.8%</span></td>
+          <td><span class="badge mid">76.5%</span></td>
+          <td><span class="winner-pill opus">Opus 4.7</span></td>
+        </tr>
+        <tr>
+          <td>Terminal-Bench 2.0</td>
+          <td><span class="badge hi">69.4%</span></td>
+          <td><span class="badge hi">69.3%</span></td>
+          <td><span class="badge mid">57.0%</span></td>
+          <td><span class="winner-pill tie">Near tie</span></td>
+        </tr>
+        <tr>
+          <td>CursorBench v3.1</td>
+          <td><span class="badge mid">61.6%</span></td>
+          <td><span class="badge hi">63.2%</span></td>
+          <td><span class="badge neu">—</span></td>
+          <td><span class="winner-pill composer">Composer 2.5</span></td>
+        </tr>
+        <tr>
+          <td>SWE-Pro</td>
+          <td><span class="badge neu">~57%</span></td>
+          <td><span class="badge neu">—</span></td>
+          <td><span class="badge mid">56.22%</span></td>
+          <td><span class="winner-pill tie">Near tie</span></td>
+        </tr>
+        <tr>
+          <td>GPQA Diamond</td>
+          <td><span class="badge hi">94.2%</span></td>
+          <td><span class="badge neu">—</span></td>
+          <td><span class="badge neu">—</span></td>
+          <td><span class="winner-pill opus">Opus 4.7</span></td>
+        </tr>
+        <tr>
+          <td>Input price / 1M tokens</td>
+          <td><span class="badge lo">$5.00</span></td>
+          <td><span class="badge hi">$0.50</span></td>
+          <td><span class="badge hi">~$0.30</span></td>
+          <td><span class="winner-pill minimax">Minimax M2.7</span></td>
+        </tr>
+        <tr>
+          <td>Output price / 1M tokens</td>
+          <td><span class="badge lo">$25.00</span></td>
+          <td><span class="badge hi">$2.50</span></td>
+          <td><span class="badge hi">Low</span></td>
+          <td><span class="winner-pill minimax">Minimax M2.7</span></td>
+        </tr>
+        <tr>
+          <td>Cost per coding task (est.)</td>
+          <td><span class="badge lo">$4.82</span></td>
+          <td><span class="badge hi">$0.07–$0.44</span></td>
+          <td><span class="badge hi">Very low</span></td>
+          <td><span class="winner-pill minimax">Minimax M2.7</span></td>
+        </tr>
+        <tr>
+          <td>Coding Agent Index rank</td>
+          <td><span class="badge hi">#1</span></td>
+          <td><span class="badge mid">#3</span></td>
+          <td><span class="badge neu">—</span></td>
+          <td><span class="winner-pill opus">Opus 4.7</span></td>
+        </tr>
+        <tr>
+          <td>Open source</td>
+          <td><span class="badge lo">No</span></td>
+          <td><span class="badge lo">No</span></td>
+          <td><span class="badge hi">Yes</span></td>
+          <td><span class="winner-pill minimax">Minimax M2.7</span></td>
+        </tr>
+        <tr>
+          <td>General API access</td>
+          <td><span class="badge hi">Yes</span></td>
+          <td><span class="badge lo">Cursor only</span></td>
+          <td><span class="badge hi">Yes</span></td>
+          <td><span class="winner-pill tie">Opus / Minimax</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Project Recommendation ── -->
+  <div class="section-label">Orthodox AI Assistant — Project Fit Analysis</div>
+  <div class="recommendation">
+    <div class="recommendation-header">
+      <h2>Which model fits the Orthodox AI Assistant project?</h2>
+      <p>The project is a <strong>closed-corpus theological Q&amp;A system</strong> (Phase 1) with strict citation verification, safety gates, multi-tenant isolation, and route-certification requirements. Reliability and correctness are non-negotiable; cost is secondary at this stage.</p>
+    </div>
+    <div class="rec-grid">
+
+      <div class="rec-col primary">
+        <h4>Serving Model (A1/A2/A5)</h4>
+        <div class="model-name">Claude Opus 4.7</div>
+        <p class="reason">The only correct choice for Phase 1 LLM serving. Anthropic is the <strong>only certified provider</strong> in the architecture — the startup refuses to load an uncertified route. All 20 canonical safety cases must pass before any model enters production.</p>
+        <ul class="rec-bullets">
+          <li>Already the designated certified primary in AGENTS.md and code-gen-guide.md</li>
+          <li>Best instruction-following precision for closed-corpus enforcement (no hallucination tolerance)</li>
+          <li>Structured JSON output and prompt caching natively supported</li>
+          <li>87.6% SWE-Bench Verified — highest reliability on hard tasks</li>
+          <li>Phase 1 is low-volume (&ge;50 queries to exit) — cost advantage of cheaper models is irrelevant now</li>
+          <li>A5 (evidence composition) demands the highest-scrutiny route: Opus 4.7 is the safe choice</li>
+        </ul>
+      </div>
+
+      <div class="rec-col secondary">
+        <h4>Development Tooling (IDE)</h4>
+        <div class="model-name">Cursor + Composer 2.5</div>
+        <p class="reason">Excellent choice for writing the actual project code. Composer 2.5 is not a general API model — it only runs inside Cursor — but for scaffolding FastAPI routes, Next.js components, Alembic migrations, and Qdrant adapters, it provides near-Opus quality at ~10x lower cost.</p>
+        <ul class="rec-bullets">
+          <li>Cannot be integrated as an LLM provider in the serving architecture (Cursor IDE only)</li>
+          <li>Strong at multi-file edits and long-running agent tasks — suits T-001 to T-007 scaffolding</li>
+          <li>CursorBench 63.2% beats Opus 4.7 (61.6%) on IDE-specific coding tasks</li>
+          <li>$0.07–$0.44 per coding task vs $4.82 for Opus — use it to write code, not serve theology</li>
+        </ul>
+      </div>
+
+      <div class="rec-col tertiary">
+        <h4>Future Consideration (Phase 2+)</h4>
+        <div class="model-name">Minimax M2.7</div>
+        <p class="reason">Not suitable for Phase 1 — it is not a certified provider, and the project explicitly prohibits automatic cross-provider fallback. However, its open-source nature and low cost make it worth evaluating for Phase 2 high-volume agentic workloads.</p>
+        <ul class="rec-bullets">
+          <li>No Anthropic provider interface — cannot slot into Phase 1 certified routes</li>
+          <li>Self-evolving agents are interesting but unpredictable; the project demands deterministic safety</li>
+          <li>Phase 2 could certify an M2.7 route as a cost-efficient fallback for A1/A2 (query analysis)</li>
+          <li>Open-source weights allow local deployment — appealing for privacy-sensitive theological content</li>
+          <li>Requires full 20-case safety suite certification before any production use</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Final Verdict ── -->
+  <div class="verdict">
+    <div class="verdict-icon">&#x26A1;</div>
+    <div class="verdict-body">
+      <h3>Recommended Combination for This Project</h3>
+      <p>
+        <strong>Serving layer (production):</strong> Claude Opus 4.7 — already the certified primary, non-negotiable for Phase 1 given the closed-corpus, citation-verification, and safety-gate requirements. Phase 1 is too low-volume for cost to be a deciding factor.<br><br>
+        <strong>Development tooling:</strong> Cursor IDE with Composer 2.5 — use it to write and scaffold the FastAPI backend, Next.js frontend, Qdrant adapters, and Alembic migrations. Near-Opus coding quality at a fraction of the cost per task.<br><br>
+        <strong>Minimax M2.7:</strong> Table it for Phase 2 route certification as a cost-efficient fallback for non-composition steps (A1/A2 query analysis). Self-hosting the open-source weights is worth exploring for privacy compliance given the ecclesiastical nature of the content.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Sources ── -->
+  <div class="sources">
+    <h4>Sources — Verified May 2026</h4>
+    <ul>
+      <li><a href="https://www.marktechpost.com/2026/04/12/minimax-just-open-sourced-minimax-m2-7-a-self-evolving-agent-model-that-scores-56-22-on-swe-pro-and-57-0-on-terminal-bench-2/" target="_blank">MarkTechPost — MiniMax M2.7 open-source release, SWE-Pro 56.22%, Terminal Bench 2 57.0%</a></li>
+      <li><a href="https://www.minimax.io/news/minimax-m27-en" target="_blank">MiniMax Official — M2.7 release announcement</a></li>
+      <li><a href="https://llm-stats.com/models/minimax-m2.7" target="_blank">LLM Stats — MiniMax M2.7 benchmarks, pricing, context window</a></li>
+      <li><a href="https://artificialanalysis.ai/articles/cursor-composer-2-5-coding-agent-index" target="_blank">Artificial Analysis — Composer 2.5 Coding Agent Index (3rd place, 10–60x cost advantage)</a></li>
+      <li><a href="https://winbuzzer.com/2026/05/18/cursor-releases-composer-25-saying-its-better-at-s-xcxwbn/" target="_blank">WinBuzzer — Cursor Composer 2.5 release, May 18 2026</a></li>
+      <li><a href="https://www.techtimes.com/articles/316917/20260520/cursor-composer-25-matches-claude-opus-47-coding-benchmarks-one-tenth-cost.htm" target="_blank">TechTimes — Composer 2.5 vs Claude Opus 4.7 benchmark comparison</a></li>
+      <li><a href="https://www.anthropic.com/news/claude-opus-4-7" target="_blank">Anthropic — Claude Opus 4.7 announcement</a></li>
+      <li><a href="https://github.blog/changelog/2026-04-16-claude-opus-4-7-is-generally-available/" target="_blank">GitHub Changelog — Claude Opus 4.7 GA, April 16 2026</a></li>
+      <li><a href="https://llm-stats.com/models/claude-opus-4-7" target="_blank">LLM Stats — Claude Opus 4.7 benchmarks, $5/$25 pricing, context window</a></li>
+      <li><a href="https://www.finout.io/blog/claude-opus-4.7-pricing-the-real-cost-story-behind-the-unchanged-price-tag" target="_blank">Finout — Opus 4.7 pricing and tokenizer change analysis</a></li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>
