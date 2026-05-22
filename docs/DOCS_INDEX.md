@@ -53,6 +53,7 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/contracts/vector-store-interface.md` | canonical | `VectorStore` Protocol seam; `tenant_id` invariant; `ChunkPayload` / `ScoredChunk` boundary (ADR-0010, ADR-0013). |
 | `docs/contracts/retrieval-eval-suite.md` | canonical | Per-tenant retrieval gold-set format, deterministic metrics, Ragas-style judge gate (D-EVAL-001). |
 | `docs/contracts/embedding-upgrade-sop.md` | canonical | Dual-index window protocol for changing the embedding `ModelRoute`; corpusVersion bump rules. |
+| `docs/contracts/prompt-management.md` | canonical | `/prompts/` directory layout, `prompt_version` path-identifier contract, CI gate on prompt diffs, runtime template-loader rules. |
 
 ## Configuration
 
