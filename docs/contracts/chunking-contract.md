@@ -114,9 +114,15 @@ The chunking service MUST enforce all of the following. Each is covered by a tes
 6. **Footnote completeness.** Every footnote `ParsedBlock` is either folded into a paragraph chunk OR explicitly logged as "orphan footnote" with a `chunking.orphan_footnote` warning event.
 7. **Tenant isolation invariant carries through.** The chunking service receives `tenantId` from its caller (the ingestion worker) and stamps it on every chunk; chunks never inherit `tenantId` from any other source.
 
+## Post-chunking enrichment — contextual prefix
+
+The chunking service does **not** set `Chunk.contextPrefix`. Per ADR-0009 Step 4 (Contextual Retrieval), the optional `contextPrefix` is stamped by a separate enrichment stage in the ingestion worker that runs **after** chunking and **before** embedding. The enrichment stage calls a `ModelRoute` with `purpose='context_prefix'` (default Haiku 4.5 per D-MDL-002) once per chunk, with the source-document preamble cached via Anthropic prompt caching. The chunking service itself remains deterministic and LLM-free (see "What the chunking service must NOT do" below).
+
+When `contextPrefix` is set, the embedding input becomes `contextPrefix + "\n\n" + text` and the BM25 index receives the same concatenation. `Chunk.text` is unchanged and remains the canonical source for A6 quote-overlap. See `docs/contracts/embedding-upgrade-sop.md` for the corpus-version bump rules when this feature is toggled.
+
 ## What the chunking service must NOT do
 
-- Call an LLM. Chunking is deterministic and local.
+- Call an LLM. Chunking is deterministic and local. (Contextual prefix is set by a separate enrichment stage post-chunking; see above.)
 - Write to Postgres. The ingestion worker (`app/workers/tasks/ingestion.py`) owns persistence.
 - Write to the vector store. Embedding and `VectorStore.upsert` are downstream steps.
 - Approve chunks. `chunks.approved` is set only via `PATCH /corpus/{chunkId}` per `db-schema.md` invariant #3.

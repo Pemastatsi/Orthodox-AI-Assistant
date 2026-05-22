@@ -64,6 +64,11 @@
       "type": ["string", "null"],
       "description": "References chunks.chunkId of the parent when this chunk was produced by a sentence-boundary split inside a single oversized parent (chunking-contract.md §Chunk boundaries). NULL for top-level chunks. The join key for the Phase 2 graph traversal layer (ADR-0006)."
     },
+    "contextPrefix": {
+      "type": ["string", "null"],
+      "maxLength": 200,
+      "description": "Optional 50–100-token document-context summary produced at ingestion time by a ModelRoute with purpose='context_prefix' (ADR-0009 Step 4, D-MDL-002). When set, the embedding input is contextPrefix + '\\n\\n' + text and the BM25 index uses the same concatenation. The pristine text field is unaffected and remains the canonical source for A6 quote-overlap. NULL on chunks ingested before Contextual Retrieval was enabled for the tenant (corpusVersion-pinned)."
+    },
     "embeddingModel": {
       "type": "string",
       "description": "Versioned embedding model used at index time, e.g., 'openai:text-embedding-3-small@2024-03'."

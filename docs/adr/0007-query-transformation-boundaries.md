@@ -21,6 +21,16 @@ classifiedQuery.reframedQuery ?? classifiedQuery.rawQuery
 
 No Phase 1 LLM call may perform generic query rewriting, synonym expansion, or intent reinterpretation. Retrieval quality should first improve through chunking, metadata, BM25 or hybrid retrieval, reranking, and approved graph structure.
 
+### Clarification — chunk-side ingestion enrichment is not query rewriting
+
+This ADR constrains **query-side, answer-time** transformation only. Chunk-side metadata enrichment performed at **ingestion time** — including Contextual Retrieval per-chunk prefixes (ADR-0009 Step 4) and candidate edge extraction (ADR-0006 Phase-1 capture) — is not query rewriting and does not fall under the prohibition above. The distinguishing tests:
+
+- The LLM call runs at ingestion, not at retrieval. The user's question is never an input.
+- The output enriches the chunk vector or the graph, not the user-facing `semanticQuery`.
+- Two users asking the same question receive identical retrieval inputs (no per-query LLM intermediation).
+
+Future contributors flagging Contextual Retrieval or edge extraction as an ADR-0007 violation should re-read this clarification before opening a follow-up; the report's risk register R-1 (2026-05-22) anticipates this confusion.
+
 Phase 3 may add graph-grounded concept expansion inside A2, coupled to graph-aware retrieval. Expansion must be based only on approved tenant-scoped graph entities, aliases, reviewed mentions, and approved lineage edges. Candidate graph data may be visible to admins, but it must not affect retrieval expansion, answer wording, confidence tier, or user-facing lineage claims.
 
 ## Ownership
