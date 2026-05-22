@@ -243,29 +243,34 @@ When implementation reveals that a contract is wrong, ambiguous, or insufficient
 
 Do not silently work around contracts. If the change is large, raise it before coding.
 
-## 12. Phase 2 Retrieval Enhancements (do not build in Phase 1)
+## 12. Retrieval Architecture (Phase 1 hybrid + reranker)
 
-The following enhancements are deferred to Phase 2 but must be designed into A3's return type now so they can be added without breaking the A4 contract.
+Hybrid dense+sparse retrieval and cross-encoder reranking were pulled forward into Phase 1 by ADR-0011 and ADR-0012. This section names the contracts both layers depend on. The canonical `ScoredChunk` schema lives at `docs/schemas/scored-chunk.schema.json`; the runtime Protocols at `docs/contracts/vector-store-interface.md` and (for reranker) ADR-0012.
 
-### A3 Return Type Requirement (enforce in Phase 1)
+### A3 Return Type Requirement
 
-`a3_retrieval.py` must return a typed list of `ScoredChunk` objects rather than raw Qdrant hit dicts:
+`a3_retrieval.py` must return a typed list of `ScoredChunk` objects rather than raw Qdrant hit dicts. The schema is authoritative — this code block is illustrative only:
 
 ```python
 @dataclass
 class ScoredChunk:
     chunk: Chunk
-    score: float   # cosine similarity from Qdrant
-    rank: int      # 1-based rank within the returned set
+    score: float          # cosine similarity from Qdrant dense index
+    rank: int             # 1-based rank within the returned set
+    rerankScore: float | None = None   # set by Reranker.rerank if a reranker is wired in
 ```
 
-This interface is required in Phase 1 so that a reranker can be inserted between A3 scoring and A4 admission in Phase 2 without changing A4's input contract.
+A4 sorts by `rerankScore` when present, falling back to `score` (D-RNK-001).
 
-### Cross-Encoder Reranking (Phase 2)
+### Cross-Encoder Reranking (Phase 1 per ADR-0012)
 
-After Qdrant returns `k` candidates, a cross-encoder reranker re-scores each `ScoredChunk` against the `semanticQuery` before A4 admission gates. This improves precision for long Patristic arguments where a passage may be semantically adjacent but not the most directly relevant.
+After Qdrant returns `k` candidates from hybrid dense+sparse retrieval with server-side RRF (k=60, ADR-0011), a cross-encoder reranker re-scores each `ScoredChunk` against the `semanticQuery` before A4 admission gates. This improves precision for long Patristic arguments where a passage may be semantically adjacent but not the most directly relevant.
 
-- The reranker is invoked inside `a3_retrieval.py`, gated by a `RetrievalPlan.rerank: bool` field (default `False` in Phase 1, `True` in Phase 2 certified routes).
-- Candidates for evaluation: `cross-encoder/ms-marco-MiniLM-L-6-v2` (self-hosted, fast) or Cohere Rerank API (managed, latency cost).
-- The reranker must not alter the `ScoredChunk` schema — it updates `score` and `rank` only.
+- The reranker is invoked behind the `Reranker` Protocol (ADR-0012), gated by a `RetrievalPlan.rerank: bool` field. Default and concrete behaviour are set by the certified `ModelRoute` with `purpose='rerank'`.
+- Phase 1 default implementation: **`BAAI/bge-reranker-v2-m3`** (Apache-2.0, self-hosted via `sentence-transformers`) — multilingual including Polytonic Greek, selected by ADR-0012 / D-RNK-001.
+- Managed-API alternative on the certified track: **Cohere Rerank v3.5** behind a `CohereRerankerAdapter`. Activation requires the safety-suite gate (ADR-0004) and the retrieval-eval gate (`retrieval-eval-suite.md`).
+- LLM-pointwise reranking is forbidden (ADR-0012).
+- The reranker must not alter the `ScoredChunk` schema — it updates `rerankScore` only.
 - A4 admission gates operate on the reranked list identically to the unreranked list.
+
+See ADR-0011 (hybrid retrieval), ADR-0012 (reranker selection), and `docs/contracts/vector-store-interface.md` for the canonical seam definitions.

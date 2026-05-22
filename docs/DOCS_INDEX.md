@@ -9,9 +9,10 @@ For coding sessions, read only:
 
 1. `AGENTS.md`
 2. `docs/contracts/code-gen-guide.md`
-3. the relevant `docs/task_cards/phase1/*.md`
-4. directly affected source files
-5. failing tests
+3. `docs/contracts/approved-decisions-register.md`
+4. the relevant `docs/task_cards/phase1/*.md`
+5. directly affected source files
+6. failing tests
 
 Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the task card points to them. Read `docs/reference/` or `docs/archive/` only to resolve a contradiction or revisit strategy.
 
@@ -47,6 +48,11 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/contracts/quote-overlap-algorithm.md` | canonical | A6 70% rule, normalization, shingles, test vectors. |
 | `docs/contracts/safety-config-format.md` | canonical | YAML format for sensitivity keywords and pastoral filters. |
 | `docs/contracts/frontend-components.md` | canonical | React component prop/state contracts and routing. |
+| `docs/contracts/parser-interface.md` | canonical | `Parser` Protocol seam; `ParsedBlock` shape consumed by chunking (ADR-0008). |
+| `docs/contracts/chunking-contract.md` | canonical | Heading-boundary hierarchical chunking algorithm and `Chunk` assembly rules (ADR-0009). |
+| `docs/contracts/vector-store-interface.md` | canonical | `VectorStore` Protocol seam; `tenant_id` invariant; `ChunkPayload` / `ScoredChunk` boundary (ADR-0010, ADR-0013). |
+| `docs/contracts/retrieval-eval-suite.md` | canonical | Per-tenant retrieval gold-set format, deterministic metrics, Ragas-style judge gate (D-EVAL-001). |
+| `docs/contracts/embedding-upgrade-sop.md` | canonical | Dual-index window protocol for changing the embedding `ModelRoute`; corpusVersion bump rules. |
 
 ## Configuration
 
@@ -79,6 +85,9 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/schemas/model-route.schema.json` | contract | Certified provider/model/prompt/schema combination. |
 | `docs/schemas/run-trace.schema.json` | contract | Full pipeline run trace. |
 | `docs/schemas/calendar-profile.schema.json` | contract | Inline calendar profile stored at `tenants.config.calendarProfile`. Drives cache-key `calendarVersion` field. |
+| `docs/schemas/parsed-block.schema.json` | contract | Typographic block emitted by a `Parser`; consumed by chunking to detect headings and assemble Chunks. |
+| `docs/schemas/progress-event.schema.json` | contract | Typed SSE payload for `POST /query` when `streamProgress=true` (progress / done / error variants). |
+| `docs/schemas/scored-chunk.schema.json` | contract | Retrieval hit composed of a Chunk plus cosine `score` and optional `rerankScore`; returned by `VectorStore.search`. |
 
 ## Architecture Decision Records
 
@@ -91,6 +100,12 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/adr/0005-cache-billing-privacy.md` | canonical | Cache, usage metering, and sensitive logs. |
 | `docs/adr/0006-pag-rag-lineage-architecture.md` | canonical | Phased PAG-RAG lineage architecture. |
 | `docs/adr/0007-query-transformation-boundaries.md` | canonical | No generic query rewriting in Phase 1. |
+| `docs/adr/0008-pdf-parser-strategy.md` | canonical | Two-path PDF parser (`pdfplumber` born-digital + `pytesseract` scanned with `grc`+`ell`) behind the `Parser` Protocol. |
+| `docs/adr/0009-chunking-strategy.md` | canonical | Hierarchical heading-boundary chunking (800–1200 soft / 1500 hard tokens, `cl100k_base`). |
+| `docs/adr/0010-vector-store-interface.md` | canonical | `VectorStore` Protocol seam; no direct Qdrant client imports outside `adapters/`. |
+| `docs/adr/0011-hybrid-retrieval.md` | canonical | Dense + sparse (BM25) hybrid via Qdrant native sparse vectors with server-side RRF (k=60). |
+| `docs/adr/0012-reranker-selection.md` | canonical | Cross-encoder `BAAI/bge-reranker-v2-m3` (Apache-2.0); LLM-pointwise reranking forbidden. |
+| `docs/adr/0013-qdrant-collection-topology.md` | canonical | Shared Qdrant collection with required `tenant_id` payload filter; one-collection-per-tenant reserved as documented migration target. |
 
 ## Task Cards
 

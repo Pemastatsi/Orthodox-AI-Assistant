@@ -133,6 +133,15 @@ These checks are tested directly in `tests/unit/test_vector_store_isolation.py`.
 - Not implemented in Phase 1.
 - The Protocol surface is unchanged; the implementation issues a single SQL query against a `chunk_embeddings` table with a `vector` column and `tenant_id`/`approved`/`visibility` predicates, eliminating the cross-store hydration round-trip.
 
+### `TurbopufferStore` (Phase 2 conditional — reserved seam, not committed)
+
+- Not implemented and not scheduled. Reserved here so the swap path is explicit if the trigger condition fires.
+- **Trigger condition (either):** active tenant count exceeds 5, OR Railway-hosted Qdrant operational cost exceeds $100/mo, OR a tenant requires data-residency isolation that the shared collection cannot deliver.
+- **Topology shift:** Turbopuffer's namespace-per-tenant model makes `namespace == tenant_id`, so the `VectorFilter.tenant_id` invariant maps to a structural isolation rather than a predicate filter — the cross-tenant failure mode (forgetting a payload filter) becomes structurally impossible at the store layer. The `approved=true` filter remains a payload attribute and is still enforced by the Protocol invariant.
+- **Protocol surface:** unchanged. The adapter still requires `VectorFilter.tenant_id` and still emits `TenantIsolationViolation` for empty values; it additionally maps `tenant_id` to the Turbopuffer namespace at the wire level.
+- **Trade-off:** no native ColBERT late-interaction support (relevant to REC-015 / ADR-0011's optional 3rd retrieval signal). If Turbopuffer is selected and late-interaction is required, the ColBERT vectors live alongside dense+sparse in the same namespace, scored client-side.
+- Phase-2 evaluation against the certified retrieval-eval gold set is captured in `docs/task_cards/phase2/T-2XX-vector-store-swap-evaluation.md`.
+
 ## Error Mapping
 
 Each adapter catches its library's exceptions and raises one of these typed exceptions:
