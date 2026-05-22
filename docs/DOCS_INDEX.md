@@ -107,6 +107,7 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/adr/0012-reranker-selection.md` | canonical | Cross-encoder `BAAI/bge-reranker-v2-m3` (Apache-2.0); LLM-pointwise reranking forbidden. |
 | `docs/adr/0013-qdrant-collection-topology.md` | canonical | Shared Qdrant collection with required `tenant_id` payload filter; one-collection-per-tenant reserved as documented migration target. |
 | `docs/adr/0014-cross-provider-failover.md` | canonical | Phase-2 cross-provider failover design (certified peer only; refusals never trigger; 5xx/network/rate-limit/latency-threshold triggers; embedding routes excluded). |
+| `docs/adr/0016-postgres-rls.md` | canonical | Phase-1 Postgres RLS as engine-layer defense-in-depth backstop for tenant isolation; FastAPI `SET LOCAL` dependency; `app_admin` BYPASSRLS role for migrations, seeders, retention. |
 
 ## Task Cards
 
@@ -186,7 +187,7 @@ These files are superseded planning drafts. They have headers warning future age
 - Draft answer text is not streamed before A6 verification.
 - PDFs are reference-only and never override canonical contracts.
 - CLAUDE.md is the universal policy spine; FastAPI/Next.js code-gen rules live in `docs/contracts/code-gen-guide.md`.
-- App-layer tenant scoping is the Phase 1 default; Postgres RLS is deferred to a Phase 2 ADR.
+- App-layer `WHERE tenant_id` filtering is the primary line of tenant isolation. Postgres RLS is also enabled in Phase 1 per ADR-0016 as the engine-layer defense-in-depth backstop (superseding the earlier deferral). The Phase-1 tenant-isolation defense triad is: app-layer filter + Postgres RLS + pgaudit.
 - `calendarProfile` is an inline object on `tenants.config`, not a referenced id; the cache-key path `tenants.config.calendarProfile.version` is satisfied without a join. Schema: `docs/schemas/calendar-profile.schema.json` (added 2026-05-02).
 - Embeddings are obtained through the `LLMProvider.embed_texts` method; no direct provider SDK calls outside `app/adapters/providers/`.
 - Phase 1 has no automatic cross-provider fallback on `provider_unavailable`. Codified in ADR 0004.

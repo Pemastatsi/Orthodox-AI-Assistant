@@ -7,8 +7,8 @@ This document is the canonical Postgres DDL for Phase 1. The first Alembic migra
 
 ## Decisions
 
-- **Tenant scoping: app-layer.** Every tenant table has `tenant_id NOT NULL`. The repository layer adds `WHERE tenant_id = :tenant_id` to every read and write. Postgres RLS is not enabled in Phase 1.
-- **Defense in depth:** a `pgaudit` rule (configured at infrastructure level) records every direct DB session that bypasses the application. RLS becomes a Phase 2 ADR.
+- **Tenant scoping: app-layer + Postgres RLS (defense in depth).** Every tenant table has `tenant_id NOT NULL`. The repository layer adds `WHERE tenant_id = :tenant_id` to every read and write (primary line of defense). Postgres Row-Level Security is enabled in Phase 1 per **ADR-0016** as the engine-layer backstop: `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` on every multi-tenant table, with a `tenant_isolation_policy` keyed off the per-request GUC `app.current_tenant_id`. A FastAPI dependency sets the GUC via `SET LOCAL` at the start of every authenticated transaction; missing the GUC produces zero rows (fail closed). The `app_runtime` Postgres role used by the request pool does NOT have `BYPASSRLS`; only the `app_admin` role (used by Alembic migrations, seeders, and the audited retention worker) does.
+- **Defense in depth:** a `pgaudit` rule (configured at infrastructure level) records every direct DB session that bypasses the application. The combination of (a) app-layer `WHERE tenant_id` filtering, (b) Postgres RLS, and (c) pgaudit is the Phase-1 tenant-isolation defense triad.
 - **Primary keys** are ULID strings (text). They are sortable by creation time and safe to include in URLs and logs.
 - **Timestamps** are `timestamptz` (UTC).
 - **Soft deletes** are not used in Phase 1 except where retention requires it (raw sensitive logs); admins use status enums (`closed`, `disabled`, `deprecated`).
