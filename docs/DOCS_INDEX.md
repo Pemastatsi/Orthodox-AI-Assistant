@@ -118,6 +118,7 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/task_cards/phase1/T-005-cache-logs-billing.md` | contract | Cache, logs, billing counters, privacy. |
 | `docs/task_cards/phase1/T-006-admin-chat-safety-gate.md` | contract | Chat UI, admin UI, safety gate. |
 | `docs/task_cards/phase1/T-007-real-safety-configs.md` | contract | Real (non-stub) safety config delivery; founder + Greek-language reviewer ownership. Required by exit criterion #9. |
+| `docs/task_cards/phase1/T-008-doc-hygiene-and-codegen.md` | contract | Master tracker for the 2026-05-22 frontier meta-evaluation: all doc amendments + code-deferred acceptance criteria for T-001..T-006. |
 
 ## Tests and Fixtures
 
