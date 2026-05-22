@@ -106,6 +106,7 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/adr/0011-hybrid-retrieval.md` | canonical | Dense + sparse (BM25) hybrid via Qdrant native sparse vectors with server-side RRF (k=60). |
 | `docs/adr/0012-reranker-selection.md` | canonical | Cross-encoder `BAAI/bge-reranker-v2-m3` (Apache-2.0); LLM-pointwise reranking forbidden. |
 | `docs/adr/0013-qdrant-collection-topology.md` | canonical | Shared Qdrant collection with required `tenant_id` payload filter; one-collection-per-tenant reserved as documented migration target. |
+| `docs/adr/0014-cross-provider-failover.md` | canonical | Phase-2 cross-provider failover design (certified peer only; refusals never trigger; 5xx/network/rate-limit/latency-threshold triggers; embedding routes excluded). |
 
 ## Task Cards
 

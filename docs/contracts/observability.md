@@ -69,6 +69,47 @@ Every line conforms to the following schema. Optional fields may be omitted; req
 - Every outbound provider/Qdrant/Redis/Stripe/Clerk call carries the trace ID in adapter logs.
 - Worker tasks read the trace ID from the queued job payload; they never invent a new one if continuing existing work.
 
+## OpenTelemetry (REC-010)
+
+`structlog` to stdout remains the canonical Phase-1 log sink. In addition, the FastAPI app initializes the OpenTelemetry SDK (`opentelemetry-api`, `opentelemetry-sdk`, `opentelemetry-instrumentation-fastapi`, `opentelemetry-instrumentation-httpx`) and emits spans that mirror the structlog event catalog. The GenAI semantic conventions, which exited experimental status early 2026, are used verbatim:
+
+- `gen_ai.system` — provider name (`anthropic`, `openai`).
+- `gen_ai.request.model` — the `ModelRoute.model_id` (e.g., `claude-haiku-4-5`, `claude-opus-4-7`).
+- `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens` — token accounting.
+- `gen_ai.operation.name` — one of `chat`, `embed`, `tool_use`, `batch.submit`, `batch.retrieve`.
+- `gen_ai.failover.from_route_id` / `gen_ai.failover.trigger` — populated when ADR-0014 cross-provider failover fires.
+
+### Trace ID mapping
+
+The OTel `trace_id` is the same ULID surfaced as `runId` in structlog, the API response, and the `RunTrace` row. The mapping is one-way (ULID-to-128-bit-hex zero-extended) and recorded once at request entry so every downstream span shares the trace context.
+
+### Custom A1–A6 spans
+
+Each agent stage emits a manual span:
+
+| Span name | Attributes |
+|---|---|
+| `agent.a1_classify` | `gen_ai.request.model`, `sensitivity_primary`, `risk_flags[]` |
+| `agent.a2_plan` | `answer_mode`, `k`, `rerank` |
+| `agent.a3_retrieve` | `vector_store`, `recall_count`, `rerank_count`, `latency_ms` |
+| `agent.a4_admit` | `admitted_count`, `evidence_packet_id` |
+| `agent.a5_compose` | `gen_ai.request.model`, `gen_ai.usage.*`, `cached_read_tokens` (Anthropic prompt-cache hit count) |
+| `agent.a6_verify` | `quote_overlap_ratio`, `lineage_check_passed`, `handling` |
+
+These are the same boundaries the existing structlog event catalog enforces; OTel spans are an additional channel, not a replacement.
+
+### Redaction extends to OTel
+
+The redaction filter in the next section MUST be applied to span attributes before export. Concretely, the OTel SDK is configured with a `SpanProcessor` that drops or scrubs any attribute key matching the redaction list (`query_text`, `chunk_text`, `raw_query`, `raw_answer`, secrets, PII). Failure to extend redaction to OTel is a release blocker — the GenAI semconv attributes themselves are safe, but `details`-style ad-hoc attributes can leak sensitive data the same way structlog `details` could.
+
+### Phase-2 sink
+
+Phase 1 exports to console only. Phase-2 wires Langfuse self-host (MIT + ClickHouse-backed) as the OTel collector backend per REC-025; the `mask` hook in Langfuse provides a second-line redaction guard at ingest. No SaaS LLM-observability backend (Logfire, Datadog LLM Obs, Braintrust cloud) is on the roadmap — they violate the closed-corpus posture by egressing Confidential traffic.
+
+### Latency benchmark before merge (R-7 mitigation)
+
+OTel instrumentation MUST NOT push p95 query latency above the 8 s exit criterion. Before merging the OTel rollout, run a 100-query benchmark against the staging fixture corpus and confirm overhead is < 50 ms. If overhead exceeds budget, sample spans 1/N on hot paths (e.g., redaction span) until Langfuse self-host gives a steady backend.
+
 ## Redaction Rules
 
 The logger applies a redactor before serialization. Inputs that pass through `details` are scanned for the following keys (case-insensitive) and the value replaced with `"[redacted]"`:
