@@ -1,0 +1,10 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RET", "ARG", "N"]
+
+[lint.per-file-ignores]
+"backend/app/alembic/versions/*" = ["E501", "N806", "I001"]
+"backend/app/domain/models/__init__.py" = ["F401"]
+"**/__init__.py" = ["F401"]

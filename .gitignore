@@ -26,8 +26,8 @@ dist/
 build/
 .tox/
 
-# uv
-uv.lock
+# uv: uv.lock is intentionally tracked for reproducible builds
+# (scaffold-contract.md §Backend pyproject.toml — "rely on uv.lock for exact pins").
 
 # Node
 node_modules/
@@ -41,6 +41,7 @@ pnpm-debug.log
 yarn-debug.log
 yarn-error.log
 npm-debug.log
+*.tsbuildinfo
 
 # IDE
 .idea/
