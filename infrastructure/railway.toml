@@ -1,0 +1,31 @@
+# Railway service manifest. Two app services + Qdrant as a custom-Docker service.
+# Postgres and Redis are Railway-managed plugins, attached separately in the dashboard.
+
+[[services]]
+name = "backend"
+
+[services.build]
+dockerfilePath = "infrastructure/Dockerfile.backend"
+
+[services.deploy]
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"
+
+[[services]]
+name = "web"
+
+[services.build]
+dockerfilePath = "infrastructure/Dockerfile.web"
+
+[services.deploy]
+healthcheckPath = "/api/health"
+restartPolicyType = "ON_FAILURE"
+
+[[services]]
+name = "qdrant"
+
+[services.build]
+image = "qdrant/qdrant:latest"
+
+[services.deploy]
+restartPolicyType = "ON_FAILURE"

@@ -47,35 +47,29 @@ Implement tenant-aware persistence and manual corpus ingestion with approval wor
 
 ---
 
-## ⚠ Open Engineering Decisions (resolve before implementation begins)
+## Engineering Decisions (resolved — pointer only)
 
-### Layout-Aware PDF Parsing
+Earlier drafts of this card carried open decisions for the PDF parser and the chunking algorithm. Both are now resolved; this section is retained as a pointer so implementers do not re-litigate.
 
-Standard page-order PDF extraction misreads footnotes, scriptural citations, chapter headings, and marginalia common in Patristic PDF sources. The ingestion pipeline must use layout-aware parsing.
+### Layout-Aware PDF Parsing — resolved by ADR-0008
 
-Evaluate in this order before committing to a library:
+- Decision: two concrete parsers behind a `Parser` Protocol. `PdfplumberParser` is the first attempt for every file. `TesseractParser` (wrapping `pytesseract` with `tesseract-ocr-grc` and `tesseract-ocr-ell` language packs) is used when `avg_chars_per_page < 50` on the digital path.
+- Dispatch is owned by `app/domain/services/chunking_service.py`, not the parsers themselves.
+- The `unstructured.io` and `pymupdf` (AGPL) options previously listed here were both rejected; rationale is recorded in ADR-0008.
+- Required reads:
+  - [`docs/adr/0008-pdf-parser-strategy.md`](../../adr/0008-pdf-parser-strategy.md) — status: Accepted.
+  - [`docs/contracts/parser-interface.md`](../../contracts/parser-interface.md) — `Parser` Protocol and `ParsedBlock` shape.
 
-1. `unstructured.io` — best for mixed document types (PDF, DOCX, HTML); handles multi-column and footnote detection
-2. `pdfplumber` — good for structured PDFs with consistent layout; reliable page/table extraction
-3. `pymupdf` (block-level layout API) — fastest; suitable for clean scanned PDFs
+### Chunking Strategy — resolved by ADR-0009
 
-Requirements for whichever library is chosen:
+- Decision: heading-boundary hierarchical chunking with sentence-boundary fallback. Soft cap 800–1200 tokens, hard cap 1500 tokens, counted via `tiktoken.get_encoding("cl100k_base")`.
+- Required chunk metadata: `sectionPath`, `pageStart`, `pageEnd`, `parentChunkId` (camelCase wire / snake_case DB per `code-gen-guide.md`).
+- Heading detection: typography rule on the digital path; ALL-CAPS fallback on the OCR path. Footnotes are folded into the nearest preceding paragraph chunk, not emitted as standalone chunks.
+- The "400-token soft cap with 100-token overlap" fallback previously suggested here was superseded by ADR-0009's 800–1200 / 1500 caps; do not use the earlier numbers.
+- Required reads:
+  - [`docs/adr/0009-chunking-strategy.md`](../../adr/0009-chunking-strategy.md) — status: Accepted.
+  - [`docs/contracts/chunking-contract.md`](../../contracts/chunking-contract.md) — status: Canonical; full algorithm, invariants, and observability events.
 
-- Footnotes must be linked back to the body paragraph they annotate, not appended at page end as orphaned text.
-- Scriptural citations embedded in footnotes must be preserved as chunk metadata, not discarded.
-- Chapter and section headings must produce a `section_path` metadata field on each chunk (e.g., `"Book II > Chapter 4"`).
-- Page number must be preserved as `page_start` / `page_end` for citation accuracy in A6.
+### Tunable thresholds
 
-**This decision must be made and reflected in the `chunking_service.py` contract before T-002 implementation begins.**
-
-### Chunking Strategy
-
-Fixed-size chunking (e.g., 512 tokens with 50-token overlap) frequently splits a theological argument mid-sentence or separates a patristic claim from the citation immediately following it. A6's 70% quote-overlap threshold will fail on incoherent fragment chunks.
-
-Recommended approach:
-
-- **Primary:** Semantic/hierarchical chunking by natural section boundaries (heading → paragraph → sentence fallback).
-- **Fallback:** Sentence-boundary chunking with a 400-token soft cap and 100-token overlap.
-- Each chunk must carry: `section_path`, `page_start`, `page_end`, and `parent_chunk_id` to support context-window expansion in Phase 2.
-
-**This decision must be specified in `chunking_service.py` before T-002 implementation begins.**
+Implementers MAY tune heuristic constants (50-char OCR dispatch threshold; 1.3× font-size multiplier; 120-char heading length cap; 8-word ALL-CAPS heading cap; the 800/1200/1500 token caps) per the tuning rules in ADR-0008, ADR-0009, and `chunking-contract.md`, provided new values are recorded in `approved-decisions-register.md` as a follow-up row to D-PDF-001 / D-CHK-001. Tuning does not require an ADR amendment.
