@@ -17,6 +17,7 @@ def _payload(tenant_id: str) -> ChunkPayload:
         tenant_id=tenant_id,
         source_id="s_1",
         source_hash="sha256:" + "a" * 64,
+        chunk_hash="sha256:" + "b" * 64,
         text="text",
         section_path=[],
         page_start=None,
@@ -25,6 +26,8 @@ def _payload(tenant_id: str) -> ChunkPayload:
         approved=True,
         visibility="member",
         embedding_model="text-embedding-3-small",
+        embedding_dimension=1536,
+        corpus_version="v1",
         embedding=[0.0] * 1536,
     )
 
