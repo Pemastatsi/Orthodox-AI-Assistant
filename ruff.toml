@@ -8,3 +8,13 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RET", "ARG", "N"]
 "backend/app/alembic/versions/*" = ["E501", "N806", "I001"]
 "backend/app/domain/models/__init__.py" = ["F401"]
 "**/__init__.py" = ["F401"]
+# FastAPI dependency injection is invoked through function defaults (`Depends(...)`); the B008
+# warning is therefore expected for every router handler.
+"backend/app/api/**/*.py" = ["B008"]
+# Adapter implementations of Protocol methods must keep the full keyword-argument surface even
+# when individual concrete implementations don't use every argument.
+"backend/app/adapters/**/*.py" = ["ARG002"]
+"backend/tests/fixtures/fakes.py" = ["ARG002"]
+# Pytest fixtures use parameters as ordering markers; they appear "unused" to ruff.
+"backend/tests/conftest.py" = ["ARG001"]
+"backend/tests/**/*.py" = ["ARG001", "ARG002"]

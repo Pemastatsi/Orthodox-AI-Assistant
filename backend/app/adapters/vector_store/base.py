@@ -25,6 +25,7 @@ class ChunkPayload:
     tenant_id: str
     source_id: str
     source_hash: str
+    chunk_hash: str
     text: str
     section_path: list[str]
     page_start: int | None
@@ -33,6 +34,8 @@ class ChunkPayload:
     approved: bool
     visibility: str
     embedding_model: str
+    embedding_dimension: int
+    corpus_version: str
     embedding: list[float]
     sparse_embedding: SparseVector | None = None
 

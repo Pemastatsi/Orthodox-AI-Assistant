@@ -14,12 +14,14 @@ FROM python:3.12.7-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
-# Tesseract + language packs for the OCR path (ADR-0008). Pinned per the Dockerfile pinning rule.
+# Tesseract + Greek language packs for the OCR path (ADR-0008). poppler-utils backs pdf2image,
+# which rasterizes pages for the OCR fallback. Pinned per the Dockerfile pinning rule.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         tesseract-ocr \
         tesseract-ocr-grc \
         tesseract-ocr-ell \
+        poppler-utils \
         libpq5 \
         curl \
  && rm -rf /var/lib/apt/lists/*

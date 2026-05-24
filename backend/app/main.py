@@ -1,6 +1,7 @@
-"""FastAPI app factory. T-001 ships the /health endpoint and the production-auth boot guard.
+"""FastAPI app factory.
 
-Real API routes (query, ingest, corpus, runs, admin, tenant_config, webhooks) land in T-002+.
+T-001 shipped /health and the production-auth boot guard. T-002 mounts the ingest + corpus
+routers under /api/v1 and wires the SQLAlchemy engine + Redis pool lifecycles.
 """
 
 from __future__ import annotations
@@ -8,11 +9,15 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from app.api.v1._deps import shutdown_redis
+from app.api.v1.corpus import router as corpus_router
+from app.api.v1.ingest import router as ingest_router
 from app.core.auth import log_auth_startup
 from app.core.config import Settings, get_settings
 from app.core.errors import ProductionAuthConfigError
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RunIdMiddleware
+from app.domain.repositories._base import dispose_engine, init_engine
 
 
 def _production_auth_guard(settings: Settings) -> None:
@@ -43,6 +48,15 @@ def create_app() -> FastAPI:
 
     logger = get_logger(__name__)
 
+    @app.on_event("startup")
+    async def _startup() -> None:
+        init_engine(settings)
+
+    @app.on_event("shutdown")
+    async def _shutdown() -> None:
+        await dispose_engine()
+        await shutdown_redis()
+
     @app.get("/health", tags=["health"])
     async def health() -> JSONResponse:
         return JSONResponse(
@@ -52,6 +66,9 @@ def create_app() -> FastAPI:
                 "appEnv": settings.app_env,
             }
         )
+
+    app.include_router(ingest_router, prefix="/api/v1")
+    app.include_router(corpus_router, prefix="/api/v1")
 
     logger.info(
         "app.startup",
