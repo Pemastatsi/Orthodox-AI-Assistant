@@ -17,12 +17,8 @@ import pytest
 
 pytest.importorskip("app", reason="awaits T-001 backend scaffold")
 
-from sqlalchemy import text
-
 from app.domain.repositories._base import (  # noqa: E402
-    dispose_engine,
     get_sessionmaker,
-    init_engine,
 )
 from app.domain.repositories.chunk_repository import (  # noqa: E402
     ChunkInsert,
@@ -34,7 +30,7 @@ from app.domain.repositories.source_repository import (  # noqa: E402
     SourceRepository,
     compute_source_hash,
 )
-
+from sqlalchemy import text
 
 pytestmark = pytest.mark.asyncio
 

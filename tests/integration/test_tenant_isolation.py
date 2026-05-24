@@ -9,8 +9,8 @@ Context citations:
   - docs/task_cards/phase1/T-005-cache-logs-billing.md — Acceptance Tests
 
 This file is the NAMED OWNER of the tenant-isolation invariant per
-phase1-implementation-contract.md exit criterion #5. Implementation is pending
-T-002 (ingestion), T-003 (retrieval), and T-005 (cache/logs/billing).
+phase1-implementation-contract.md exit criterion #5. The A3-retrieval check is implemented
+below (T-003); A4/A5 and cache/run-trace checks remain stubs pending T-004 and T-005.
 
 Fixture reference — isolationCases from tiny_other_tenant_corpus.json:
   tenant_a_query_about_prayer:
@@ -28,8 +28,12 @@ Fixture reference — isolationCases from tiny_other_tenant_corpus.json:
 
 Zero cross-tenant leaks are required for Phase 1 → 2 gate.
 """
+import base64
 import json
+import socket
 from pathlib import Path
+from urllib.parse import urlparse
+
 import pytest
 
 pytest.importorskip("app", reason="awaits T-001 backend scaffold")
@@ -71,24 +75,123 @@ _ISOLATION_QUERY_PARAMS = [
 # ---------------------------------------------------------------------------
 
 
-def test_a3_retrieval_excludes_other_tenant_chunks():
-    """Submit Tenant A's three queries from
-    tests/fixtures/corpus/tiny_other_tenant_corpus.json#/isolationCases.
-    Assert mustNotReturnChunkIds DO NOT appear in A3 retrieval results.
-    """
-    pytest.skip("pending T-003 implementation: A3 retrieval Qdrant tenant filter not yet wired")
-    # When implementation lands, replace with:
-    # from app.domain.services.retrieval_service import RetrievalService
-    # from app.domain.models.principal import Principal
-    # principal = Principal(tenantId=_TENANT_A_ID, role="member", userId="u_test")
-    # service = RetrievalService(...)
-    # for case_id, query, must_not_ids in _ISOLATION_QUERY_PARAMS:
-    #     candidates = service.retrieve(query=query, principal=principal)
-    #     returned_ids = {c.chunkId for c in candidates}
-    #     assert returned_ids.isdisjoint(must_not_ids), (
-    #         f"[{case_id}] A3 returned cross-tenant chunk(s): "
-    #         f"{returned_ids & must_not_ids}"
-    #     )
+def _service_reachable(url: str, default_port: int) -> bool:
+    parsed = urlparse(url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or default_port
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def _dev_header(*, tenant_id: str, role: str = "member") -> dict[str, str]:
+    payload = {"tenantId": tenant_id, "role": role, "userId": "usr_iso_test"}
+    encoded = base64.b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+    return {"x-dev-principal": encoded}
+
+
+@pytest.mark.asyncio
+async def test_a3_retrieval_excludes_other_tenant_chunks() -> None:
+    """For each isolation case in tiny_other_tenant_corpus.json, submit the query as Tenant A
+    and assert no chunk from Tenant B appears in the A3 retrieval response."""
+    import contextlib
+
+    from app.adapters.providers.openai_provider import embedding_dimension_for
+    from app.adapters.vector_store.base import VectorFilter
+    from app.adapters.vector_store.qdrant_store import QdrantStore
+    from app.api.v1._deps import (
+        get_embedding_provider,
+        get_query_analyzer_provider,
+        get_safety_config,
+        get_sparse_embedder,
+        get_vector_store,
+    )
+    from app.core.config import get_settings
+    from app.domain.repositories._base import dispose_engine, get_sessionmaker, init_engine
+    from app.domain.services.safety_config import load_sensitivity_keywords
+    from app.main import app
+    from fastapi.testclient import TestClient
+    from sqlalchemy import text as sql_text
+
+    from backend.tests.fixtures.corpus_loader import (
+        TINY_APPROVED,
+        TINY_OTHER,
+        load_corpus_fixture,
+    )
+    from backend.tests.fixtures.fakes import FakeStructuredProvider
+
+    settings = get_settings()
+    if not _service_reachable(settings.qdrant_url or "http://localhost:6333", 6333):
+        pytest.skip("Qdrant not reachable; tenant-isolation test skipped")
+    if not _service_reachable(settings.database_url, 5432):
+        pytest.skip("Postgres not reachable; tenant-isolation test skipped")
+
+    init_engine(settings)
+    store = QdrantStore(
+        embedding_dimension=embedding_dimension_for("text-embedding-3-small"),
+        settings=settings,
+    )
+
+    sm = get_sessionmaker()
+    async with sm() as session:
+        await session.execute(
+            sql_text(
+                "TRUNCATE TABLE chunks, sources, users, tenants RESTART IDENTITY CASCADE"
+            )
+        )
+        await session.commit()
+    with contextlib.suppress(Exception):
+        await store.delete_by_filter(filters=VectorFilter(tenant_id=_TENANT_A_ID))
+        await store.delete_by_filter(filters=VectorFilter(tenant_id=_TENANT_B_ID))
+
+    # Seed BOTH tenants so the cross-tenant leak surface is populated.
+    loaded_a = await load_corpus_fixture(fixture_path=TINY_APPROVED, vector_store=store)
+    loaded_b = await load_corpus_fixture(fixture_path=TINY_OTHER, vector_store=store)
+    assert loaded_a.tenant_id == _TENANT_A_ID
+    assert loaded_b.tenant_id == _TENANT_B_ID
+
+    safety_config = load_sensitivity_keywords(settings.sensitivity_keywords_path)
+    provider = FakeStructuredProvider(
+        dimension=embedding_dimension_for("text-embedding-3-small")
+    )
+
+    app.dependency_overrides[get_safety_config] = lambda: safety_config
+    app.dependency_overrides[get_query_analyzer_provider] = lambda: provider
+    app.dependency_overrides[get_embedding_provider] = lambda: provider
+    app.dependency_overrides[get_vector_store] = lambda: store
+    app.dependency_overrides[get_sparse_embedder] = lambda: None  # not used; useBM25=false
+
+    try:
+        client = TestClient(app)
+        for case_id, query, must_not_ids in _ISOLATION_QUERY_PARAMS:
+            response = client.post(
+                "/api/v1/query",
+                json={"queryText": query},
+                headers=_dev_header(tenant_id=_TENANT_A_ID),
+            )
+            assert response.status_code == 200, (
+                f"[{case_id}] query failed: {response.status_code} {response.text}"
+            )
+            body = response.json()
+            returned_ids = {hit["chunk"]["chunkId"] for hit in body["scoredChunks"]}
+            assert returned_ids.isdisjoint(must_not_ids), (
+                f"[{case_id}] A3 returned cross-tenant chunk(s): "
+                f"{returned_ids & must_not_ids}"
+            )
+            # Defense in depth: every returned chunk belongs to tenant A.
+            for hit in body["scoredChunks"]:
+                assert hit["chunk"]["tenantId"] == _TENANT_A_ID, (
+                    f"[{case_id}] returned chunk with foreign tenantId: {hit['chunk']}"
+                )
+    finally:
+        app.dependency_overrides.clear()
+        with contextlib.suppress(Exception):
+            await store.delete_by_filter(filters=VectorFilter(tenant_id=_TENANT_A_ID))
+            await store.delete_by_filter(filters=VectorFilter(tenant_id=_TENANT_B_ID))
+        await store.close()
+        await dispose_engine()
 
 
 def test_a4_admission_excludes_other_tenant_chunks():
@@ -115,7 +218,9 @@ def test_response_citations_exclude_other_tenant_chunks():
     """For the same queries, assert mustNotReturnChunkIds DO NOT appear
     in any final VerifiedResponse.citations[].chunkId.
     """
-    pytest.skip("pending T-004 implementation: VerifiedResponse.citations not yet produced by A5/A6")
+    pytest.skip(
+        "pending T-004 implementation: VerifiedResponse.citations not yet produced by A5/A6"
+    )
     # When implementation lands, replace with:
     # from app.domain.services.query_pipeline import QueryPipeline
     # for case_id, query, must_not_ids in _ISOLATION_QUERY_PARAMS:

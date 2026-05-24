@@ -20,7 +20,6 @@ V3 (Greek) is casefold-dependent; Python version is printed in failure messages
 so regressions are debuggable.
 """
 import hashlib
-import json
 import sys
 
 import pytest

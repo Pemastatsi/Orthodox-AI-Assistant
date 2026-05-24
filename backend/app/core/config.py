@@ -1,8 +1,11 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
@@ -58,6 +61,8 @@ class Settings(BaseSettings):
     active_model_route_a5: str = "a5_compose_anthropic@2026-05-01.1"
     active_model_route_embedding: str = "embedding_openai@2026-05-01.1"
     active_model_route_verifier: str = Field(default="")
+
+    sensitivity_keywords_path: str = str(_REPO_ROOT / "config" / "sensitivity_keywords.yaml")
 
 
 @lru_cache

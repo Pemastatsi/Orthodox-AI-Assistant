@@ -14,7 +14,6 @@ meaningful when the code lands.
 Each vector: (vector_id, claim_text, source_text, expected_ratio)
 Expected ratio must match within ±0.01 per the algorithm contract.
 """
-import sys
 import pytest
 
 pytest.importorskip("app", reason="awaits T-001 backend scaffold")

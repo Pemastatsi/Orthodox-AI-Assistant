@@ -9,15 +9,20 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from app.api.v1._deps import shutdown_redis
+from app.api.v1._deps import shutdown_query_resources, shutdown_redis
 from app.api.v1.corpus import router as corpus_router
 from app.api.v1.ingest import router as ingest_router
+from app.api.v1.query import router as query_router
 from app.core.auth import log_auth_startup
 from app.core.config import Settings, get_settings
 from app.core.errors import ProductionAuthConfigError
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RunIdMiddleware
 from app.domain.repositories._base import dispose_engine, init_engine
+from app.domain.services.safety_config import (
+    assert_production_ready,
+    load_sensitivity_keywords,
+)
 
 
 def _production_auth_guard(settings: Settings) -> None:
@@ -36,6 +41,10 @@ def create_app() -> FastAPI:
     settings = get_settings()
     _production_auth_guard(settings)
     log_auth_startup(settings)
+
+    # Safety config self-test per docs/contracts/safety-config-format.md §Phase 2 Launch Gate.
+    safety_config = load_sensitivity_keywords(settings.sensitivity_keywords_path)
+    assert_production_ready(safety_config, app_env=settings.app_env)
 
     app = FastAPI(
         title="Orthodox AI Assistant",
@@ -56,6 +65,7 @@ def create_app() -> FastAPI:
     async def _shutdown() -> None:
         await dispose_engine()
         await shutdown_redis()
+        await shutdown_query_resources()
 
     @app.get("/health", tags=["health"])
     async def health() -> JSONResponse:
@@ -69,6 +79,7 @@ def create_app() -> FastAPI:
 
     app.include_router(ingest_router, prefix="/api/v1")
     app.include_router(corpus_router, prefix="/api/v1")
+    app.include_router(query_router, prefix="/api/v1")
 
     logger.info(
         "app.startup",
