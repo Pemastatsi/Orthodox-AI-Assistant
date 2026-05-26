@@ -21,6 +21,7 @@ from app.core.middleware import RunIdMiddleware
 from app.domain.repositories._base import dispose_engine, init_engine
 from app.domain.services.safety_config import (
     assert_production_ready,
+    load_pastoral_filters,
     load_sensitivity_keywords,
 )
 
@@ -45,6 +46,8 @@ def create_app() -> FastAPI:
     # Safety config self-test per docs/contracts/safety-config-format.md §Phase 2 Launch Gate.
     safety_config = load_sensitivity_keywords(settings.sensitivity_keywords_path)
     assert_production_ready(safety_config, app_env=settings.app_env)
+    # Pastoral filters are validated at startup too; A6 fails closed if the file is missing.
+    load_pastoral_filters(settings.pastoral_filters_path)
 
     app = FastAPI(
         title="Orthodox AI Assistant",

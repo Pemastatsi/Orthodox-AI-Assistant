@@ -389,7 +389,86 @@ class RefusingStructuredProvider(FakeStructuredProvider):
         )
 
 
+class ComposerFakeProvider:
+    """A FakeStructuredProvider variant whose responder is composer-shaped (`answer` +
+    `citedChunkIds`). Use this in T-004 tests to drive A5 deterministically."""
+
+    name = "fake-composer"
+
+    def __init__(
+        self,
+        *,
+        answer: str = "Saint Basil writes that prayer requires patience.",
+        cited_chunk_ids: list[str] | None = None,
+        finish_reason: str = "stop",
+    ) -> None:
+        self._answer = answer
+        self._cited = cited_chunk_ids or []
+        self._finish_reason = finish_reason
+        self.calls: list[dict[str, Any]] = []
+
+    @property
+    def supports_prompt_cache(self) -> bool:
+        return False
+
+    @property
+    def supports_batch(self) -> bool:
+        return False
+
+    @property
+    def supports_json_mode(self) -> bool:
+        return True
+
+    @property
+    def supports_embeddings(self) -> bool:
+        return False
+
+    async def generate_structured(
+        self,
+        *,
+        messages: list[ChatMessage],
+        schema: dict[str, Any],
+        route_id: str,
+        tenant_id: str,
+        run_id: str,
+        max_output_tokens: int = 1024,
+        temperature: float = 0.0,
+        timeout_s: float = 30.0,
+    ) -> StructuredResult:
+        del schema, max_output_tokens, temperature, timeout_s
+        self.calls.append(
+            {
+                "messages": messages,
+                "route_id": route_id,
+                "tenant_id": tenant_id,
+                "run_id": run_id,
+            }
+        )
+        data = {"answer": self._answer, "citedChunkIds": list(self._cited)}
+        return StructuredResult(
+            data=data,
+            raw_text="<fake>",
+            prompt_tokens=10,
+            completion_tokens=20,
+            model_route_id=route_id,
+            finish_reason=self._finish_reason,  # type: ignore[arg-type]
+        )
+
+    async def generate_text(self, **kwargs: Any) -> str:
+        raise NotImplementedError
+
+    def stream_text(self, **kwargs: Any) -> AsyncIterator[StreamEvent]:
+        raise NotImplementedError
+
+    async def count_tokens(self, *, text: str, model: str) -> int:
+        return len(text.split())
+
+    async def embed_texts(self, **kwargs: Any) -> list[list[float]]:
+        raise NotImplementedError
+
+
 __all__ = [
+    "ComposerFakeProvider",
     "FakeEmbeddingProvider",
     "FakeParser",
     "FakeStructuredProvider",

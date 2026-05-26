@@ -19,6 +19,7 @@ from app.adapters.vector_store.base import (
     ScoredChunk as AdapterScoredChunk,
 )
 from app.adapters.vector_store.base import (
+    SparseVector,
     VectorFilter,
     VectorStore,
 )
@@ -153,7 +154,7 @@ class Retriever:
             raise ValueError("embedding provider returned no vector for query")
         return vectors[0]
 
-    def _embed_sparse(self, *, plan: RetrievalPlan):
+    def _embed_sparse(self, *, plan: RetrievalPlan) -> SparseVector | None:
         if plan.retrieval is None:
             return None
         if not (plan.retrieval.use_bm25 or plan.retrieval.use_hybrid):

@@ -1,23 +1,23 @@
-"""Safety config loader and matcher for A1.
+"""Safety config loader and matcher for A1 + A6.
 
-Canonical owner of `config/sensitivity_keywords.yaml` per
-`docs/contracts/safety-config-format.md`. Loaded at startup; validation failures
-must prevent the service from booting. The hard-trigger regex match runs *before*
-any LLM call (T-003 acceptance test).
-
-`pastoral_filters.yaml` (A6, T-004) reuses the validation conventions documented
-here but is implemented separately when T-004 lands.
+Canonical owner of `config/sensitivity_keywords.yaml` (A1) and
+`config/pastoral_filters.yaml` (A6) per `docs/contracts/safety-config-format.md`.
+Loaded at startup; validation failures must prevent the service from booting. The
+hard-trigger regex match runs *before* any LLM call. Pastoral-filter rules drive
+A6's `verifier_failed`/`safety_blocked` reason codes.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal, get_args
 
 import yaml
 
+from app.core.errors import ApiErrorCode
 from app.domain.models.classified_query import RiskFlag, SensitivityPrimary
 
 _SENSITIVITY_VALUES: Final[frozenset[str]] = frozenset(get_args(SensitivityPrimary))
@@ -165,10 +165,10 @@ def _parse_rule(
     return SafetyRule(
         rule_id=rule_id,
         pattern=compiled,
-        sensitivity=sensitivity,  # type: ignore[arg-type]
+        sensitivity=sensitivity,
         risk_flags=tuple(risk_flags_raw),
         hard_trigger=hard_trigger,
-        lang=lang,  # type: ignore[arg-type]
+        lang=lang,
         notes=notes,
     )
 
@@ -204,13 +204,197 @@ def assert_production_ready(config: SafetyConfig, *, app_env: str) -> None:
         )
 
 
+# ---- Pastoral filters (A6) --------------------------------------------------------------
+
+_PASTORAL_REASON_CODES: Final[frozenset[str]] = frozenset(
+    code.value for code in ApiErrorCode
+)
+PastoralAction = Literal["reject_answer", "warn"]
+
+
+@dataclass(frozen=True)
+class PastoralRule:
+    rule_id: str
+    pattern: re.Pattern[str]
+    action: PastoralAction
+    reason_code: str
+    lang: Literal["en", "el"]
+    notes: str | None
+
+
+@dataclass(frozen=True)
+class PastoralConfig:
+    version: str
+    rules: tuple[PastoralRule, ...]
+    source_path: Path
+
+
+@dataclass(frozen=True)
+class PastoralMatch:
+    rule_id: str
+    action: PastoralAction
+    reason_code: str
+    lang: Literal["en", "el"]
+
+
+def load_pastoral_filters(path: str | Path) -> PastoralConfig:
+    """Parse and validate `config/pastoral_filters.yaml`. Raises `SafetyConfigError` on any
+    schema, type, regex, or uniqueness violation. The returned config is immutable."""
+    yaml_path = Path(path)
+    if not yaml_path.is_file():
+        raise SafetyConfigError(f"pastoral filter config not found: {yaml_path}")
+
+    try:
+        raw = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise SafetyConfigError(f"YAML parse error in {yaml_path}: {exc}") from exc
+
+    if not isinstance(raw, dict):
+        raise SafetyConfigError(f"{yaml_path}: top-level must be a mapping")
+
+    version = raw.get("version")
+    if not isinstance(version, str) or not version:
+        raise SafetyConfigError(f"{yaml_path}: 'version' must be a non-empty string")
+
+    if raw.get("regex_flavor") not in (None, "python_re"):
+        raise SafetyConfigError(
+            f"{yaml_path}: only regex_flavor: python_re is supported"
+        )
+    if raw.get("ordering") not in (None, "first_match_wins"):
+        raise SafetyConfigError(
+            f"{yaml_path}: only ordering: first_match_wins is supported"
+        )
+
+    rules_raw = raw.get("rules")
+    if not isinstance(rules_raw, list) or not rules_raw:
+        raise SafetyConfigError(f"{yaml_path}: 'rules' must be a non-empty list")
+
+    rules: list[PastoralRule] = []
+    seen_ids: set[str] = set()
+    for idx, item in enumerate(rules_raw):
+        rules.append(
+            _parse_pastoral_rule(item, yaml_path=yaml_path, index=idx, seen_ids=seen_ids)
+        )
+
+    return PastoralConfig(version=version, rules=tuple(rules), source_path=yaml_path)
+
+
+def _parse_pastoral_rule(
+    item: object,
+    *,
+    yaml_path: Path,
+    index: int,
+    seen_ids: set[str],
+) -> PastoralRule:
+    if not isinstance(item, dict):
+        raise SafetyConfigError(f"{yaml_path}: rule {index} must be a mapping")
+
+    rule_id = item.get("id")
+    if not isinstance(rule_id, str) or not rule_id.strip():
+        raise SafetyConfigError(
+            f"{yaml_path}: rule {index} 'id' must be a non-empty string"
+        )
+    if rule_id in seen_ids:
+        raise SafetyConfigError(f"{yaml_path}: duplicate rule id {rule_id!r}")
+    seen_ids.add(rule_id)
+
+    pattern_raw = item.get("pattern")
+    if not isinstance(pattern_raw, str) or not pattern_raw:
+        raise SafetyConfigError(
+            f"{yaml_path}: rule {rule_id!r} 'pattern' must be a non-empty string"
+        )
+    try:
+        compiled = re.compile(pattern_raw, re.IGNORECASE | re.UNICODE)
+    except re.error as exc:
+        raise SafetyConfigError(
+            f"{yaml_path}: rule {rule_id!r} regex does not compile: {exc}"
+        ) from exc
+
+    action = item.get("action")
+    if action not in ("reject_answer", "warn"):
+        raise SafetyConfigError(
+            f"{yaml_path}: rule {rule_id!r} 'action' must be 'reject_answer' or 'warn'"
+        )
+
+    reason_code = item.get("reason_code")
+    if not isinstance(reason_code, str) or reason_code not in _PASTORAL_REASON_CODES:
+        raise SafetyConfigError(
+            f"{yaml_path}: rule {rule_id!r} 'reason_code' must be a code from the "
+            "error taxonomy (docs/contracts/error-taxonomy.md)"
+        )
+
+    lang = item.get("lang")
+    if lang not in _LANG_VALUES:
+        raise SafetyConfigError(
+            f"{yaml_path}: rule {rule_id!r} 'lang' must be 'en' or 'el'"
+        )
+
+    notes = item.get("notes")
+    if notes is not None and not isinstance(notes, str):
+        raise SafetyConfigError(f"{yaml_path}: rule {rule_id!r} 'notes' must be a string")
+
+    return PastoralRule(
+        rule_id=rule_id,
+        pattern=compiled,
+        action=action,
+        reason_code=reason_code,
+        lang=lang,
+        notes=notes,
+    )
+
+
+def _normalize_for_pastoral(text: str) -> str:
+    """NFKC + casefold per safety-config-format.md §pastoral_filters.yaml — Rules."""
+    return unicodedata.normalize("NFKC", text).casefold()
+
+
+def match_pastoral_filter(
+    answer_text: str, config: PastoralConfig
+) -> PastoralMatch | None:
+    """Return the first `reject_answer` rule that matches the normalized answer, or None.
+
+    `warn` rules are NOT returned here; callers that want to log warnings should use
+    `iter_pastoral_matches` to walk every matching rule.
+    """
+    for match in iter_pastoral_matches(answer_text, config):
+        if match.action == "reject_answer":
+            return match
+    return None
+
+
+def iter_pastoral_matches(
+    answer_text: str, config: PastoralConfig
+) -> list[PastoralMatch]:
+    """Walk every rule in order and return PastoralMatches for those whose pattern hit."""
+    normalized = _normalize_for_pastoral(answer_text)
+    matches: list[PastoralMatch] = []
+    for rule in config.rules:
+        if rule.pattern.search(normalized):
+            matches.append(
+                PastoralMatch(
+                    rule_id=rule.rule_id,
+                    action=rule.action,
+                    reason_code=rule.reason_code,
+                    lang=rule.lang,
+                )
+            )
+    return matches
+
+
 __all__ = [
     "STUB_VERSION",
+    "PastoralAction",
+    "PastoralConfig",
+    "PastoralMatch",
+    "PastoralRule",
     "SafetyConfig",
     "SafetyConfigError",
     "SafetyMatch",
     "SafetyRule",
     "assert_production_ready",
+    "iter_pastoral_matches",
+    "load_pastoral_filters",
     "load_sensitivity_keywords",
+    "match_pastoral_filter",
     "match_sensitivity",
 ]

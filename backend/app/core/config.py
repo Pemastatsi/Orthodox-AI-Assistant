@@ -57,12 +57,18 @@ class Settings(BaseSettings):
     active_schema_version: str = "2026-05-01.1"
     active_prompt_version_a1a2: str = "qa_analyze@2026-05-01.1"
     active_prompt_version_a5: str = "a5_compose@2026-05-01.1"
+    active_verifier_version: str = "a6_verify@2026-05-01.1"
     active_model_route_a1a2: str = "qa_analyze_anthropic@2026-05-01.1"
     active_model_route_a5: str = "a5_compose_anthropic@2026-05-01.1"
     active_model_route_embedding: str = "embedding_openai@2026-05-01.1"
     active_model_route_verifier: str = Field(default="")
 
+    anthropic_model_a1a2: str = "claude-haiku-4-5-20251001"
+    anthropic_model_a5: str = "claude-haiku-4-5-20251001"
+    anthropic_model_verifier: str = "claude-haiku-4-5-20251001"
+
     sensitivity_keywords_path: str = str(_REPO_ROOT / "config" / "sensitivity_keywords.yaml")
+    pastoral_filters_path: str = str(_REPO_ROOT / "config" / "pastoral_filters.yaml")
 
 
 @lru_cache

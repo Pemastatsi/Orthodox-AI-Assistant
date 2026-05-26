@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Coroutine
+from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from redis.asyncio import Redis
 
+from app.adapters.providers.anthropic_provider import AnthropicProvider
 from app.adapters.providers.base import LLMProvider
 from app.adapters.providers.openai_provider import (
     OpenAIProvider,
@@ -17,13 +19,18 @@ from app.adapters.vector_store.base import VectorStore
 from app.adapters.vector_store.qdrant_store import QdrantStore
 from app.core.auth import resolve_principal
 from app.core.config import Settings, get_settings
-from app.core.errors import ApiErrorCode, ForbiddenRoleError
+from app.core.errors import ForbiddenRoleError
+from app.domain.agents.composer import Composer
+from app.domain.agents.evidence_packager import EvidencePackager
 from app.domain.agents.query_analyzer import QueryAnalyzer
+from app.domain.agents.verifier import Verifier, VerifierConfig
 from app.domain.models.principal import Principal
 from app.domain.repositories._base import AsyncSession, session_scope
 from app.domain.services.retriever import Retriever
 from app.domain.services.safety_config import (
+    PastoralConfig,
     SafetyConfig,
+    load_pastoral_filters,
     load_sensitivity_keywords,
 )
 
@@ -51,7 +58,9 @@ async def get_principal(
         ) from exc
 
 
-def require_scope(scope: str):
+def require_scope(
+    scope: str,
+) -> Callable[[Principal], Coroutine[Any, Any, Principal]]:
     """Dependency factory: enforces that the resolved Principal carries the named scope."""
 
     async def _checker(principal: Principal = Depends(get_principal)) -> Principal:
@@ -92,10 +101,12 @@ async def shutdown_redis() -> None:
         _redis = None
 
 
-# ---- Query path dependencies (T-003) -------------------------------------------------
+# ---- Query path dependencies (T-003 / T-004) -----------------------------------------
 
 _safety_config: SafetyConfig | None = None
+_pastoral_config: PastoralConfig | None = None
 _embedding_provider: LLMProvider | None = None
+_anthropic_provider: AnthropicProvider | None = None
 _vector_store: QdrantStore | None = None
 _sparse_embedder: Bm25SparseEmbedder | None = None
 
@@ -105,6 +116,15 @@ def get_safety_config(settings: Settings = Depends(get_settings_dep)) -> SafetyC
     if _safety_config is None:
         _safety_config = load_sensitivity_keywords(settings.sensitivity_keywords_path)
     return _safety_config
+
+
+def get_pastoral_config(
+    settings: Settings = Depends(get_settings_dep),
+) -> PastoralConfig:
+    global _pastoral_config
+    if _pastoral_config is None:
+        _pastoral_config = load_pastoral_filters(settings.pastoral_filters_path)
+    return _pastoral_config
 
 
 def get_embedding_provider(
@@ -118,67 +138,33 @@ def get_embedding_provider(
     return _embedding_provider
 
 
-class _DeferredQueryAnalyzerProvider:
-    """Placeholder LLMProvider whose `generate_structured` raises an HTTPException.
-
-    T-001 shipped the `LLMProvider` Protocol; the real Anthropic adapter lands in T-004.
-    Until then, queries that would invoke A1/A2 over the LLM return 503 feature_deferred.
-    Hard-trigger queries never reach `generate_structured` and therefore work in production.
-    Tests override `get_query_analyzer_provider` with `FakeStructuredProvider`.
-    """
-
-    name = "deferred"
-
-    async def generate_structured(self, **kwargs):  # type: ignore[no-untyped-def]
-        del kwargs
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": ApiErrorCode.FEATURE_DEFERRED.value,
-                "message": (
-                    "A1/A2 LLM provider is not yet wired (Anthropic adapter lands in T-004)."
-                ),
-            },
-        )
-
-    async def generate_text(self, **kwargs):  # type: ignore[no-untyped-def]
-        del kwargs
-        raise NotImplementedError
-
-    def stream_text(self, **kwargs):  # type: ignore[no-untyped-def]
-        del kwargs
-        raise NotImplementedError
-
-    async def count_tokens(self, **kwargs):  # type: ignore[no-untyped-def]
-        del kwargs
-        raise NotImplementedError
-
-    async def embed_texts(self, **kwargs):  # type: ignore[no-untyped-def]
-        del kwargs
-        raise NotImplementedError
-
-    @property
-    def supports_prompt_cache(self) -> bool:
-        return False
-
-    @property
-    def supports_batch(self) -> bool:
-        return False
-
-    @property
-    def supports_json_mode(self) -> bool:
-        return False
-
-    @property
-    def supports_embeddings(self) -> bool:
-        return False
+def _get_anthropic_provider(settings: Settings) -> LLMProvider:
+    global _anthropic_provider
+    if _anthropic_provider is None:
+        _anthropic_provider = AnthropicProvider(settings=settings)
+    return _anthropic_provider
 
 
-_deferred_provider = _DeferredQueryAnalyzerProvider()
+def get_query_analyzer_provider(
+    settings: Settings = Depends(get_settings_dep),
+) -> LLMProvider:
+    return _get_anthropic_provider(settings)
 
 
-def get_query_analyzer_provider() -> LLMProvider:
-    return _deferred_provider  # type: ignore[return-value]
+def get_composer_provider(
+    settings: Settings = Depends(get_settings_dep),
+) -> LLMProvider:
+    return _get_anthropic_provider(settings)
+
+
+def get_verifier_provider(
+    settings: Settings = Depends(get_settings_dep),
+) -> LLMProvider | None:
+    """Returns the certified judge provider when `ACTIVE_MODEL_ROUTE_VERIFIER` is non-empty;
+    otherwise returns None and A6 runs deterministic checks only (F-08)."""
+    if not settings.active_model_route_verifier:
+        return None
+    return _get_anthropic_provider(settings)
 
 
 def get_vector_store(settings: Settings = Depends(get_settings_dep)) -> VectorStore:
@@ -227,6 +213,35 @@ def build_retriever(
     )
 
 
+def build_evidence_packager(*, settings: Settings) -> EvidencePackager:
+    return EvidencePackager(corpus_version=settings.active_schema_version)
+
+
+def build_composer(*, provider: LLMProvider, settings: Settings) -> Composer:
+    return Composer(
+        provider=provider,
+        prompt_version=settings.active_prompt_version_a5,
+        model_route_id=settings.active_model_route_a5,
+    )
+
+
+def build_verifier(
+    *,
+    pastoral_config: PastoralConfig,
+    settings: Settings,
+    judge_provider: LLMProvider | None,
+) -> Verifier:
+    return Verifier(
+        pastoral_config=pastoral_config,
+        config=VerifierConfig(
+            verifier_version=settings.active_verifier_version,
+            schema_version=settings.active_schema_version,
+            judge_route_id=settings.active_model_route_verifier,
+        ),
+        judge_provider=judge_provider,
+    )
+
+
 async def shutdown_query_resources() -> None:
     global _vector_store
     if _vector_store is not None:
@@ -236,17 +251,25 @@ async def shutdown_query_resources() -> None:
 
 # Used by tests to drop caches when a different stub config or vector-store is needed.
 def _reset_query_caches() -> None:
-    global _safety_config, _embedding_provider, _vector_store, _sparse_embedder
+    global _safety_config, _pastoral_config, _embedding_provider, _anthropic_provider
+    global _vector_store, _sparse_embedder
     _safety_config = None
+    _pastoral_config = None
     _embedding_provider = None
+    _anthropic_provider = None
     _vector_store = None
     _sparse_embedder = None
 
 
 __all__ = [
+    "build_composer",
+    "build_evidence_packager",
     "build_query_analyzer",
     "build_retriever",
+    "build_verifier",
+    "get_composer_provider",
     "get_embedding_provider",
+    "get_pastoral_config",
     "get_principal",
     "get_query_analyzer_provider",
     "get_redis",
@@ -255,6 +278,7 @@ __all__ = [
     "get_settings_dep",
     "get_sparse_embedder",
     "get_vector_store",
+    "get_verifier_provider",
     "require_scope",
     "shutdown_query_resources",
     "shutdown_redis",

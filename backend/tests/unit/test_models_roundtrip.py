@@ -7,10 +7,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from app.domain.models import (
+    AdmittedChunk,
     ApiError,
     Chunk,
     Citation,
     ClassifiedQuery,
+    EvidencePacket,
     Principal,
     Reframing,
     RetrievalFilters,
@@ -147,3 +149,51 @@ def test_verified_response_roundtrips() -> None:
         run_id="01HZX7ABC",
     )
     _roundtrip(r)
+
+
+def test_bounded_fallback_response_roundtrips() -> None:
+    r = VerifiedResponse(
+        answer="The approved library does not contain material on this topic. ...",
+        confidence_tier="RED",
+        handling="insufficient_evidence",
+        citations=[],
+        verification=Verification(
+            passed=False,
+            checked_at=NOW,
+            verifier_version="a6@2026-05-01.1",
+            failure_reason="quote_overlap_below_threshold:1",
+        ),
+        reframing=Reframing(was_reframed=False),
+        usage=VerifiedResponseUsage(
+            served_answer_count=1,
+            fresh_model_run_count=0,
+            model_route_id="a5_compose_anthropic@2026-05-01.1",
+        ),
+        served_from_cache=False,
+        schema_version="2026-05-01.1",
+        run_id="run_bounded",
+    )
+    _roundtrip(r)
+
+
+def test_evidence_packet_roundtrips() -> None:
+    packet = EvidencePacket(
+        tenant_id="tn_test",
+        corpus_version="2026-05-01",
+        confidence_tier="YELLOW",
+        admitted_chunks=[
+            AdmittedChunk(
+                chunk_id="ch_1",
+                source_id="s_1",
+                title="On Prayer",
+                text="Saint Basil writes about prayer.",
+                score=0.85,
+                visibility="member",
+                source_hash=SHA,
+                chunk_hash=SHA,
+            )
+        ],
+        suppressed_chunk_ids=["ch_2", "ch_3"],
+        lineage_context=[],
+    )
+    _roundtrip(packet)
