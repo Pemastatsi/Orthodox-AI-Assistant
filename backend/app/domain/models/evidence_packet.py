@@ -7,9 +7,11 @@ from typing import Literal
 from pydantic import Field
 
 from app.domain.models._base import WireModel
-from app.domain.models.chunk import Visibility
 
 EvidenceConfidenceTier = Literal["GREEN", "YELLOW", "RED"]
+# Per evidence-packet.schema.json, admitted evidence is restricted to user-facing tiers.
+# admin_only and suppressed chunks are never admittable (ADR-0001).
+AdmittedVisibility = Literal["member", "scholar"]
 
 
 class AdmittedChunk(WireModel):
@@ -19,7 +21,7 @@ class AdmittedChunk(WireModel):
     text: str
     score: float = Field(ge=0.0, le=1.0)
     approved: Literal[True] = True
-    visibility: Visibility
+    visibility: AdmittedVisibility
     source_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     chunk_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     work: str | None = None

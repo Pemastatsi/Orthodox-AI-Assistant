@@ -45,8 +45,9 @@ _STUB_CONFIG_VERSION = "2026-05-01.1"
 def _configs_are_stub() -> bool:
     """Return True when sensitivity_keywords.yaml is still the stub baseline."""
     try:
-        import yaml  # type: ignore
         from pathlib import Path
+
+        import yaml  # type: ignore
         config_path = Path(__file__).parent.parent.parent / "config" / "sensitivity_keywords.yaml"
         with open(config_path, encoding="utf-8") as f:
             cfg = yaml.safe_load(f)

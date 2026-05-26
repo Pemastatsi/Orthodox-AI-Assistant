@@ -30,8 +30,10 @@ class RetrievalRerankerConfig(WireModel):
 
 
 class RetrievalConfig(WireModel):
-    use_bm25: bool = False
-    use_hybrid: bool = False
+    # Explicit aliases because `to_camel` would produce `useBm25`, but the canonical
+    # schema (`docs/schemas/retrieval-plan.schema.json`) spells the wire field `useBM25`.
+    use_bm25: bool = Field(default=False, alias="useBM25")
+    use_hybrid: bool = Field(default=False, alias="useHybrid")
     reranker: RetrievalRerankerConfig | None = None
 
 

@@ -24,7 +24,6 @@ import pytest
 pytest.importorskip("app", reason="awaits T-001 backend scaffold")
 
 import ulid  # noqa: E402
-
 from app.adapters.providers.openai_provider import embedding_dimension_for  # noqa: E402
 from app.adapters.vector_store.base import VectorFilter  # noqa: E402
 from app.adapters.vector_store.qdrant_store import QdrantStore  # noqa: E402
@@ -43,6 +42,7 @@ from app.domain.services.ingestion_service import (  # noqa: E402
     IngestionContext,
     process_ingestion,
 )
+
 from backend.tests.fixtures.corpus_loader import (  # noqa: E402
     TINY_OTHER,
     load_corpus_fixture,
