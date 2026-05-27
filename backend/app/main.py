@@ -19,6 +19,7 @@ from app.core.errors import ProductionAuthConfigError
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RunIdMiddleware
 from app.domain.repositories._base import dispose_engine, init_engine
+from app.domain.services.encryption_service import load_key_map_from_env
 from app.domain.services.safety_config import (
     assert_production_ready,
     load_pastoral_filters,
@@ -37,10 +38,24 @@ def _production_auth_guard(settings: Settings) -> None:
         )
 
 
+def _production_sensitive_log_guard(settings: Settings) -> None:
+    """Refuse to boot when APP_ENV=production and SENSITIVE_LOG_DATA_KEY_BASE64
+    is missing or malformed. Without this guard the key is only validated on the
+    first sensitive query, so a misconfigured production deploy ships and then
+    crashes per-request. See ADR-0005 §Encryption strategy."""
+    if settings.app_env != "production":
+        return
+    load_key_map_from_env(
+        settings.sensitive_log_data_key_base64,
+        settings.sensitive_log_key_version,
+    )
+
+
 def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
     _production_auth_guard(settings)
+    _production_sensitive_log_guard(settings)
     log_auth_startup(settings)
 
     # Safety config self-test per docs/contracts/safety-config-format.md §Phase 2 Launch Gate.
