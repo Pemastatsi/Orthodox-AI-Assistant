@@ -1,23 +1,29 @@
-"""POST /api/v1/query — full A1+A2+A3+A4+A5+A6 pipeline (Phase 1).
+"""POST /api/v1/query — A1+A2+A3+A4+A5+A6 pipeline with caching and persistence.
 
-Returns a canonical `VerifiedResponse` for every code path:
-- Hard-safety triggers and political/fabrication blocks → bounded fallback with the
-  case-specific canonical text (see `bounded_fallback.CANONICAL_TEXTS`).
-- A4 admits no chunks (corpus_empty by tenant) → `corpus_empty` 409 if the tenant has zero
-  approved chunks at all; otherwise `insufficient_evidence` bounded fallback with HTTP 200.
-- A5 refusal or A6 reject → `insufficient_evidence` bounded fallback.
+T-004 wired the pipeline and the bounded-fallback fall-through paths.
+T-005 adds the surrounding plumbing:
 
-Per `phase1-implementation-contract.md` §Run-trace persistence is unconditional, every
-served request must be inspectable in `/admin/queries`. The run trace itself is persisted
-in T-005; T-004 just emits structured logs and the canonical response shape.
+- Cache lookup AFTER A1+A2 (we need `answerMode` from the RetrievalPlan) and BEFORE A3.
+  Hits return the cached `VerifiedResponse` with a freshly-minted `runId` and increment
+  `served_answer_count` only.
+- Cache write AFTER A6 success (fire-and-forget after DB commit) — a Redis failure logs
+  `cache.store(outcome=error)` but never breaks the request.
+- Every served request — hard-safety, RED, composer refusal, or normal — writes exactly
+  one `run_traces` row, increments `billing_usage` (served, plus `fresh` when A5 ran), and
+  may add a `flagged_queries` row (+ optional encrypted `raw_sensitive_logs` row).
+
+The hard-safety bypass still short-circuits before A3, but now persists a minimal
+`run_traces` row so F-18 ("every served request inspectable in /admin/queries") holds.
 """
 
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
+from typing import Any
 
 import ulid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import Field
 
 from app.adapters.providers.base import LLMProvider
@@ -33,7 +39,9 @@ from app.api.v1._deps import (
     get_embedding_provider,
     get_pastoral_config,
     get_query_analyzer_provider,
+    get_response_cache,
     get_safety_config,
+    get_sensitive_log_cipher,
     get_settings_dep,
     get_sparse_embedder,
     get_vector_store,
@@ -51,17 +59,36 @@ from app.core.errors import (
     VectorStoreUnavailableError,
 )
 from app.core.logging import get_logger
+from app.core.tenant_context import set_tenant_guc
 from app.domain.agents.query_analyzer import QueryAnalysis
 from app.domain.models._base import WireModel
+from app.domain.models.classified_query import ClassifiedQuery
 from app.domain.models.principal import Principal
+from app.domain.models.run_trace import RunTrace, RunTraceUsage, Stage
 from app.domain.models.verified_response import VerifiedResponse
+from app.domain.repositories._base import session_scope
+from app.domain.repositories.billing_usage_repository import BillingUsageRepository
+from app.domain.repositories.flagged_query_repository import FlaggedQueryRepository
+from app.domain.repositories.raw_sensitive_log_repository import (
+    RawSensitiveLogRepository,
+)
+from app.domain.repositories.run_trace_repository import RunTraceRepository
 from app.domain.services.bounded_fallback import CaseClass, build_bounded_fallback
+from app.domain.services.cache_service import (
+    ResponseCache,
+    build_cache_fields,
+    cache_key,
+)
+from app.domain.services.encryption_service import SensitiveLogCipher
+from app.domain.services.redaction_service import (
+    redact_query_text,
+    should_capture_raw_sensitive,
+)
 from app.domain.services.safety_config import PastoralConfig, SafetyConfig
 
 router = APIRouter(prefix="/query", tags=["query"])
 logger = get_logger(__name__)
 
-# Map hard-trigger risk flags to the canonical bounded-fallback case_class.
 _HARD_TRIGGER_CASE_CLASS: dict[str, CaseClass] = {
     "self_harm": "self_harm",
     "medical_emergency": "medical_emergency",
@@ -79,6 +106,7 @@ class QueryRequest(WireModel):
 )
 async def post_query(
     body: QueryRequest,
+    request: Request,
     principal: Principal = Depends(require_scope("query:read")),
     safety_config: SafetyConfig = Depends(get_safety_config),
     pastoral_config: PastoralConfig = Depends(get_pastoral_config),
@@ -88,9 +116,12 @@ async def post_query(
     embedding_provider: LLMProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
     sparse_embedder: Bm25SparseEmbedder = Depends(get_sparse_embedder),
+    cache: ResponseCache = Depends(get_response_cache),
+    cipher: SensitiveLogCipher | None = Depends(get_sensitive_log_cipher),
     settings: Settings = Depends(get_settings_dep),
 ) -> VerifiedResponse:
-    run_id = f"run_{ulid.new()!s}"
+    run_id = f"run_{getattr(request.state, 'run_id', None) or ulid.new()!s}"
+    started_at = datetime.now(UTC)
     start = time.perf_counter()
 
     analyzer = build_query_analyzer(
@@ -137,7 +168,7 @@ async def post_query(
     original_query = analysis.classified_query.raw_query
     reframed_query = analysis.classified_query.reframed_query
 
-    # Hard-safety bypass: short-circuit before retrieval, A4, A5, A6.
+    # Hard-safety bypass: never touches cache; persists a minimal run trace per F-18.
     if analysis.classified_query.handling == "block_with_redirect":
         case_class = _resolve_hard_trigger_case_class(analysis)
         response = build_bounded_fallback(
@@ -152,8 +183,69 @@ async def post_query(
             original_query=original_query,
             reframed_query=reframed_query,
         )
-        _log_completed(run_id, principal, response, start, case="hard_safety")
+        await _persist_run_outcome(
+            run_id=run_id,
+            started_at=started_at,
+            principal=principal,
+            classified=analysis.classified_query,
+            raw_query=body.query_text,
+            response=response,
+            cache_hit=False,
+            fresh_model_run=False,
+            stages=[_stage_a1a2(started_at, settings, outcome="fallback")],
+            flag_reason="hard_safety_trigger",
+            cipher=cipher,
+            sensitive_log_retention_days=settings.sensitive_log_retention_days,
+        )
+        _log_completed(run_id, principal, response, start, case="hard_safety", cache_hit=False)
         return response
+
+    # ---- Cache lookup (after A1+A2, before A3) ---------------------------------------
+    cache_fields = build_cache_fields(
+        principal=principal,
+        raw_query=body.query_text,
+        answer_mode=analysis.retrieval_plan.answer_mode,
+        session_hash=None,
+        corpus_version=settings.active_schema_version,
+        config_version=settings.active_schema_version,
+        calendar_version=settings.active_schema_version,
+        prompt_version=settings.active_prompt_version_a5,
+        model_route_id=settings.active_model_route_a5,
+        schema_version=settings.active_schema_version,
+    )
+    key = cache_key(cache_fields)
+    try:
+        cached = await cache.get(key)
+    except Exception as exc:  # noqa: BLE001 — cache errors must not fail the request
+        logger.warning(
+            "cache.lookup_error", run_id=run_id, error_type=type(exc).__name__
+        )
+        cached = None
+
+    if cached is not None:
+        logger.info("cache.hit", run_id=run_id, tenant_id=principal.tenant_id)
+        response = cached.model_copy(update={"run_id": run_id, "served_from_cache": True})
+        await _persist_run_outcome(
+            run_id=run_id,
+            started_at=started_at,
+            principal=principal,
+            classified=analysis.classified_query,
+            raw_query=body.query_text,
+            response=response,
+            cache_hit=True,
+            fresh_model_run=False,
+            stages=[
+                _stage_a1a2(started_at, settings, outcome="ok"),
+                _stage("cache_lookup", started_at, outcome="ok", notes="cache_hit"),
+            ],
+            flag_reason=None,
+            cipher=cipher,
+            sensitive_log_retention_days=settings.sensitive_log_retention_days,
+        )
+        _log_completed(run_id, principal, response, start, case="cache_hit", cache_hit=True)
+        return response
+
+    logger.info("cache.miss", run_id=run_id, tenant_id=principal.tenant_id)
 
     # ---- A3 retrieval -----------------------------------------------------------------
     try:
@@ -180,7 +272,6 @@ async def post_query(
     )
     packet = packaging.packet
 
-    # RED tier (or no admitted chunks) → bounded `insufficient_evidence`.
     if packet.confidence_tier == "RED" or not packet.admitted_chunks:
         response = build_bounded_fallback(
             case_class="out_of_corpus",
@@ -193,7 +284,24 @@ async def post_query(
             original_query=original_query,
             reframed_query=reframed_query,
         )
-        _log_completed(run_id, principal, response, start, case="red_evidence")
+        await _persist_run_outcome(
+            run_id=run_id,
+            started_at=started_at,
+            principal=principal,
+            classified=analysis.classified_query,
+            raw_query=body.query_text,
+            response=response,
+            cache_hit=False,
+            fresh_model_run=False,
+            stages=[
+                _stage_a1a2(started_at, settings, outcome="ok"),
+                _stage("a4_evidence_packager", started_at, outcome="fallback"),
+            ],
+            flag_reason="insufficient_evidence",
+            cipher=cipher,
+            sensitive_log_retention_days=settings.sensitive_log_retention_days,
+        )
+        _log_completed(run_id, principal, response, start, case="red_evidence", cache_hit=False)
         return response
 
     # ---- A5 composition + A6 verification --------------------------------------------
@@ -222,7 +330,26 @@ async def post_query(
             original_query=original_query,
             reframed_query=reframed_query,
         )
-        _log_completed(run_id, principal, response, start, case="composer_refusal")
+        await _persist_run_outcome(
+            run_id=run_id,
+            started_at=started_at,
+            principal=principal,
+            classified=analysis.classified_query,
+            raw_query=body.query_text,
+            response=response,
+            cache_hit=False,
+            fresh_model_run=False,
+            stages=[
+                _stage_a1a2(started_at, settings, outcome="ok"),
+                _stage("a5_composer", started_at, outcome="error", notes=type(exc).__name__),
+            ],
+            flag_reason="verifier_failed",
+            cipher=cipher,
+            sensitive_log_retention_days=settings.sensitive_log_retention_days,
+        )
+        _log_completed(
+            run_id, principal, response, start, case="composer_refusal", cache_hit=False
+        )
         return response
     except ProviderUnavailableError as exc:
         raise HTTPException(
@@ -241,18 +368,48 @@ async def post_query(
         original_query=original_query,
         reframed_query=reframed_query,
     )
-    _log_completed(run_id, principal, response, start, case="normal")
+
+    # Successful round-trip: persist + cache + log.
+    a6_passed = response.verification.passed
+    await _persist_run_outcome(
+        run_id=run_id,
+        started_at=started_at,
+        principal=principal,
+        classified=analysis.classified_query,
+        raw_query=body.query_text,
+        response=response,
+        cache_hit=False,
+        fresh_model_run=True,
+        stages=[
+            _stage_a1a2(started_at, settings, outcome="ok"),
+            _stage("a5_composer", started_at, outcome="ok"),
+            _stage("a6_verifier", started_at, outcome="ok" if a6_passed else "fallback"),
+        ],
+        flag_reason=None if a6_passed else "verifier_failed",
+        cipher=cipher,
+        sensitive_log_retention_days=settings.sensitive_log_retention_days,
+    )
+
+    if a6_passed and response.handling in ("answer", "answer_with_disclaimer"):
+        try:
+            await cache.set(key, response, ttl_seconds=settings.response_cache_ttl_seconds)
+            logger.info("cache.store", run_id=run_id, outcome="ok")
+        except Exception as exc:  # noqa: BLE001 — never break the request on cache failure
+            logger.warning(
+                "cache.store",
+                run_id=run_id,
+                outcome="error",
+                error_type=type(exc).__name__,
+            )
+
+    _log_completed(run_id, principal, response, start, case="normal", cache_hit=False)
     return response
 
 
-def _resolve_hard_trigger_case_class(analysis: QueryAnalysis) -> CaseClass:
-    """Map an analysis with `handling=block_with_redirect` to the canonical case_class.
+# ---- Helpers ----------------------------------------------------------------------
 
-    Order of precedence:
-    1. Hard-trigger risk flag (`self_harm`, `medical_emergency`) — those map directly.
-    2. Soft-handled blocks (e.g. political voting, fabrication) — match by safety_match
-       rule_id or sensitivityPrimary.
-    """
+
+def _resolve_hard_trigger_case_class(analysis: QueryAnalysis) -> CaseClass:
     risk_flags = set(analysis.classified_query.risk_flags)
     for flag, case_class in _HARD_TRIGGER_CASE_CLASS.items():
         if flag in risk_flags:
@@ -263,6 +420,121 @@ def _resolve_hard_trigger_case_class(analysis: QueryAnalysis) -> CaseClass:
     return "fabrication_attempt"
 
 
+def _stage(
+    name: str,
+    started_at: datetime,
+    *,
+    outcome: str,
+    notes: str | None = None,
+    model_route_id: str | None = None,
+) -> Stage:
+    now = datetime.now(UTC)
+    return Stage(
+        stage=name,
+        started_at=started_at,
+        finished_at=now,
+        outcome=outcome,
+        model_route_id=model_route_id,
+        notes=notes,
+    )
+
+
+def _stage_a1a2(started_at: datetime, settings: Settings, *, outcome: str) -> Stage:
+    return _stage(
+        "a1_a2_query_analyzer",
+        started_at,
+        outcome=outcome,
+        model_route_id=settings.active_model_route_a1a2,
+    )
+
+
+async def _persist_run_outcome(
+    *,
+    run_id: str,
+    started_at: datetime,
+    principal: Principal,
+    classified: ClassifiedQuery,
+    raw_query: str,
+    response: VerifiedResponse,
+    cache_hit: bool,
+    fresh_model_run: bool,
+    stages: list[Stage],
+    flag_reason: str | None,
+    cipher: SensitiveLogCipher | None,
+    sensitive_log_retention_days: int,
+) -> None:
+    """Single durable write-down for every request outcome.
+
+    Writes: run_traces (always), billing_usage (always), flagged_queries + optionally
+    raw_sensitive_logs (when `flag_reason` is set OR `should_capture_raw_sensitive`).
+    All in one transaction so partial state is impossible.
+    """
+    finished_at = datetime.now(UTC)
+    trace = RunTrace(
+        run_id=run_id,
+        tenant_id=principal.tenant_id,
+        user_id=principal.user_id,
+        started_at=started_at,
+        finished_at=finished_at,
+        cache_hit=cache_hit,
+        stages=stages,
+        usage=RunTraceUsage(
+            served_answer_count=1,
+            fresh_model_run_count=1 if fresh_model_run else 0,
+        ),
+        final_handling=response.handling,
+        final_confidence_tier=response.confidence_tier,
+        verifier_passed=response.verification.passed,
+    )
+
+    capture_raw = cipher is not None and should_capture_raw_sensitive(classified)
+    needs_flagged = flag_reason is not None or capture_raw
+    effective_flag = flag_reason or ("hard_safety_trigger" if capture_raw else None)
+
+    try:
+        async with session_scope() as session:
+            await set_tenant_guc(session, principal.tenant_id)
+
+            await RunTraceRepository(session).insert(trace)
+            await BillingUsageRepository(session).increment(
+                tenant_id=principal.tenant_id,
+                served_answer_count=1,
+                fresh_model_run_count=1 if fresh_model_run else 0,
+                prompt_tokens=response.usage.prompt_tokens or 0,
+                completion_tokens=response.usage.completion_tokens or 0,
+            )
+
+            if needs_flagged and effective_flag is not None:
+                raw_log_id: str | None = None
+                if capture_raw and cipher is not None:
+                    blob = cipher.encrypt(raw_query)
+                    raw_log_id = await RawSensitiveLogRepository(session).insert(
+                        tenant_id=principal.tenant_id,
+                        user_id=principal.user_id,
+                        run_id=run_id,
+                        blob=blob,
+                        retention_days=sensitive_log_retention_days,
+                    )
+                await FlaggedQueryRepository(session).insert(
+                    tenant_id=principal.tenant_id,
+                    user_id=principal.user_id,
+                    run_id=run_id,
+                    query_text_redacted=redact_query_text(raw_query),
+                    flag_reason=effective_flag,
+                    raw_sensitive_log_id=raw_log_id,
+                    sensitivity_primary=classified.sensitivity_primary,
+                    risk_flags=list(classified.risk_flags),
+                )
+    except Exception as exc:  # noqa: BLE001 — log + swallow so the user still gets the answer
+        logger.error(
+            "query.persist_failed",
+            run_id=run_id,
+            code="PERSIST_FAILED",
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
+
+
 def _log_completed(
     run_id: str,
     principal: Principal,
@@ -270,6 +542,7 @@ def _log_completed(
     start: float,
     *,
     case: str,
+    cache_hit: bool,
 ) -> None:
     logger.info(
         "query.completed",
@@ -281,8 +554,13 @@ def _log_completed(
         verifier_passed=response.verification.passed,
         citation_count=len(response.citations),
         case=case,
+        cache_hit=cache_hit,
         duration_ms=int((time.perf_counter() - start) * 1000),
     )
 
 
 __all__ = ["router"]
+
+
+# Used by tests to suppress the unused-import lint when query.py is imported standalone.
+_ = Any

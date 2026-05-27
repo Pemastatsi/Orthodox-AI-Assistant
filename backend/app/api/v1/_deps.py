@@ -26,6 +26,11 @@ from app.domain.agents.query_analyzer import QueryAnalyzer
 from app.domain.agents.verifier import Verifier, VerifierConfig
 from app.domain.models.principal import Principal
 from app.domain.repositories._base import AsyncSession, session_scope
+from app.domain.services.cache_service import ResponseCache
+from app.domain.services.encryption_service import (
+    SensitiveLogCipher,
+    load_key_map_from_env,
+)
 from app.domain.services.retriever import Retriever
 from app.domain.services.safety_config import (
     PastoralConfig,
@@ -99,6 +104,31 @@ async def shutdown_redis() -> None:
     if _redis is not None:
         await _redis.aclose()
         _redis = None
+
+
+def get_response_cache(redis: Redis = Depends(get_redis)) -> ResponseCache:
+    return ResponseCache(redis=redis)
+
+
+_cipher: SensitiveLogCipher | None = None
+
+
+def get_sensitive_log_cipher(
+    settings: Settings = Depends(get_settings_dep),
+) -> SensitiveLogCipher | None:
+    """Lazy-build the cipher from settings. Returns None if no key is configured
+    (development without sensitive-log capture); callers must handle that case."""
+    global _cipher
+    if _cipher is not None:
+        return _cipher
+    if not settings.sensitive_log_data_key_base64:
+        return None
+    keys = load_key_map_from_env(
+        settings.sensitive_log_data_key_base64,
+        settings.sensitive_log_key_version,
+    )
+    _cipher = SensitiveLogCipher(keys=keys, active_version=settings.sensitive_log_key_version)
+    return _cipher
 
 
 # ---- Query path dependencies (T-003 / T-004) -----------------------------------------
@@ -261,6 +291,12 @@ def _reset_query_caches() -> None:
     _sparse_embedder = None
 
 
+def _reset_cipher_cache() -> None:
+    """Test hook: drop the cipher singleton so a different key can be injected."""
+    global _cipher
+    _cipher = None
+
+
 __all__ = [
     "build_composer",
     "build_evidence_packager",
@@ -273,7 +309,9 @@ __all__ = [
     "get_principal",
     "get_query_analyzer_provider",
     "get_redis",
+    "get_response_cache",
     "get_safety_config",
+    "get_sensitive_log_cipher",
     "get_session",
     "get_settings_dep",
     "get_sparse_embedder",

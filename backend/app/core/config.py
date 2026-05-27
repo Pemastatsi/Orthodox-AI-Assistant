@@ -52,7 +52,11 @@ class Settings(BaseSettings):
     make_webhook_secret: str = "REPLACE_ME"
 
     sensitive_log_data_key_base64: str = ""
+    sensitive_log_key_version: str = "v1"
     sensitive_log_retention_days: int = 30
+
+    retention_worker_cron: str = "5 * * * *"
+    database_admin_url: str | None = None
 
     active_schema_version: str = "2026-05-01.1"
     active_prompt_version_a1a2: str = "qa_analyze@2026-05-01.1"

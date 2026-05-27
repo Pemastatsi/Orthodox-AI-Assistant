@@ -29,9 +29,12 @@ REDACTED_KEYS = frozenset(
         "pan",
         "query_text",
         "raw_query",
+        "raw_query_text",
         "raw_answer",
         "chunk_text",
         "source_text",
+        "plaintext",
+        "ciphertext",
     }
 )
 
