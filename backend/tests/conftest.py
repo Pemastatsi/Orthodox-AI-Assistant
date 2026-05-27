@@ -85,8 +85,8 @@ async def clean_tables(db_engine: object) -> AsyncIterator[None]:
         await session.execute(
             text(
                 "TRUNCATE TABLE audit_entries, flagged_queries, raw_sensitive_logs, "
-                "run_traces, ingest_jobs, sessions, chunks, sources, users, tenants "
-                "RESTART IDENTITY CASCADE"
+                "run_traces, ingest_jobs, sessions, billing_usage, chunks, sources, "
+                "users, tenants RESTART IDENTITY CASCADE"
             )
         )
         await session.commit()
@@ -95,8 +95,8 @@ async def clean_tables(db_engine: object) -> AsyncIterator[None]:
         await session.execute(
             text(
                 "TRUNCATE TABLE audit_entries, flagged_queries, raw_sensitive_logs, "
-                "run_traces, ingest_jobs, sessions, chunks, sources, users, tenants "
-                "RESTART IDENTITY CASCADE"
+                "run_traces, ingest_jobs, sessions, billing_usage, chunks, sources, "
+                "users, tenants RESTART IDENTITY CASCADE"
             )
         )
         await session.commit()
