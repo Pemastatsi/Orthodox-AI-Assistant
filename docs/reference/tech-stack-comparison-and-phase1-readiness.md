@@ -64,10 +64,11 @@ problem the recommended stack does not address.
 
 ---
 
-## 2. Verdict: Project Potential vs. VulgateAI and Logos
+## 2. Verdict: Project Potential vs. Logos, Vulgate AI, Magisterium AI, Catena Bible
 
 The competitive feature matrix in `docs/reference/patristic-build-plan.md` enumerates the
-moats. The decisive moat is **layered**, not single-axis:
+moats. The decisive moat is **layered**, not single-axis, and applies uniformly to all
+four named competitors:
 
 ### Layer 1 — Existential moat (zero-hallucination by construction)
 
@@ -117,14 +118,41 @@ clergy-governed corpora).
 - **Phase 3 institutional network**: cross-diocese / cross-monastery corpus sharing under
   policy-hierarchy scoped visibility. First-mover wins permanently in the Orthodox market.
 - **Phase 4 offline / monastery deployment**: Athonite manuscript archive partnerships,
-  SQLite + embedded Qdrant on-monastery. Neither competitor targets this segment.
+  SQLite + embedded Qdrant on-monastery. None of the four named competitors target this
+  segment.
+
+### Adjacent competitors (Magisterium AI, Catena Bible)
+
+The two original competitors (Logos, Vulgate AI) sit on opposite ends of the
+metadata/AI axis. Two adjacent products complete the competitive picture but neither
+is a head-to-head substitute on the four moat layers:
+
+- **Magisterium AI** is a Catholic-aligned, magisterium-corpus RAG product with
+  citation-style UX. It addresses Layer 2 only partially (corpus-authentic to Catholic
+  teaching) and offers no closed-corpus quote-overlap verification (Layer 1), no
+  Orthodox jurisdictional configuration (the Layer 2 axis that matters for this
+  market), no approval queues or multi-tenant clergy governance (Layer 3), and no
+  monastery / offline deployment story (Layer 4). It competes only on the Catholic
+  side of the market — confirming the project's segmentation thesis rather than
+  challenging it.
+- **Catena Bible** is a curated patristic-commentary navigator (no AI synthesis, no
+  generative retrieval). It is strong on patristic-discourse navigation (commentary
+  chains, Father-by-verse views) but has no AI synthesis, no closed-corpus QA, no
+  answer-mode discipline, no multi-tenant governance, and no jurisdictional scoping.
+  It is a **complementary** product (a static reference index alongside the
+  generative assistant), not a head-to-head competitor. Its curated commentary
+  mapping is a model for the Phase 2 PAG-RAG lineage-edge UX, not a threat.
 
 ### Verdict
 
-**The project plan can beat VulgateAI and Logos on every axis that matters for the
-Orthodox market** — provided Phase 1 ships on the contract as written. The contracts and
-ADRs are already locked at a discipline level competitors do not approach. **What remains
-is execution, not architecture.**
+**The project plan can beat Logos, Vulgate AI, Magisterium AI, and Catena Bible on
+every axis that matters for the Orthodox market** — provided Phase 1 ships on the
+contract as written. The contracts and ADRs are already locked at a discipline level
+none of the four competitors approach. Logos cannot answer conceptual queries its
+hand-curated index does not anticipate; Vulgate AI's pure vector retrieval smooths
+out the long-tail patristic nuances PAG-RAG's typed edges preserve; Magisterium AI
+is wrong-segment; Catena Bible is wrong-modality. **What remains is execution, not
+architecture.**
 
 ---
 
@@ -226,6 +254,7 @@ has a clean charter and no surprises.
 | P2-8 | **LangSmith / Phoenix / Arize integration** behind the existing `structlog` + ULID `runId` adapter for distributed tracing once query volume justifies it. | Not needed Phase 1 (run trace + redacted logs are sufficient); becomes useful at multi-tenant scale. |
 | P2-9 | **Cohere `rerank-multilingual-v3.0` as a second certified `Reranker`** alongside the local BGE, for tenants willing to pay for higher recall on long-tail polytonic Greek. | ADR-0012 Protocol already supports it. |
 | P2-10 | **Bishop-briefing / study-packet export** (`institutional_policy` answer mode → PDF). | Institutional sales lever. |
+| P2-11 | **CLTK lemma + morphology enrichment of the BM25 sparse index for Polytonic Greek.** Evaluate appending CLTK-derived lemma tokens and morphology tags to `ChunkPayload.sparse_embedding` text before BM25 encoding. Measure recall@K lift on Polytonic-Greek queries against the certified gold set (P2-1 bake-off corpus). | Greek's heavy inflection means BM25 currently misses morphological variants (e.g., a query for `ἀγάπη` does not match `ἀγάπην` / `ἀγάπης`). Cross-encoder reranking partially compensates but only on candidates that already passed top-K. ADR-0011 §"When to reconsider" already names BM42/SPLADE revisitation; lemma enrichment is the lighter alternative. No ADR amendment until measurement justifies it. |
 
 ---
 
@@ -325,3 +354,65 @@ To verify this analysis end-to-end before kicking off Phase 1:
 
 When O-1 through O-7 are merged and the T-007 reviewer is calendared, Phase 1 is cleared
 for kickoff.
+
+---
+
+## 8. 2026 Linguistic Graph-RAG Recommendation Comparison
+
+A second recommendation arrived after the §1 comparison was written, proposing a
+"Linguistic Graph-RAG + Late-Interaction Reranking + Multi-Agent Synthesis" stack —
+LlamaParse, LlamaIndex Property Graphs, Neo4j + Qdrant, CLTK lemma + morphology,
+Cohere Embed v3 multilingual, LangGraph orchestration with DeepSeek-R1 / GPT-4o,
+ColBERT-style late-interaction reranking, and automated morphological tagging — as
+the way to beat Logos (hand-curated linguistic metadata) and Vulgate AI (neural RAG
+over a Catholic corpus).
+
+This section evaluates that recommendation against the current architecture as it
+now stands, including the three ADRs locked after the original §1 comparison was
+written: ADR-0011 (hybrid retrieval), ADR-0012 (reranker selection), ADR-0013
+(Qdrant collection topology).
+
+### Component-by-component verdict
+
+| Recommended component | Current architecture | Verdict |
+|---|---|---|
+| LlamaParse (layout-aware ingestion) | `pdfplumber` + `pytesseract` with `grc`+`ell` Tesseract packs (ADR-0008) | **Current wins** — LlamaParse has no Polytonic Greek OCR; same product-killing failure mode as the Unstructured.io rejection in §1. |
+| LlamaIndex Property Graphs | PAG-RAG with typed, approval-gated edges (ADR-0006) | **Current wins** — typed patristic-discourse edges (`quotes`, `builds_on`, `translation_of`, `contested_by`, etc.) with approval gating cannot be enforced inside LlamaIndex. |
+| Neo4j + Qdrant | PostgreSQL canonical edges + Qdrant; Neo4j optional Phase 2+ (ADR-0006 Rule 2) | **Current correctly deferred** — adding Neo4j now duplicates the source of truth before graph traffic justifies it. |
+| CLTK (lemma + morphology) | CLTK referenced only as a Tesseract OCR language pack; no lemmatization / POS in the retrieval path | **Real gap** — current architecture does not enrich the BM25 sparse index with lemma tokens. Worth a Phase 2 charter row (P2-11). |
+| Cohere Embed v3 multilingual | OpenAI `text-embedding-3-small` Phase 1; multilingual bake-off on Phase 2 charter (P2-1, ADR-0006) | **Already planned** — Cohere v3 is a candidate in the existing bake-off. |
+| LangGraph + DeepSeek-R1 / GPT-4o | Deterministic A1–A6 pipeline; Anthropic certified first; `LLMProvider` Protocol allows any (ADR-0004) | **Current wins** — A4 (deterministic policy / approval / threshold / citation-health gate) and A6 (deterministic citation verification) are incompatible with LangGraph's unbounded agent loops; DeepSeek-R1 is a candidate route, not an architecture. |
+| ColBERT late-interaction | BGE-reranker-v2-m3 cross-encoder (ADR-0012) | **Current wins** — ADR-0012 §Alternatives explicitly considered and rejected ColBERT for 10–50× storage cost; revisit only if cross-encoder underperforms the eval suite. |
+| Automated morphological tagging | Not present (real gap) | **Phase 2 candidate** — folded into P2-11. |
+| Multi-agent syntactic synthesis | A1–A6 schema-driven pipeline with `runTrace` (AGENTS.md §Query Pipeline) | **Current wins** — "multi-agent" without contracts is undefined; the A1–A6 pipeline is the disciplined form. |
+| Hybrid keyword + semantic search | Qdrant native dense + sparse BM25 via RRF (ADR-0011) | **Already done.** |
+| Layout-aware chunking | Hierarchical heading-boundary + sentence fallback (ADR-0009) | **Already done.** |
+
+### Where the 2026 recommendation would actively hurt this project
+
+- **LangGraph's unbounded loops** break the A1–A6 contract (`AGENTS.md §Query
+  Pipeline`): A4 is deterministic and A6 is deterministic citation verification.
+  Hand the loop to LangGraph and you cannot guarantee either, which collapses the
+  Layer 1 existential moat. It also violates the ADR-0006 Phase 1 vector-first rule
+  by giving the agent runtime authority to traverse uncertified edges.
+- **LlamaParse's lack of Polytonic Greek OCR** is the same failure mode as the
+  Unstructured.io rejection in §1 — diacritics drop, patristic sources misparse,
+  citation verification fails closed on otherwise-valid content. Product-killing for
+  this corpus.
+- **ColBERT per-token storage cost** is already considered and rejected in ADR-0012
+  §Alternatives at 10–50× the cross-encoder footprint. Reopening this without an
+  eval-suite signal is gratuitous infrastructure expansion.
+
+### Where the 2026 recommendation has a real gap to close
+
+One genuine gap survives the audit: **automated lemma + morphological tagging via
+CLTK for the Polytonic Greek sparse-index path**. Polytonic Greek is heavily
+inflected; BM25 over surface forms misses morphological variants of the same lemma,
+and the cross-encoder can only rerank what hybrid retrieval already surfaced. CLTK
+lemma + morphology enrichment of the BM25 input text is a measurable lift, not a
+re-architecture. Captured as charter row **P2-11** in §4. ADR-0011 §"When to
+reconsider" already names BM42 / SPLADE revisitation; lemma enrichment is the
+lighter alternative and should be measured first.
+
+No ADR amendment is required to charter this work. ADR-0011 stays as-is until the
+P2-11 measurement justifies otherwise.
