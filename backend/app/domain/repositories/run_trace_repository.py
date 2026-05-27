@@ -86,6 +86,45 @@ class RunTraceRepository:
         row = result.mappings().one_or_none()
         return _row_to_run_trace(row) if row else None
 
+    async def list_by_tenant(
+        self,
+        *,
+        tenant_id: str,
+        cursor: str | None = None,
+        limit: int = 25,
+        handling: str | None = None,
+        confidence_tier: str | None = None,
+        since: Any | None = None,
+    ) -> tuple[list[RunTrace], str | None]:
+        """Keyset pagination by `run_id DESC` (ULIDs are time-sortable, so
+        newest-first). Returns up to `limit` rows + a nextCursor string when
+        more rows are available, otherwise None."""
+        assert_tenant(tenant_id)
+        clauses = ["tenant_id = :tenant_id"]
+        params: dict[str, Any] = {"tenant_id": tenant_id, "limit": limit + 1}
+        if cursor:
+            clauses.append("run_id < :cursor")
+            params["cursor"] = cursor
+        if handling is not None:
+            clauses.append("final_handling = :handling")
+            params["handling"] = handling
+        if confidence_tier is not None:
+            clauses.append("final_confidence_tier = :confidence_tier")
+            params["confidence_tier"] = confidence_tier
+        if since is not None:
+            clauses.append("started_at >= :since")
+            params["since"] = since
+        sql = (
+            "SELECT * FROM run_traces WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY run_id DESC LIMIT :limit"
+        )
+        result = await self._session.execute(text(sql), params)
+        rows = list(result.mappings().all())
+        items = [_row_to_run_trace(r) for r in rows[:limit]]
+        next_cursor = rows[limit - 1]["run_id"] if len(rows) > limit else None
+        return items, next_cursor
+
 
 def _json(value: Any) -> str:
     import json
