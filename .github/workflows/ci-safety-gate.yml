@@ -1,3 +1,17 @@
+# CI Safety Gate
+#
+# Job status expectations during Phase 1 implementation:
+#   contracts                  — green on every PR (schemas + safety YAML + OpenAPI lint).
+#   safety-suite-fixtures      — green on every PR (validates the 20-case fixture shape).
+#   backend                    — skipped until backend/pyproject.toml lands (T-001).
+#   frontend                   — skipped until web/package.json lands (T-001).
+#   safety-suite-execution     — INTENTIONALLY FAILING until T-006 ships
+#                                backend/tests/safety/test_20_queries_harness.py.
+#                                See lines 118-138 below for the in-job rationale.
+#
+# A red ❌ on safety-suite-execution before T-006 is not a regression. Do not
+# attempt to "fix" it by deleting the gate; the gate is the contract.
+
 name: CI Safety Gate
 
 on:
