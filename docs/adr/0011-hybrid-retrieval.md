@@ -83,6 +83,17 @@ The reranker (ADR-0012) and the sparse signal solve different problems. The spar
 - If BM25 underperforms BM42 or SPLADE on Polytonic Greek queries in the Phase 2 multilingual embedding upgrade window (ADR-0006 §Embedding Model Upgrade), revisit the sparse model. Record in a follow-up row to D-RET-001.
 - If Qdrant's hybrid-query latency exceeds the per-tenant retrieval SLO (recorded once measured), consider returning to two separate queries fused in application code — but only with measurement.
 
+## Optional 3rd signal — late-interaction / ColBERT (REC-015, gated on REC-008)
+
+A3 may carry an optional third signal — late-interaction scoring via ColBERT — alongside dense and sparse. The signal is gated behind `RetrievalPlan.useLateInteraction: bool` (default `False`) and is **not** activated until the dual-index embedding benchmark (REC-008, `docs/task_cards/phase1/T-009-embedding-upgrade.md`) selects an embedding model that includes a ColBERT head:
+
+- If REC-008 selects **BGE-M3**, the ColBERT head ships with the model at no additional cost; the ColBERT vectors live alongside dense+sparse in the same Qdrant collection via multi-vector mode (or pgvector multi-column when ADR-0010 §PgvectorStore lands).
+- If REC-008 selects `text-embedding-3-large` or another non-ColBERT model, ColBERT requires a separate model (`jinaai/jina-colbert-v2` is the leading candidate per Jina 2024-11 — 89 languages including Greek, +6.5% over ColBERTv2). The cost is the extra inference call at retrieval time.
+
+The `ScoredChunk` contract is unchanged — the late-interaction score updates `score` in place (or contributes to a fused score), and the downstream A4 admission gates are signal-agnostic. The Reranker stage (ADR-0012) still runs after A3 and operates on the same `ScoredChunk` shape.
+
+Polytonic-Greek cross-lingual matching benefits more from late-interaction than from coarser dense signals; this is the primary motivation. Activation requires retrieval-eval pass on the certified gold set.
+
 ## Consequences
 
 - **One Protocol extension:** `VectorStore.search` gains `sparse_query: SparseVector | None = None`. Default `None` preserves existing call sites; only A3 passes a non-`None` value.

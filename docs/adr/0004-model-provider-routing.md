@@ -32,6 +32,7 @@ Provider adapters expose:
 4. A6 runs deterministic checks before any optional verifier model call.
 5. Every production route is certified by provider, model, prompt version, schema version, and safety-suite result.
 6. Experiments may be logged but cannot serve users until certified.
+7. Prompt templates are version-controlled artifacts under `/prompts/` per `docs/contracts/prompt-management.md` (GS-3). The `prompt_version` field stamped on every `ModelRoute` row corresponds to a versioned file path under `/prompts/`; embedded string-literal prompts in agent code are forbidden. Any change to a file under `/prompts/` triggers a CI gate (safety-suite + retrieval-eval) before the change can merge, regardless of whether the in-database route was already certified for the prior `prompt_version`.
 
 ## Route Certification Protocol
 
@@ -51,6 +52,17 @@ A `model_routes` row may serve user traffic only when `certification_status='cer
 4. **Recording on the route.** The certifying owner sets `model_routes.safety_suite_run_id` to the **`safety_suite_runs.safety_suite_run_id`** of the passing aggregate (NOT to a single `run_traces.run_id`); `certified_by` to their `users.user_id`; and `certified_at` to the timestamp. The PATCH writes an `audit_entries` row with `action='model_route_certified'`. The API MUST refuse the certification PATCH when the referenced `safety_suite_runs` row does not exist, has `passed=false`, or has a different `purpose`/`prompt_version`/`schema_version` triple than the route being certified.
 5. **Startup enforcement.** Service startup loads the active route ids from `.env` (`ACTIVE_MODEL_ROUTE_*`) and refuses to start if any active id resolves to a row whose `certification_status != 'certified'` or whose `deprecated_at IS NOT NULL`.
 6. **Revocation.** A regression flips the row to `deprecated`; the service refuses the next deploy until a different certified route is named in `.env`. Revocation is `admin`+ but never required to be `owner` (you should be able to take a bad route out fast).
+
+## Prompt-Version Lifecycle (GS-3)
+
+Prompt templates are first-class certified artifacts, on par with provider/model/schema. The lifecycle:
+
+1. **Authoring.** A new prompt version is committed as a new file under `/prompts/{stage}/{language}/{version}.{j2,yaml}` per `docs/contracts/prompt-management.md`. The directory layout makes `prompt_version` a path identifier, not a free-form string. Editing an existing file in place is forbidden — version it.
+2. **CI gate.** A diff under `/prompts/` triggers the safety-suite (`backend/tests/safety/test_20_queries_harness.py`) and retrieval-eval suites in CI against a candidate `ModelRoute` that references the new `prompt_version`. The PR cannot merge with either suite red.
+3. **Route certification.** Promoting a route from `experiment` to `certified` requires both (a) a passing safety-suite aggregate per the protocol above and (b) the `prompt_version` referenced by the route corresponds to an existing file under `/prompts/`. The API MUST refuse the certification PATCH when the prompt file is missing from disk.
+4. **Forensic auditability.** The `RunTrace.stages[].details.promptVersion` and `model_route_invocations.prompt_version` fields preserve which prompt version served which user, so post-incident analysis can reconstruct exactly which template wording was active for any historical query.
+
+The runtime piece of decision register row 6 — admin-facing free-form prompt editing with preview + rollback — remains post-MVP. The lifecycle above governs platform-authored prompt templates only.
 
 ## Provider Outage Policy (Phase 1)
 

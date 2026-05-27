@@ -141,14 +141,11 @@ Each adapter catches its provider's exceptions and raises one of these typed exc
 
 Adapters MUST NOT leak the provider SDK's exception types upward.
 
-## Outage Handling (No Cross-Provider Fallback in Phase 1)
+## Outage Handling (No Cross-Provider Fallback in Phase 1; Phase 2 design recorded in ADR-0014)
 
 When a `generate_*` or `embed_texts` call raises `ProviderUnavailableError` / `ProviderTimeoutError` / `ProviderRateLimitedError`, the orchestrator does **not** automatically retry the request on a different certified provider. The user-facing response is the matching error code from `docs/contracts/error-taxonomy.md` (`provider_unavailable`, `rate_limited`) with `Retry-After` populated. The client retries explicitly when ready.
 
-Cross-provider failover is out of scope for Phase 1 (see ADR 0004 "Provider Outage Policy"). Adding it later requires:
-1. A documented selection rule that does not violate route certification (you cannot fall back to an uncertified route).
-2. Test coverage that demonstrates A5 still receives only evidence-grounded prompts when failover triggers.
-3. An ADR update.
+**Phase 2 path:** ADR-0014 (Cross-Provider Failover) records the bounded design — failover only to a certified peer of the same `purpose`; refusals never trigger; trigger conditions include 5xx, network errors, rate-limit beyond a threshold, AND **latency-threshold breaches** per the GS-4 circuit-breaker discipline; embedding routes excluded; at most one failover per stage; audited via `model_route_invocations.failover_from_route_id`. The Phase-1 Protocol surface already satisfies the seam — adding failover does not require breaking changes here. The new `ModelRoute` fields (`failover_peer_route_id`, `latency_breaker_threshold_ms`, etc.) land alongside ADR-0014 implementation.
 
 ## Refusal Handling
 
@@ -161,6 +158,14 @@ When a provider returns a structured refusal (`finish_reason='refusal'` or equiv
 ## JSON Mode
 
 `supports_json_mode = True` means the adapter can ask the provider for guaranteed JSON output (Anthropic's `tool_use` mode or OpenAI's `response_format`). When supported, `generate_structured` uses it. When not supported, the adapter post-parses the raw text and validates against the schema.
+
+### Prompt caching (REC-011)
+
+Anthropic adapters that report `supports_prompt_cache = True` expose a `cache_control` hook on the message-block list. A5 composition structures its prompt as `[system + corpus_chunks_prefix | dynamic_query]` and marks the `corpus_chunks_prefix` block with `cache_control={"type": "ephemeral"}`, yielding cached-read pricing on follow-ups within the same session (≈10% of the input rate vs ≈1.25× on cache writes, per Anthropic 2026 pricing). The cache key recipe in `docs/contracts/cache-key.md` is extended to include `model_id + system_hash + chunk_id_set + corpusVersion` so a corpus update or model swap invalidates stale cache entries before they can be read.
+
+### Batch API (REC-020)
+
+Anthropic adapters that report `supports_batch_mode = True` expose a `submit_batch(routes: list[BatchItem]) -> BatchHandle` method. Batch mode is gated by `ModelRoute.purpose = 'retrieval_eval_judge'` — it is NEVER used on the user-facing answer path. Batch submissions get a 50% discount with a 24-hour delivery window, which is acceptable for offline retrieval-eval gating runs but not for live queries.
 
 ## Streaming Boundaries
 

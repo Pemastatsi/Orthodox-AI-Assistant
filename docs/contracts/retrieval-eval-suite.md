@@ -99,6 +99,25 @@ These run a calibrated LLM judge against A5's composed answer and the admitted e
 
 The judge route is itself a `ModelRoute` with `purpose='retrieval_eval_judge'` (new purpose, certified separately from any production answer-path route). The judge is intentionally not the same model as A5 — using a different family/provider reduces the risk that A5's biases get re-rewarded by the judge.
 
+#### DeepEval as the metric harness (REC-019)
+
+The metric implementations themselves use **DeepEval** (open-source, pytest-native, native RAGAS metrics: `FaithfulnessMetric`, `AnswerRelevancyMetric`, `ContextualPrecisionMetric`, `ContextualRecallMetric`). DeepEval is configured to call our internal `retrieval_eval_judge` `ModelRoute` rather than the default OpenAI endpoint:
+
+```python
+# tests/retrieval_eval/conftest.py — illustrative
+from deepeval.models import DeepEvalBaseLLM
+
+class InternalJudgeModel(DeepEvalBaseLLM):
+    def generate(self, prompt: str) -> str:
+        return llm_provider.generate_text(prompt, route=judge_route)
+```
+
+DeepEval cloud telemetry and login are explicitly disabled (`deepeval login` is not run; the `CONFIDENT_API_KEY` env var is not set). Gold sets never leave the repo's private remote — DeepEval runs locally only. This preserves the closed-corpus posture documented in §Tenant Scoping and Privacy below.
+
+#### Batch API for judge calls (REC-020)
+
+When the certified judge route is an Anthropic model (`anthropic:claude-haiku-4-5` is the leading candidate), judge invocations submit through the Anthropic Batch API for a 50% discount with a 24h delivery window. The gating constraint is `ModelRoute.purpose='retrieval_eval_judge'` — Batch mode is NEVER used on the user-facing answer path (see `provider-interface.md` §Batch API).
+
 ### Score-Scale Normalization
 
 All metrics are reported in `[0.0, 1.0]`. The Sialtsis 2026 1–5 human-rated scale is not used; calibrating a 1–5 scale across LLM judges is a known-fragile exercise, and binary/fractional metrics are easier to gate in CI.

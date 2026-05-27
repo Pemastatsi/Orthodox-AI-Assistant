@@ -9,9 +9,10 @@ For coding sessions, read only:
 
 1. `AGENTS.md`
 2. `docs/contracts/code-gen-guide.md`
-3. the relevant `docs/task_cards/phase1/*.md`
-4. directly affected source files
-5. failing tests
+3. `docs/contracts/approved-decisions-register.md`
+4. the relevant `docs/task_cards/phase1/*.md`
+5. directly affected source files
+6. failing tests
 
 Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the task card points to them. Read `docs/reference/` or `docs/archive/` only to resolve a contradiction or revisit strategy.
 
@@ -47,6 +48,12 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/contracts/quote-overlap-algorithm.md` | canonical | A6 70% rule, normalization, shingles, test vectors. |
 | `docs/contracts/safety-config-format.md` | canonical | YAML format for sensitivity keywords and pastoral filters. |
 | `docs/contracts/frontend-components.md` | canonical | React component prop/state contracts and routing. |
+| `docs/contracts/parser-interface.md` | canonical | `Parser` Protocol seam; `ParsedBlock` shape consumed by chunking (ADR-0008). |
+| `docs/contracts/chunking-contract.md` | canonical | Heading-boundary hierarchical chunking algorithm and `Chunk` assembly rules (ADR-0009). |
+| `docs/contracts/vector-store-interface.md` | canonical | `VectorStore` Protocol seam; `tenant_id` invariant; `ChunkPayload` / `ScoredChunk` boundary (ADR-0010, ADR-0013). |
+| `docs/contracts/retrieval-eval-suite.md` | canonical | Per-tenant retrieval gold-set format, deterministic metrics, Ragas-style judge gate (D-EVAL-001). |
+| `docs/contracts/embedding-upgrade-sop.md` | canonical | Dual-index window protocol for changing the embedding `ModelRoute`; corpusVersion bump rules. |
+| `docs/contracts/prompt-management.md` | canonical | `/prompts/` directory layout, `prompt_version` path-identifier contract, CI gate on prompt diffs, runtime template-loader rules. |
 
 ## Configuration
 
@@ -79,6 +86,9 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/schemas/model-route.schema.json` | contract | Certified provider/model/prompt/schema combination. |
 | `docs/schemas/run-trace.schema.json` | contract | Full pipeline run trace. |
 | `docs/schemas/calendar-profile.schema.json` | contract | Inline calendar profile stored at `tenants.config.calendarProfile`. Drives cache-key `calendarVersion` field. |
+| `docs/schemas/parsed-block.schema.json` | contract | Typographic block emitted by a `Parser`; consumed by chunking to detect headings and assemble Chunks. |
+| `docs/schemas/progress-event.schema.json` | contract | Typed SSE payload for `POST /query` when `streamProgress=true` (progress / done / error variants). |
+| `docs/schemas/scored-chunk.schema.json` | contract | Retrieval hit composed of a Chunk plus cosine `score` and optional `rerankScore`; returned by `VectorStore.search`. |
 
 ## Architecture Decision Records
 
@@ -91,6 +101,15 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/adr/0005-cache-billing-privacy.md` | canonical | Cache, usage metering, and sensitive logs. |
 | `docs/adr/0006-pag-rag-lineage-architecture.md` | canonical | Phased PAG-RAG lineage architecture. |
 | `docs/adr/0007-query-transformation-boundaries.md` | canonical | No generic query rewriting in Phase 1. |
+| `docs/adr/0008-pdf-parser-strategy.md` | canonical | Two-path PDF parser (`pdfplumber` born-digital + `pytesseract` scanned with `grc`+`ell`) behind the `Parser` Protocol. |
+| `docs/adr/0009-chunking-strategy.md` | canonical | Hierarchical heading-boundary chunking (800–1200 soft / 1500 hard tokens, `cl100k_base`). |
+| `docs/adr/0010-vector-store-interface.md` | canonical | `VectorStore` Protocol seam; no direct Qdrant client imports outside `adapters/`. |
+| `docs/adr/0011-hybrid-retrieval.md` | canonical | Dense + sparse (BM25) hybrid via Qdrant native sparse vectors with server-side RRF (k=60). |
+| `docs/adr/0012-reranker-selection.md` | canonical | Cross-encoder `BAAI/bge-reranker-v2-m3` (Apache-2.0); LLM-pointwise reranking forbidden. |
+| `docs/adr/0013-qdrant-collection-topology.md` | canonical | Shared Qdrant collection with required `tenant_id` payload filter; one-collection-per-tenant reserved as documented migration target. |
+| `docs/adr/0014-cross-provider-failover.md` | canonical | Phase-2 cross-provider failover design (certified peer only; refusals never trigger; 5xx/network/rate-limit/latency-threshold triggers; embedding routes excluded). |
+| `docs/adr/0015-regional-tenancy.md` | canonical | Phase-2 regional pinning design (per-region instances; `tenant.dataRegion` authoritative; JWT `region` claim; `wrong_region` 421 redirect). |
+| `docs/adr/0016-postgres-rls.md` | canonical | Phase-1 Postgres RLS as engine-layer defense-in-depth backstop for tenant isolation; FastAPI `SET LOCAL` dependency; `app_admin` BYPASSRLS role for migrations, seeders, retention. |
 
 ## Task Cards
 
@@ -103,6 +122,11 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/task_cards/phase1/T-005-cache-logs-billing.md` | contract | Cache, logs, billing counters, privacy. |
 | `docs/task_cards/phase1/T-006-admin-chat-safety-gate.md` | contract | Chat UI, admin UI, safety gate. |
 | `docs/task_cards/phase1/T-007-real-safety-configs.md` | contract | Real (non-stub) safety config delivery; founder + Greek-language reviewer ownership. Required by exit criterion #9. |
+| `docs/task_cards/phase1/T-008-doc-hygiene-and-codegen.md` | contract | Master tracker for the 2026-05-22 frontier meta-evaluation: all doc amendments + code-deferred acceptance criteria for T-001..T-006. |
+| `docs/task_cards/phase1/T-009-embedding-upgrade.md` | contract | Dual-index embedding benchmark (BGE-M3 + text-embedding-3-large vs baseline); late chunking gated on winner; ColBERT 3rd retrieval signal; Modal Llama-3-70B A5-peer certification (GS-4). |
+| `docs/task_cards/phase2/T-2XX-vector-store-swap-evaluation.md` | contract (Phase 2) | Conditional swap evaluation for Turbopuffer / pgvector+ParadeDB at REC-022 trigger conditions. |
+| `docs/task_cards/phase2/T-2XX-regional-tenancy.md` | contract (Phase 2) | Implementation card for ADR-0015 regional tenancy. Gated on first EU enterprise customer. |
+| `docs/task_cards/phase2/T-2XX-phase2-platform-bundle.md` | contract (Phase 2) | Phase-2 platform bundle (Valkey, WorkOS, Langfuse, different-family A6 judge). |
 
 ## Tests and Fixtures
 
@@ -118,6 +142,15 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `tests/unit/test_cache_key.py` | contract (skeleton, body delivered by T-005) | Asserts cache-key V1–V4 vectors (literal sha256 + from-input-dict). |
 | `scripts/exit_criteria_dashboard.py` | contract (skeleton, body delivered with Phase-2-exit dashboard work) | Phase 1 mechanism for tracking the 9 exit criteria; replaces the deferred Prometheus exporter. |
 | `backend/tests/safety/test_20_queries_harness.py` | contract (delivered by T-006) | Executes the 20 cases through the live A1–A6 pipeline; required by CI `safety-suite-execution` job. |
+
+## Architecture and Runbooks
+
+| Path | Status | Purpose |
+|---|---|---|
+| `docs/glossary.md` | canonical | Canonical terms across the contract pack (A1–A6 stages, EvidencePacket, RetrievalPlan, ScoredChunk, ChunkPayload, ModelRoute, RunTrace, BoundedFallbackResponse, etc.). |
+| `docs/architecture/pipeline.md` | canonical | A1–A6 query pipeline + ingestion pipeline as Mermaid diagrams with per-stage contract/ADR cross-references. |
+| `docs/architecture/schema-to-code-map.md` | reference (auto-generated by REC-009 codegen once T-008's T-001 amendment lands) | Mapping from `docs/schemas/*.json` and `docs/api/openapi.yaml` to the generated Pydantic / TS / Zod artifacts. Manual placeholder until codegen lands. |
+| `docs/runbooks/frontier-sync.md` | canonical | Quarterly process to re-run retrieval-eval against current routes, check 2026/2027 benchmarks, and produce one ADR amendment per cycle. |
 
 ## Reference Material
 
@@ -169,7 +202,7 @@ These files are superseded planning drafts. They have headers warning future age
 - Draft answer text is not streamed before A6 verification.
 - PDFs are reference-only and never override canonical contracts.
 - CLAUDE.md is the universal policy spine; FastAPI/Next.js code-gen rules live in `docs/contracts/code-gen-guide.md`.
-- App-layer tenant scoping is the Phase 1 default; Postgres RLS is deferred to a Phase 2 ADR.
+- App-layer `WHERE tenant_id` filtering is the primary line of tenant isolation. Postgres RLS is also enabled in Phase 1 per ADR-0016 as the engine-layer defense-in-depth backstop (superseding the earlier deferral). The Phase-1 tenant-isolation defense triad is: app-layer filter + Postgres RLS + pgaudit.
 - `calendarProfile` is an inline object on `tenants.config`, not a referenced id; the cache-key path `tenants.config.calendarProfile.version` is satisfied without a join. Schema: `docs/schemas/calendar-profile.schema.json` (added 2026-05-02).
 - Embeddings are obtained through the `LLMProvider.embed_texts` method; no direct provider SDK calls outside `app/adapters/providers/`.
 - Phase 1 has no automatic cross-provider fallback on `provider_unavailable`. Codified in ADR 0004.

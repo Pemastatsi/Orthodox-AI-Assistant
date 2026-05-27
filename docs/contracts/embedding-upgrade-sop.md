@@ -213,6 +213,51 @@ a new `safety_suite_run_id` and `retrieval_eval_run_id` against the same route, 
 chunk re-embed needed. A re-run that fails the `baseline − 0.02` floor triggers this
 SOP under a new snapshot.
 
+## Embedding input contract — Contextual Retrieval prefix
+
+When `Chunk.contextPrefix` is set (ADR-0009 Step 4), the embedding input is
+`contextPrefix + "\n\n" + text`, not `text` alone. The same concatenation is fed
+to the sparse (BM25) index so the contextual signal is symmetric across signals.
+Backfill workers (Stage 2) MUST honor this rule: a re-embed pass that ignores
+`contextPrefix` would silently degrade retrieval quality relative to the
+ingestion-time embeddings.
+
+Toggling Contextual Retrieval on or off for a tenant is a `corpusVersion` bump:
+the new vectors are not comparable to the old ones, the cache key changes (see
+`cache-key.md`), and a full re-embed is required. The dual-index window
+described above is the canonical mechanism for that re-embed.
+
+## REC-008 dual-index benchmark — BGE-M3 vs text-embedding-3-large vs current baseline
+
+REC-008 (frontier meta-evaluation 2026-05-22) opens a Phase-1 dual-index window
+comparing two embedding-model candidates against the certified
+`openai:text-embedding-3-small` baseline:
+
+- **BGE-M3** (Apache-2.0, open-weight) — unifies dense + sparse + ColBERT in
+  one model; 8192-token context unlocks late chunking (see below). Winning BGE-M3
+  retires three separate ModelRoutes and also unlocks REC-015 (ColBERT 3rd
+  retrieval signal) at no additional cost.
+- **text-embedding-3-large** (managed, OpenAI) — 3072d Matryoshka; +10.9 MIRACL
+  points over the current baseline. Does NOT unlock late chunking (the long-doc
+  context window is not large enough for Patristic chapters).
+
+Both candidates run through this SOP unchanged: dual-index, backfill, retrieval-
+eval and safety-suite gates, owner certification, cutover. The decision criteria
+and timeline are recorded in `docs/task_cards/phase1/T-009-embedding-upgrade.md`.
+
+## Late chunking — gated activation
+
+Late chunking (Jina 2024-09, arXiv:2409.04701) — embed the whole source document
+with a long-context model, then segment the embedding stream into chunks —
+preserves long-range Patristic argument coherence inside each chunk vector.
+Text boundaries are unchanged, so A6 quote-overlap is unaffected.
+
+Late chunking activates only after the dual-index benchmark above selects an
+embedding model whose context window can hold an entire source document (BGE-M3
+qualifies; `text-embedding-3-large` does not without sharding). Activation
+bumps `corpusVersion` and triggers a full re-embed under this SOP. Until
+activation, the chunking service emits per-chunk embeddings as today.
+
 ## What this SOP does NOT cover
 
 - **Reranker upgrades.** The reranker reads `ScoredChunk` objects, not embeddings, so a

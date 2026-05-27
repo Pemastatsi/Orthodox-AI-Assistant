@@ -83,6 +83,10 @@ Cohere Rerank v3 multilingual is a strong reranker with documented Greek-languag
 
 `CohereRerankerAdapter` is recorded as the Phase 1 managed-API alternative and is expected to be certified alongside the local implementation. The Protocol accommodates both with no implementation change.
 
+### Greek-stress fallback path (REC-016)
+
+`CohereRerankerAdapter` is the canonical Greek-stress fallback. Tenants whose retrieval-eval scores show measurably worse Polytonic-Greek rerank quality on `BgeRerankerLocal` get routed to Cohere Rerank v3.5 instead. The routing decision is per-tenant: a `tenant.config.rerankerRoutePreference: 'bge_local' | 'cohere'` field selects between two certified `ModelRoute` rows with `purpose='rerank'`. Certification of each route is gated independently on the retrieval-eval suite per `retrieval-eval-suite.md`; promoting a route to `certified` requires `role='owner'` per ADR-0004. The Cohere egress posture is documented in ADR-0005 §"Reranker egress" — reranker input is Confidential, not Sensitive, and the tenant-facing setting makes the egress choice explicit per tenant.
+
 ## When to reconsider
 
 - **Cross-encoder underperforms on the eval suite.** If `BgeRerankerLocal` fails to lift Recall@6 / Precision@6 / faithfulness above the hybrid-no-rerank baseline by a meaningful margin on the certified gold set, the reranker is removed from the active path (set the rerank `ModelRoute` to `deprecated`). Reranking with no measurable benefit is dead weight.

@@ -80,6 +80,18 @@ Bumping any of these versions invalidates the entire cache scope tied to it:
 - `configVersion` / `calendarVersion`: tenant-wide flush.
 - Tenant `status` change to non-`active`: keys still hash, but the auth layer rejects upstream so the cache is unreachable.
 
+## Provider Prompt Cache (Anthropic) — separate concern (REC-011, R-8 mitigation)
+
+The recipe above is the **app-side response cache** key: it produces a stable identifier for an entire `VerifiedResponse` so we can serve repeat queries without rerunning A1–A6. It is distinct from the **Anthropic prompt cache**, which is a provider-side cache that returns intermediate token computation for repeated prompt prefixes within a session (see `provider-interface.md` §JSON Mode → Prompt caching).
+
+The Anthropic prompt cache is content-keyed by Anthropic on their side: the cache hit/miss decision is made from a hash of `(model_id, system_block_content, cached_block_content)`. Because the A5 corpus prefix block IS the retrieved chunk content, any change to the chunk set, chunk text, or chunk ordering invalidates the prompt cache automatically. Our obligations to keep the two caches consistent:
+
+1. **Deterministic chunk ordering inside the cached block.** The chunks fed into the A5 prefix MUST be sorted by `chunk_id` (lexicographic ASCII order). Any randomization, score-order shuffling, or A4 admission-order leaks reorder the bytes and destroy the prompt cache hit rate without changing the result.
+2. **`corpusVersion` bumps cascade.** When a chunk is approved, unapproved, or re-ingested, `corpusVersion` is bumped. The next A5 call produces a different chunk content, the Anthropic prompt cache misses (correctly), and the app-side response cache also misses (because `corpusVersion` is in the response cache key above). The two caches stay coherent at the corpus-bump boundary.
+3. **Follow-ups within a session.** The session cache key (`sessionHash != null`) scopes the app-side cache; the Anthropic prompt cache stays warm across the follow-up turn because the corpus prefix is unchanged. If the corpus changes mid-session, `corpusVersion` bumps and both caches invalidate together.
+
+R-8 in the 2026-05-22 risk register names "stale corpus prefixes on a `corpusVersion` bump" as the concern. The mitigation is: do not roll your own prompt-cache invalidation logic; rely on Anthropic's content-keying and our `corpusVersion`-bump cascade. The test that codifies this is the V3 Greek-casefold reference vector (`tests/unit/test_cache_key.py`), reproduced against any cache implementation before promoting it to a route.
+
 The cache itself does not delete old entries; expired keys roll off via the 1-hour TTL (per ADR 0005). Active key changes simply stop hitting old entries.
 
 ## Reference Test Vectors

@@ -55,6 +55,37 @@ Every emitted chunk MUST carry:
 
 `ParsedBlock`s with `block_type == "footnote"` are appended to the nearest preceding paragraph chunk, not emitted as standalone chunks. Standalone footnote chunks would be too short to embed meaningfully, would inflate the vector store, and would surface as low-signal retrieval hits.
 
+### Step 4 — Contextual Prefix (ingestion-time, per-chunk)
+
+After chunking and before embedding, every chunk receives a **contextual prefix**: a 50–100-token summary placing the chunk inside its source document. The prefix is produced by a single LLM call per chunk against a `ModelRoute` with `purpose='context_prefix'` (default: Claude Haiku 4.5 per D-MDL-002). The source-document preamble shared by all chunks of one source is cached via Anthropic prompt caching to amortize cost (Anthropic 2024-09 "Introducing Contextual Retrieval" reports ≈$1.02/M doc tokens with caching).
+
+The prefix is stored on `chunk.contextPrefix` (optional field, ≤200 chars, see `docs/schemas/chunk.schema.json`) and **concatenated to the chunk text at index time** for both the dense embedding and BM25 index. The pristine `chunk.text` is preserved unchanged for A6 quote-overlap (which already normalizes per `docs/contracts/quote-overlap-algorithm.md`).
+
+**This step is ingestion-time enrichment, not query-time rewriting.** It does not violate ADR-0007 — see ADR-0007 §"Clarification — chunk-side ingestion enrichment is not query rewriting."
+
+Empirically the prefix reduces retrieval-failure rate by ≈49% on Anthropic's benchmark, ≈67% combined with reranking. Phase 1 enables it by default for all new ingestions; toggling it off requires a `corpusVersion` bump and re-ingestion.
+
+### Late Chunking (gated, Phase 1 candidate per REC-014)
+
+Late chunking — embed the whole source document with a long-context embedding model, then segment the embedding stream into chunks — preserves long-range Patristic argument coherence inside each chunk vector. Text boundaries are unchanged, so A6 quote-overlap is unaffected.
+
+Late chunking is **gated on the outcome of the dual-index embedding benchmark** (REC-008, see `docs/task_cards/phase1/T-009-embedding-upgrade.md`). It is activated only if the certified embedding `ModelRoute` supports a context window large enough to embed entire source documents (≥8192 tokens for typical Patristic chapters; BGE-M3 qualifies, `text-embedding-3-large` does not without sharding). Activation bumps `corpusVersion` and triggers a full re-embed.
+
+### Sequence in the ingestion pipeline
+
+```
+ParsedBlock stream  ─►  Heading detection  ─►  Boundary-aware chunking
+                                                       │
+                                                       ▼
+                                          Step 4: contextual prefix (per chunk)
+                                                       │
+                                                       ▼
+                                        Embedding (dense + sparse, optional late)
+                                                       │
+                                                       ▼
+                                              Upsert to VectorStore
+```
+
 ## Why this matters for Phase 1 exit criteria
 
 A6's quote-overlap algorithm (`docs/contracts/quote-overlap-algorithm.md`) requires that A5's cited text overlap with the retrieved chunk by at least 70% by default. Fixed-size chunking systematically reduces the overlap floor for long quotations — particularly scriptural quotations and conciliar canons, both of which are common in Patristic argument. Hierarchical chunking keeps these quotations whole inside a single chunk, raising the achievable overlap floor and making the 70% threshold a meaningful safety check rather than an obstacle.
