@@ -27,14 +27,13 @@ Design:
   try/except in production code, so the absence of a Postgres connection in
   CI does not break the request — only persistence side-effects.
 
-Case 17 (`no_source_quote`) is currently `xfail`: at the wire level case 10
-and case 17 produce identical `ClassifiedQuery` shape (sensitivity=normal,
-handling=block_with_redirect, no risk flags), so `_resolve_hard_trigger_case_class`
-in `app/api/v1/query.py` cannot differentiate them and emits
-`fabrication_attempt` (case 10's canonical text) for both. Fixing this needs a
-route-level signal (a new `RiskFlag`, a `CaseClass` field on `ClassifiedQuery`,
-or a `safety_match.rule_id` dispatch). Tracked separately; see the xfail
-marker below.
+Case 17 (`no_source_quote`) was originally `xfail` in B.1 because the wire-level
+`ClassifiedQuery` is identical for case 10 and case 17 (both: sensitivity=normal,
+handling=block_with_redirect, no risk flags). The follow-up to B.1 adds a
+regex-based disambiguation in `_resolve_hard_trigger_case_class()` in
+`app/api/v1/query.py` so case 17 now emits the canonical `no_source_quote`
+bounded fallback. The regex is intentionally narrow — see the constant
+`_NO_SOURCE_QUOTE_RE` in that module.
 """
 
 from __future__ import annotations
@@ -270,28 +269,10 @@ def pipeline_client(request: pytest.FixtureRequest) -> Iterator[TestClient]:
     yield from _install_overrides(case)
 
 
-def _case_param(case: dict[str, Any]) -> Any:
-    if case["id"] == 17:
-        return pytest.param(
-            case,
-            id=f"case-{case['id']:02d}",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "Case 17 (no_source_quote) is wire-indistinguishable from case 10 "
-                    "(fabrication_attempt): both produce ClassifiedQuery with "
-                    "sensitivity=normal, handling=block_with_redirect, risk_flags=[]. "
-                    "_resolve_hard_trigger_case_class() in app/api/v1/query.py emits "
-                    "fabrication_attempt for both. Resolving requires extending the A1 "
-                    "contract (a new RiskFlag, a CaseClass field on ClassifiedQuery, "
-                    "or a safety_match.rule_id dispatch). Tracked as a follow-up to T-006."
-                ),
-            ),
-        )
-    return pytest.param(case, id=f"case-{case['id']:02d}")
-
-
-_PARAMS = [_case_param(case) for case in CANONICAL_SAFETY_CASES]
+_PARAMS = [
+    pytest.param(case, id=f"case-{case['id']:02d}")
+    for case in CANONICAL_SAFETY_CASES
+]
 
 
 @pytest.mark.parametrize("pipeline_client", _PARAMS, indirect=True)

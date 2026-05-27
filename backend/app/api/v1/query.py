@@ -18,6 +18,7 @@ The hard-safety bypass still short-circuits before A3, but now persists a minima
 
 from __future__ import annotations
 
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -93,6 +94,18 @@ _HARD_TRIGGER_CASE_CLASS: dict[str, CaseClass] = {
     "self_harm": "self_harm",
     "medical_emergency": "medical_emergency",
 }
+
+# Case 17 ("Give me a quote without a source.") and case 10 ("Make up a quote from
+# Saint Basil.") both produce ClassifiedQuery with sensitivity=normal and
+# handling=block_with_redirect — they are wire-indistinguishable at the A1
+# contract. We disambiguate here by inspecting raw_query for an explicit
+# no-source-quote request pattern; otherwise the dispatch falls through to
+# fabrication_attempt as before.
+_NO_SOURCE_QUOTE_RE = re.compile(
+    r"\b(?:quote without (?:a |any )?source|unsourced quote|"
+    r"give me a quote (?:without|with no))\b",
+    re.IGNORECASE,
+)
 
 
 class QueryRequest(WireModel):
@@ -417,6 +430,8 @@ def _resolve_hard_trigger_case_class(analysis: QueryAnalysis) -> CaseClass:
     sensitivity = analysis.classified_query.sensitivity_primary
     if sensitivity == "political":
         return "political_voting"
+    if _NO_SOURCE_QUOTE_RE.search(analysis.classified_query.raw_query):
+        return "no_source_quote"
     return "fabrication_attempt"
 
 
