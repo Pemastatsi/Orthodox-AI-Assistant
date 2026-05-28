@@ -1,60 +1,372 @@
-# Sensitivity keyword stub. Conservative format-only rules.
-# Real Greek + pastoral phrasing requires founder sign-off (safety-config-format.md).
-# Each rule change requires a safety-suite run.
+# Sensitivity keywords — v1 real ruleset (T-007).
+#
+# Founder approver:        peterstavrinides0@gmail.com
+# Greek-language reviewer: peterstavrinides0@gmail.com (dual role per T-007 §Owners)
+# Engineering reviewer:    on-call reviewer (structural / startup self-test)
+#
+# Coverage matrix (per docs/contracts/safety-config-format.md §Phase 2 Launch Gate):
+#   sensitivityPrimary  | EN rules                                                    | EL rules
+#   --------------------+-------------------------------------------------------------+----------------------
+#   pastoral_advice     | sk_pastoral_advice_divorce_en_001                           | sk_pastoral_advice_divorce_el_001
+#                       | sk_pastoral_advice_marriage_en_001
+#                       | sk_pastoral_advice_priest_en_001
+#                       | sk_pastoral_advice_personal_en_001
+#                       | sk_minor_protection_en_001/002/003 (also riskFlag)
+#   political           | sk_political_voting_en_001/002                              | sk_political_voting_el_001
+#                       | sk_political_party_en_001
+#                       | sk_political_endorsement_en_001
+#   medical             | sk_medical_advice_en_001/002                                | sk_medical_advice_el_001
+#                       | sk_medical_illness_en_001
+#                       | sk_medical_depression_en_001
+#   comparative_religion| sk_comparative_religion_en_001/002/003/004                  | sk_comparative_religion_el_001
+#   canonical_dispute   | sk_canonical_dispute_en_001/002/003/004                     | sk_canonical_dispute_el_001
+#                       | sk_canonical_dispute_active_en_001 (also riskFlag)
+#   other_sensitive     | sk_other_sensitive_sexuality_en_001                         | (deferred)
+#                       | sk_other_sensitive_abortion_en_001
+#                       | sk_other_sensitive_race_en_001
+#
+#   riskFlag                  | EN rules                                              | EL rules
+#   --------------------------+-------------------------------------------------------+-------------------------------
+#   self_harm (hard)          | sk_self_harm_en_001/002/003                           | sk_self_harm_el_001
+#   medical_emergency (hard)  | sk_medical_emergency_en_001/002/003                   | sk_medical_emergency_el_001
+#   canonical_dispute_active  | sk_canonical_dispute_active_en_001 (candidate)        | (deferred)
+#   minor_protection          | sk_minor_protection_en_001/002/003                    | (deferred)
+#
+# Ordering discipline: hard triggers first (EN then EL), then soft candidates grouped
+# by sensitivityPrimary (EN then EL). First-match-wins; existing rule IDs preserved.
+#
+# EL coverage is a conservative first pass — narrow lexical patterns chosen to avoid
+# false positives in Orthodox theological discourse (e.g. patristic quotes about
+# death must not trigger self-harm rules). Iterate from production traces.
 
-version: "2026-05-01.1"
+version: "2026-05-28.1"
 schema: "1"
 regex_flavor: python_re
 ordering: first_match_wins
 languages: [en, el]
 
 rules:
-  # --- Hard safety triggers (bypass two-stage gate) ---
+
+  # ===========================================================================
+  # Hard triggers — self_harm (bypass two-stage gate; force block_with_redirect)
+  # ===========================================================================
   - id: sk_self_harm_en_001
     pattern: "\\b(?:kill myself|end my life|suicid(?:e|al))\\b"
     sensitivity: pastoral_advice
     risk_flags: [self_harm]
     hard_trigger: true
     lang: en
-    notes: "Maps safety case 12. Always block_with_redirect."
+    notes: "Maps safety case 12. Always block_with_redirect. Unchanged from stub."
 
+  - id: sk_self_harm_en_002
+    pattern: "\\b(?:want to die|wish (?:i was|i were) dead|don'?t want to (?:be alive|live (?:anymore|any longer)?))\\b"
+    sensitivity: pastoral_advice
+    risk_flags: [self_harm]
+    hard_trigger: true
+    lang: en
+
+  - id: sk_self_harm_en_003
+    pattern: "\\b(?:no reason to live|take my (?:own )?life|hurt myself|cut myself|self[- ]harm)\\b"
+    sensitivity: pastoral_advice
+    risk_flags: [self_harm]
+    hard_trigger: true
+    lang: en
+
+  - id: sk_self_harm_el_001
+    pattern: "\\b(?:θέλω να πεθάνω|να αυτοκτονήσω|αυτοκτονί(?:α|ας|ες))\\b"
+    sensitivity: pastoral_advice
+    risk_flags: [self_harm]
+    hard_trigger: true
+    lang: el
+    notes: "Modern Greek 1st-person phrasings only. Reviewer must verify these do not false-positive on patristic discourse about death (πεθάνω = 'I die', not the general noun θάνατος)."
+
+  # ===========================================================================
+  # Hard triggers — medical_emergency
+  # ===========================================================================
   - id: sk_medical_emergency_en_001
     pattern: "\\b(?:chest pain|stroke symptoms|overdose|cannot breathe)\\b"
     sensitivity: medical
     risk_flags: [medical_emergency]
     hard_trigger: true
     lang: en
-    notes: "Medical emergencies always route to emergency-services redirect."
+    notes: "Unchanged from stub."
 
-  # --- Soft sensitivity candidates (require A1 confirmation) ---
+  - id: sk_medical_emergency_en_002
+    pattern: "\\b(?:heart attack|can'?t breathe|not breathing|bleeding out|unconscious)\\b"
+    sensitivity: medical
+    risk_flags: [medical_emergency]
+    hard_trigger: true
+    lang: en
+
+  - id: sk_medical_emergency_en_003
+    pattern: "\\b(?:choking|having a seizure|severe (?:bleeding|allergic reaction|chest pain))\\b"
+    sensitivity: medical
+    risk_flags: [medical_emergency]
+    hard_trigger: true
+    lang: en
+
+  - id: sk_medical_emergency_el_001
+    pattern: "\\b(?:πόνος στο στήθος|έμφραγμα|εγκεφαλικ(?:ό|ού))\\b"
+    sensitivity: medical
+    risk_flags: [medical_emergency]
+    hard_trigger: true
+    lang: el
+
+  # ===========================================================================
+  # Soft candidates — political (A1 confirms via LLM)
+  # ===========================================================================
   - id: sk_political_voting_en_001
     pattern: "\\b(?:who should i vote|which candidate|who to vote for)\\b"
     sensitivity: political
     risk_flags: []
     hard_trigger: false
     lang: en
-    notes: "Maps safety case 6. block_with_redirect after confirmation."
+    notes: "Maps safety case 6. block_with_redirect after confirmation. Unchanged from stub."
 
+  - id: sk_political_voting_en_002
+    pattern: "\\b(?:tell me who to vote|should i vote for (?:the )?(?:democrat|republican|candidate)|which (?:party|candidate) (?:should|to))\\b"
+    sensitivity: political
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_political_party_en_001
+    pattern: "\\b(?:which political party|what party should|right party for (?:a )?(?:christian|orthodox)|orthodox christian party)\\b"
+    sensitivity: political
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_political_endorsement_en_001
+    pattern: "\\b(?:endorse a (?:candidate|party|politician)|church (?:endorse|supports?) (?:a |the )?(?:candidate|party))\\b"
+    sensitivity: political
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_political_voting_el_001
+    pattern: "\\b(?:ποιον να ψηφίσω|ποιο κόμμα να ψηφίσω)\\b"
+    sensitivity: political
+    risk_flags: []
+    hard_trigger: false
+    lang: el
+
+  # ===========================================================================
+  # Soft candidates — pastoral_advice
+  # ===========================================================================
   - id: sk_pastoral_advice_divorce_en_001
     pattern: "\\b(?:should i divorce|leave my (?:husband|wife|spouse))\\b"
     sensitivity: pastoral_advice
     risk_flags: []
     hard_trigger: false
     lang: en
-    notes: "Maps safety case 3. Reframe to teaching."
+    notes: "Maps safety case 3. Reframe to teaching. Unchanged from stub."
 
-  - id: sk_medical_advice_en_001
-    pattern: "\\b(?:cure (?:my|the) (?:illness|disease|cancer)|fasting cure)\\b"
-    sensitivity: medical
+  - id: sk_pastoral_advice_marriage_en_001
+    pattern: "\\b(?:should i (?:marry|stay married|separate from|file for divorce|get divorced)|thinking about (?:divorce|leaving my (?:spouse|husband|wife)))\\b"
+    sensitivity: pastoral_advice
     risk_flags: []
     hard_trigger: false
     lang: en
-    notes: "Maps safety case 13. answer_with_disclaimer."
 
+  - id: sk_pastoral_advice_priest_en_001
+    pattern: "\\b(?:is my priest (?:wrong|right|sinning|heretical|incorrect)|disagree with my priest|priest (?:is|was) wrong|my priest told me)\\b"
+    sensitivity: pastoral_advice
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 15. Reframe to teaching about authority and obedience."
+
+  - id: sk_pastoral_advice_personal_en_001
+    pattern: "\\b(?:what should i do (?:about|with) my (?:marriage|husband|wife|spouse|family|life)|advise me (?:about|on) my (?:marriage|relationship))\\b"
+    sensitivity: pastoral_advice
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_pastoral_advice_divorce_el_001
+    pattern: "\\b(?:να (?:πάρω )?διαζύγιο|να χωρίσω (?:τον|την) (?:σύζυγο|άντρα|γυναίκα))\\b"
+    sensitivity: pastoral_advice
+    risk_flags: []
+    hard_trigger: false
+    lang: el
+
+  # ===========================================================================
+  # Soft candidates — pastoral_advice with minor_protection risk flag
+  # ===========================================================================
   - id: sk_minor_protection_en_001
     pattern: "\\b(?:my (?:child|son|daughter)|the children) (?:should|need|asked)\\b"
     sensitivity: pastoral_advice
     risk_flags: [minor_protection]
     hard_trigger: false
     lang: en
-    notes: "Maps safety case 18. Reframe + extra care for minor-context guidance."
+    notes: "Maps safety case 18. Reframe + extra care for minor-context guidance. Unchanged from stub."
+
+  - id: sk_minor_protection_en_002
+    pattern: "\\b(?:what should i tell my (?:child|son|daughter|kid|children|kids)|how (?:do|should) i teach my (?:child|kid|children|son|daughter) (?:about|to))\\b"
+    sensitivity: pastoral_advice
+    risk_flags: [minor_protection]
+    hard_trigger: false
+    lang: en
+
+  - id: sk_minor_protection_en_003
+    pattern: "\\b(?:my (?:young |little )?children (?:are|want|asked)|the kids (?:asked|want|need))\\b"
+    sensitivity: pastoral_advice
+    risk_flags: [minor_protection]
+    hard_trigger: false
+    lang: en
+
+  # ===========================================================================
+  # Soft candidates — medical
+  # ===========================================================================
+  - id: sk_medical_advice_en_001
+    pattern: "\\b(?:cure (?:my|the) (?:illness|disease|cancer)|fasting cure)\\b"
+    sensitivity: medical
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 13. answer_with_disclaimer. Unchanged from stub."
+
+  - id: sk_medical_advice_en_002
+    pattern: "\\b(?:fast(?:ing)? (?:cure|heal|treat|fix|will (?:cure|heal)) my|will fasting (?:cure|heal|treat))\\b"
+    sensitivity: medical
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_medical_illness_en_001
+    pattern: "\\b(?:treat (?:my )?(?:illness|cancer|disease|sickness|condition)|spiritual cure for|heal my (?:cancer|disease|illness))\\b"
+    sensitivity: medical
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_medical_depression_en_001
+    pattern: "\\b(?:about depression|cure depression|treat (?:my )?depression|deal with (?:my )?depression|fathers (?:say|teach|write).*depression)\\b"
+    sensitivity: medical
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 8. answer_with_disclaimer."
+
+  - id: sk_medical_advice_el_001
+    pattern: "\\b(?:να (?:θεραπεύσω|γιατρέψω))\\b"
+    sensitivity: medical
+    risk_flags: []
+    hard_trigger: false
+    lang: el
+
+  # ===========================================================================
+  # Soft candidates — comparative_religion
+  # ===========================================================================
+  - id: sk_comparative_religion_en_001
+    pattern: "\\b(?:compared? (?:to|with) (?:catholic(?:ism)?|protestant(?:ism)?|roman catholic|baptist|methodist|presbyterian|lutheran))\\b"
+    sensitivity: comparative_religion
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_comparative_religion_en_002
+    pattern: "\\b(?:orthodox(?:y|y's)? (?:vs|versus|compared (?:to|with)|different from) (?:catholic|protestant|buddh|hindu|islam|muslim|jew))\\b"
+    sensitivity: comparative_religion
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_comparative_religion_en_003
+    pattern: "\\b(?:is yoga|practice yoga|compatible with (?:buddh|hindu|islam|judaism|yoga)|orthodox.*(?:yoga|meditation practice))\\b"
+    sensitivity: comparative_religion
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 9."
+
+  - id: sk_comparative_religion_en_004
+    pattern: "\\b(?:differences? between orthodox(?:y)? and (?:catholic|protestant|baptist)|how (?:does|is) orthodox(?:y)? (?:compare|different))\\b"
+    sensitivity: comparative_religion
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 5."
+
+  - id: sk_comparative_religion_el_001
+    pattern: "\\b(?:Καθολικ(?:ή|ή Εκκλησία|οί|ισμός|ισμό)|Προτεσταντισμό(?:ς|ν|υ))\\b"
+    sensitivity: comparative_religion
+    risk_flags: []
+    hard_trigger: false
+    lang: el
+
+  # ===========================================================================
+  # Soft candidates — canonical_dispute
+  # ===========================================================================
+  - id: sk_canonical_dispute_en_001
+    pattern: "\\b(?:toll-?houses?|aerial toll-?houses?|tollhouse(?:s)?)\\b"
+    sensitivity: canonical_dispute
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 11."
+
+  - id: sk_canonical_dispute_en_002
+    pattern: "\\b(?:ancestral sin (?:and|vs\\.?|versus) original sin|original sin (?:and|vs\\.?|versus) ancestral|difference between (?:ancestral|original) sin)\\b"
+    sensitivity: canonical_dispute
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+    notes: "Maps safety case 16."
+
+  - id: sk_canonical_dispute_en_003
+    pattern: "\\b(?:sedevacant|true church|only true church|which church is (?:true|right))\\b"
+    sensitivity: canonical_dispute
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_canonical_dispute_en_004
+    pattern: "\\b(?:ecumenical (?:patriarch|movement|council)|(?:moscow|constantinople).{0,40}(?:moscow|constantinople))\\b"
+    sensitivity: canonical_dispute
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_canonical_dispute_el_001
+    pattern: "\\b(?:τελώνια|αληθινή εκκλησία)\\b"
+    sensitivity: canonical_dispute
+    risk_flags: []
+    hard_trigger: false
+    lang: el
+
+  # ===========================================================================
+  # Soft candidates — canonical_dispute_active risk flag
+  # (Not hard-trigger: deserves careful pastoral handling, not auto-block.)
+  # ===========================================================================
+  - id: sk_canonical_dispute_active_en_001
+    pattern: "\\b(?:my (?:bishop|priest|jurisdiction|patriarch) is (?:heretical|in heresy|in schism)|in schism with|broke communion with|jurisdiction is (?:heretical|schismatic))\\b"
+    sensitivity: canonical_dispute
+    risk_flags: [canonical_dispute_active]
+    hard_trigger: false
+    lang: en
+
+  # ===========================================================================
+  # Soft candidates — other_sensitive (catch-all for sensitive topics)
+  # ===========================================================================
+  - id: sk_other_sensitive_sexuality_en_001
+    pattern: "\\b(?:homosexual(?:ity)?|same-sex (?:marriage|relations|attraction)|gay marriage|transgender|gender identity|gender dysphoria)\\b"
+    sensitivity: other_sensitive
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_other_sensitive_abortion_en_001
+    pattern: "\\b(?:abortion|abort (?:my|a|the) (?:pregnancy|baby|child|fetus)|terminating (?:my|a|the) pregnancy)\\b"
+    sensitivity: other_sensitive
+    risk_flags: []
+    hard_trigger: false
+    lang: en
+
+  - id: sk_other_sensitive_race_en_001
+    pattern: "\\b(?:racial (?:issues|tensions|conflict|justice)|racism in (?:the church|orthodoxy)|ethnic (?:tensions|conflict) in (?:the church|orthodoxy))\\b"
+    sensitivity: other_sensitive
+    risk_flags: []
+    hard_trigger: false
+    lang: en

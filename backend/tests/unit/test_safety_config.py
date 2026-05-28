@@ -17,6 +17,26 @@ from app.domain.services.safety_config import (
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _CONFIG_PATH = _REPO_ROOT / "config" / "sensitivity_keywords.yaml"
 
+# Inline stub fixture for tests that must validate against the stub baseline
+# (T-007 replaced the shipped YAML with founder-approved real rules, so the
+# shipped file no longer carries STUB_VERSION). These inline fixtures keep the
+# stub-baseline contract under test without re-introducing stub content into
+# the shipped config.
+_INLINE_STUB_YAML = f"""
+version: "{STUB_VERSION}"
+schema: "1"
+regex_flavor: python_re
+ordering: first_match_wins
+languages: [en]
+rules:
+  - id: sk_self_harm_en_001
+    pattern: "\\\\b(?:kill myself|end my life|suicid(?:e|al))\\\\b"
+    sensitivity: pastoral_advice
+    risk_flags: [self_harm]
+    hard_trigger: true
+    lang: en
+"""
+
 
 def _write(tmp_path: Path, body: str) -> Path:
     path = tmp_path / "rules.yaml"
@@ -24,16 +44,25 @@ def _write(tmp_path: Path, body: str) -> Path:
     return path
 
 
-def test_load_shipped_stub_succeeds() -> None:
+def test_load_shipped_succeeds() -> None:
+    """Shipped sensitivity_keywords.yaml loads, validates, and preserves the
+    canonical self-harm hard trigger (`sk_self_harm_en_001`). Asserts the
+    contract that survives both stub and real-config eras."""
     config = load_sensitivity_keywords(_CONFIG_PATH)
-    assert config.version == STUB_VERSION
+    assert config.version  # non-empty
     assert len(config.rules) >= 5
     ids = [r.rule_id for r in config.rules]
     assert len(set(ids)) == len(ids)
-    # Self-harm rule is the canonical hard trigger.
     self_harm = next(r for r in config.rules if r.rule_id == "sk_self_harm_en_001")
     assert self_harm.hard_trigger is True
     assert "self_harm" in self_harm.risk_flags
+
+
+def test_load_inline_stub_carries_stub_version(tmp_path: Path) -> None:
+    """The stub-baseline contract (version == STUB_VERSION) is preserved
+    against an inline fixture, decoupled from the shipped YAML."""
+    config = load_sensitivity_keywords(_write(tmp_path, _INLINE_STUB_YAML))
+    assert config.version == STUB_VERSION
 
 
 def test_hard_trigger_matches_self_harm_phrasing() -> None:
@@ -215,15 +244,27 @@ rules:
     assert match is not None and match.rule_id == "el_rule"
 
 
-def test_assert_production_ready_blocks_stub_in_production() -> None:
-    config = load_sensitivity_keywords(_CONFIG_PATH)
+def test_assert_production_ready_blocks_stub_in_production(tmp_path: Path) -> None:
+    """Production must refuse to boot against a config carrying STUB_VERSION,
+    per Phase 1 → 2 exit criterion #9. Tested against an inline stub fixture so
+    this contract holds independently of what version the shipped YAML carries."""
+    config = load_sensitivity_keywords(_write(tmp_path, _INLINE_STUB_YAML))
     with pytest.raises(SafetyConfigError, match="stub version"):
         assert_production_ready(config, app_env="production")
 
 
-def test_assert_production_ready_allows_stub_in_development() -> None:
-    config = load_sensitivity_keywords(_CONFIG_PATH)
+def test_assert_production_ready_allows_stub_in_development(tmp_path: Path) -> None:
+    """Development env passes through even on stub versions — production is the
+    only gate."""
+    config = load_sensitivity_keywords(_write(tmp_path, _INLINE_STUB_YAML))
     assert_production_ready(config, app_env="development")  # does not raise
+
+
+def test_assert_production_ready_allows_shipped_in_production() -> None:
+    """Shipped sensitivity_keywords.yaml (post-T-007, real rules) must NOT be
+    blocked in production — this is the gate releasing under exit criterion #9."""
+    config = load_sensitivity_keywords(_CONFIG_PATH)
+    assert_production_ready(config, app_env="production")  # does not raise
 
 
 def test_missing_file_raises(tmp_path: Path) -> None:
