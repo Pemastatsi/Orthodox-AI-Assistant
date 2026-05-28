@@ -54,3 +54,6 @@ package = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "live_llm: test that calls a real LLM provider; requires OPENROUTER_API_KEY",
+]

@@ -23,9 +23,15 @@ Two skip conditions:
      per Phase 1 → 2 exit criterion #9. (APP_ENV check is enforced at startup
      separately; here we skip the test to avoid false passes on stub configs.)
 """
+import os
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("app", reason="awaits T-001 backend scaffold")
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SK_PATH = _REPO_ROOT / "config" / "sensitivity_keywords.yaml"
 
 # ---------------------------------------------------------------------------
 # Stub-config skip guard
@@ -270,41 +276,139 @@ def test_paraphrase_dict_expected_outcomes_have_all_20_cases():
     )
 
 
-def test_paraphrases_produce_same_handling_as_canonical():
-    """For each case, A1 classifier must return the same expected_handling
-    and expected_sensitivity for every paraphrase as for the canonical query.
+def test_paraphrases_regex_layer_safety_invariants():
+    """Deterministic safety invariants on PARAPHRASES (no LLM).
 
-    Skipped when: (a) app package not present, (b) sensitivity_keywords.yaml
-    is still stub version 2026-05-01.1 (real paraphrases require real configs,
-    per Phase 1 → 2 exit criterion #9).
+    Two invariants the regex layer in `config/sensitivity_keywords.yaml` MUST hold for
+    every paraphrase regardless of LLM behavior:
+      (a) Every case-12 paraphrase hits a `hard_trigger: true` rule whose risk_flags
+          include `self_harm` — keyword evasion at the regex layer is the highest-cost
+          safety failure.
+      (b) No `expected_sensitivity == "normal"` paraphrase false-positives onto any
+          `hard_trigger` rule — a regression here would block harmless queries.
+
+    Runs in per-PR CI (no credentials needed). The semantic / non-hard-trigger
+    classification gate is `test_paraphrases_produce_same_handling_as_canonical`,
+    which runs on main / workflow_dispatch with OPENROUTER_API_KEY.
     """
     if _configs_are_stub():
         pytest.skip(
             "pending T-007 real-safety-configs: sensitivity_keywords.yaml is still "
-            f"stub version {_STUB_CONFIG_VERSION!r}; paraphrase tests require "
-            "founder-approved config to be meaningful."
+            f"stub version {_STUB_CONFIG_VERSION!r}."
         )
-    pytest.skip(
-        "live A1 classifier paraphrase test deferred: PARAPHRASES dict is filled "
-        "(T-007), but exercising the real provider route certified for "
-        "purpose='query_analyzer' requires LLM credentials in CI secrets and a "
-        "cost budget. Tracked as a follow-up to T-007. See "
-        "docs/contracts/safety-config-format.md §Paraphrase Coverage."
+    from app.domain.services.safety_config import (
+        load_sensitivity_keywords,
+        match_sensitivity,
     )
-    # When implementation lands, replace with:
-    # from app.domain.services.query_analyzer import QueryAnalyzer
-    # analyzer = QueryAnalyzer(...)
-    # for case_id, paraphrases in PARAPHRASES.items():
-    #     expected = _EXPECTED_BY_CASE_ID[case_id]
-    #     for paraphrase in paraphrases:
-    #         result = analyzer.classify(paraphrase)
-    #         assert result.sensitivityPrimary == expected["expected_sensitivity"], (
-    #             f"[case {case_id}] Paraphrase {paraphrase!r}: "
-    #             f"sensitivityPrimary={result.sensitivityPrimary!r}, "
-    #             f"expected {expected['expected_sensitivity']!r}"
-    #         )
-    #         assert result.handling == expected["expected_handling"], (
-    #             f"[case {case_id}] Paraphrase {paraphrase!r}: "
-    #             f"handling={result.handling!r}, "
-    #             f"expected {expected['expected_handling']!r}"
-    #         )
+
+    sk = load_sensitivity_keywords(_SK_PATH)
+    failures: list[str] = []
+    for case_id, paraphrases in PARAPHRASES.items():
+        expected = _EXPECTED_BY_CASE_ID[case_id]
+        for paraphrase in paraphrases:
+            m = match_sensitivity(paraphrase, sk)
+            if case_id == 12:
+                if not (m and m.hard_trigger and "self_harm" in m.risk_flags):
+                    failures.append(
+                        f"[case 12] {paraphrase!r} did not hit a self_harm "
+                        f"hard_trigger; got {m!r}"
+                    )
+            elif expected["expected_sensitivity"] == "normal":
+                if m is not None and m.hard_trigger:
+                    failures.append(
+                        f"[case {case_id}] normal paraphrase {paraphrase!r} "
+                        f"false-positive on hard_trigger rule {m.rule_id}"
+                    )
+    assert not failures, "Regex-layer safety invariants violated:\n" + "\n".join(
+        failures
+    )
+
+
+@pytest.mark.live_llm
+async def test_paraphrases_produce_same_handling_as_canonical():
+    """Live A1 paraphrase gate.
+
+    For each case in PARAPHRASES, the live A1 classifier MUST produce
+    sensitivity_primary and handling values equal to _EXPECTED_BY_CASE_ID[case_id].
+
+    NOTE on certified route: this test routes calls through OpenRouter
+    (settings.openrouter_model_a1a2, default 'anthropic/claude-haiku-4.5') rather
+    than direct Anthropic. Production A1 routing is unchanged (`_get_anthropic_provider`
+    in `app/api/v1/_deps.py`). The underlying model is the same Haiku 4.5; we trade
+    exact route equivalence for billing consolidation. The OpenRouter adapter uses
+    OpenAI-compatible tool calling for schema-equivalent reliability to Anthropic's
+    tool-use mode.
+
+    Env knobs:
+      - OPENROUTER_API_KEY      : required; test skips without it
+      - OAA_PARAPHRASE_BUDGET   : cap on the number of paraphrase calls per run
+                                  (default unlimited; useful for cost-capping in CI)
+
+    Skipped when: stub configs are loaded OR OPENROUTER_API_KEY is unset.
+    """
+    if _configs_are_stub():
+        pytest.skip(
+            "pending T-007 real-safety-configs: sensitivity_keywords.yaml is still "
+            f"stub version {_STUB_CONFIG_VERSION!r}."
+        )
+    if not os.getenv("OPENROUTER_API_KEY"):
+        pytest.skip(
+            "OPENROUTER_API_KEY not set; live A1 paraphrase test requires credentials."
+        )
+
+    from app.adapters.providers.openrouter_provider import OpenRouterProvider
+    from app.core.auth import make_dev_principal
+    from app.core.config import get_settings
+    from app.domain.agents.query_analyzer import QueryAnalyzer
+    from app.domain.services.safety_config import load_sensitivity_keywords
+
+    settings = get_settings()
+    sk_config = load_sensitivity_keywords(_SK_PATH)
+    provider = OpenRouterProvider(settings=settings)
+    analyzer = QueryAnalyzer(
+        provider=provider,
+        safety_config=sk_config,
+        prompt_version=settings.active_prompt_version_a1a2,
+        model_route_id=settings.active_model_route_a1a2,
+    )
+    principal = make_dev_principal(
+        tenant_id="tn_paraphrase_test", role="member", user_id="usr_paraphrase_test"
+    )
+
+    budget_raw = os.getenv("OAA_PARAPHRASE_BUDGET", "")
+    budget = int(budget_raw) if budget_raw.isdigit() else None
+
+    failures: list[str] = []
+    calls = 0
+    for case_id, paraphrases in PARAPHRASES.items():
+        expected = _EXPECTED_BY_CASE_ID[case_id]
+        for paraphrase in paraphrases:
+            if budget is not None and calls >= budget:
+                break
+            calls += 1
+            result = await analyzer.analyze(
+                query_text=paraphrase,
+                principal=principal,
+                run_id=f"run_paraphrase_{case_id}_{calls}",
+            )
+            actual_sensitivity = result.classified_query.sensitivity_primary
+            actual_handling = result.classified_query.handling
+            if actual_sensitivity != expected["expected_sensitivity"]:
+                failures.append(
+                    f"[case {case_id}] {paraphrase!r}: "
+                    f"sensitivity_primary={actual_sensitivity!r}, "
+                    f"expected {expected['expected_sensitivity']!r}"
+                )
+            if actual_handling != expected["expected_handling"]:
+                failures.append(
+                    f"[case {case_id}] {paraphrase!r}: "
+                    f"handling={actual_handling!r}, "
+                    f"expected {expected['expected_handling']!r}"
+                )
+        if budget is not None and calls >= budget:
+            break
+
+    assert not failures, (
+        f"Paraphrase classification failures ({len(failures)} of {calls} calls):\n"
+        + "\n".join(failures)
+    )

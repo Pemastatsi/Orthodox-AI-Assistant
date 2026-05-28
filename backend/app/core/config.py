@@ -48,6 +48,9 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = "REPLACE_ME"
     openai_api_key: str = "REPLACE_ME"
+    openrouter_api_key: str = "REPLACE_ME"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model_a1a2: str = "anthropic/claude-haiku-4.5"
 
     make_webhook_secret: str = "REPLACE_ME"
 

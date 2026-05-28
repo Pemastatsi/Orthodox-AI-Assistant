@@ -164,4 +164,29 @@ jobs:
       - name: Run safety suite execution harness
         if: steps.harness.outputs.present == 'true'
         working-directory: backend
-        run: uv run pytest tests/safety/test_20_queries_harness.py -v
+        run: uv run pytest tests/safety/test_20_queries_harness.py ../tests/safety/test_20_queries_paraphrases.py -v -m "not live_llm"
+
+  paraphrase-live-llm:
+    name: Paraphrase suite (live A1 classifier via OpenRouter)
+    # Cost-controlled: only runs on main pushes (post-merge regression check) and
+    # manual workflow_dispatch (founder-triggered). NOT collected in per-PR runs.
+    # The regex-layer paraphrase invariants run on every PR via safety-suite-execution
+    # above (`-m "not live_llm"`); this job is the semantic / non-hard-trigger gate.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: safety-suite-execution
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          pip install uv
+          uv sync
+      - name: Run live A1 paraphrase suite
+        working-directory: backend
+        run: uv run pytest -m live_llm -v ../tests/safety/test_20_queries_paraphrases.py
