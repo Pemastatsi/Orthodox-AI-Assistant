@@ -93,5 +93,37 @@ class FlaggedQueryRepository:
         row = result.mappings().one_or_none()
         return _row_to_flagged(row) if row else None
 
+    async def list_by_tenant(
+        self,
+        *,
+        tenant_id: str,
+        cursor: str | None = None,
+        limit: int = 25,
+        flag_reason: str | None = None,
+    ) -> tuple[list[FlaggedQuery], str | None]:
+        """Keyset pagination by `flagged_query_id DESC` (ULIDs are time-sortable).
+        Returns up to `limit` rows + nextCursor when more remain."""
+        assert_tenant(tenant_id)
+        clauses = ["tenant_id = :tenant_id"]
+        params: dict[str, Any] = {"tenant_id": tenant_id, "limit": limit + 1}
+        if cursor:
+            clauses.append("flagged_query_id < :cursor")
+            params["cursor"] = cursor
+        if flag_reason is not None:
+            clauses.append("flag_reason = :flag_reason")
+            params["flag_reason"] = flag_reason
+        sql = (
+            "SELECT * FROM flagged_queries WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY flagged_query_id DESC LIMIT :limit"
+        )
+        result = await self._session.execute(text(sql), params)
+        rows = list(result.mappings().all())
+        items = [_row_to_flagged(r) for r in rows[:limit]]
+        next_cursor = (
+            rows[limit - 1]["flagged_query_id"] if len(rows) > limit else None
+        )
+        return items, next_cursor
+
 
 __all__ = ["FlaggedQueryRepository"]

@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from app.api.v1._deps import shutdown_query_resources, shutdown_redis
+from app.api.v1.admin import router as admin_router
 from app.api.v1.corpus import router as corpus_router
 from app.api.v1.ingest import router as ingest_router
 from app.api.v1.query import router as query_router
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(ingest_router, prefix="/api/v1")
     app.include_router(corpus_router, prefix="/api/v1")
     app.include_router(query_router, prefix="/api/v1")
+    app.include_router(admin_router, prefix="/api/v1")
 
     logger.info(
         "app.startup",
