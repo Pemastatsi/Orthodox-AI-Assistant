@@ -1,3 +1,126 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm scholarly neutrals */
+    --background: 60 18% 96%;
+    --foreground: 220 25% 16%;
+    --surface: 0 0% 100%;
+    --surface-muted: 60 14% 95%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 16%;
+
+    /* Byzantine deep teal-blue */
+    --primary: 200 60% 30%;
+    --primary-foreground: 60 18% 96%;
+    --primary-soft: 200 38% 90%;
+
+    --secondary: 220 22% 94%;
+    --secondary-foreground: 220 28% 28%;
+
+    --muted: 60 14% 94%;
+    --muted-foreground: 220 14% 44%;
+
+    --accent: 200 26% 90%;
+    --accent-foreground: 200 50% 24%;
+
+    /* Muted gold — citations, source authority */
+    --gold: 45 60% 56%;
+    --gold-foreground: 40 40% 16%;
+    --gold-soft: 48 60% 88%;
+
+    /* Safety semantics */
+    --success: 150 50% 38%;
+    --success-foreground: 150 15% 98%;
+    --success-soft: 150 30% 90%;
+
+    --warning: 38 75% 52%;
+    --warning-foreground: 30 50% 22%;
+    --warning-soft: 45 70% 92%;
+
+    --danger: 5 70% 48%;
+    --danger-foreground: 5 15% 98%;
+    --danger-soft: 5 60% 92%;
+
+    --info: 210 60% 48%;
+    --info-foreground: 210 15% 98%;
+    --info-soft: 210 50% 92%;
+
+    --destructive: 5 70% 48%;
+    --destructive-foreground: 5 15% 98%;
+
+    --border: 220 15% 88%;
+    --border-strong: 220 18% 78%;
+    --input: 220 15% 88%;
+    --ring: 200 60% 40%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 220 22% 10%;
+    --foreground: 60 12% 92%;
+    --surface: 220 18% 14%;
+    --surface-muted: 220 18% 12%;
+
+    --card: 220 18% 14%;
+    --card-foreground: 60 12% 92%;
+    --popover: 220 18% 14%;
+    --popover-foreground: 60 12% 92%;
+
+    --primary: 200 55% 60%;
+    --primary-foreground: 220 25% 12%;
+    --primary-soft: 200 30% 22%;
+
+    --secondary: 220 18% 20%;
+    --secondary-foreground: 60 12% 92%;
+
+    --muted: 220 16% 18%;
+    --muted-foreground: 220 10% 64%;
+
+    --accent: 200 22% 22%;
+    --accent-foreground: 200 50% 84%;
+
+    --gold: 45 55% 64%;
+    --gold-foreground: 40 30% 14%;
+    --gold-soft: 45 30% 22%;
+
+    --success: 150 45% 56%;
+    --success-foreground: 150 18% 12%;
+    --success-soft: 150 28% 20%;
+
+    --warning: 38 65% 60%;
+    --warning-foreground: 30 30% 16%;
+    --warning-soft: 38 30% 22%;
+
+    --danger: 5 70% 60%;
+    --danger-foreground: 5 15% 12%;
+    --danger-soft: 5 30% 24%;
+
+    --info: 210 60% 64%;
+    --info-foreground: 210 18% 12%;
+    --info-soft: 210 30% 22%;
+
+    --destructive: 5 70% 60%;
+    --destructive-foreground: 5 15% 12%;
+
+    --border: 220 14% 22%;
+    --border-strong: 220 14% 30%;
+    --input: 220 14% 22%;
+    --ring: 200 55% 60%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  }
+}
