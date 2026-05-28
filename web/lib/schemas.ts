@@ -93,3 +93,106 @@ export const ApiErrorSchema = z.object({
   requiredScope: z.string().optional(),
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Admin endpoint payloads (B.4 surfaces).                                    */
+/* Wire shape matches FastAPI response_model_by_alias=True (camelCase).       */
+/* -------------------------------------------------------------------------- */
+
+export const StageSchema = z.object({
+  stage: z.string(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable().optional(),
+  outcome: z.string(),
+  modelRouteId: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+export const RunTraceUsageSchema = z.object({
+  servedAnswerCount: z.number().int().min(0).max(1),
+  freshModelRunCount: z.number().int().min(0).max(1),
+});
+
+export const RunTraceSchema = z.object({
+  runId: z.string(),
+  tenantId: z.string(),
+  userId: z.string(),
+  sessionId: z.string().nullable().optional(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable().optional(),
+  cacheHit: z.boolean(),
+  stages: z.array(StageSchema).default([]),
+  usage: RunTraceUsageSchema,
+  finalHandling: HandlingSchema.nullable().optional(),
+  finalConfidenceTier: ConfidenceTierSchema.nullable().optional(),
+  verifierPassed: z.boolean().nullable().optional(),
+  evidencePacketRef: z.string().nullable().optional(),
+});
+export type RunTrace = z.infer<typeof RunTraceSchema>;
+
+export const FlaggedQueryWireSchema = z.object({
+  flaggedQueryId: z.string(),
+  tenantId: z.string(),
+  userId: z.string(),
+  runId: z.string().nullable().optional(),
+  queryTextRedacted: z.string(),
+  rawSensitiveLogId: z.string().nullable().optional(),
+  flagReason: z.string(),
+  sensitivityPrimary: z.string().nullable().optional(),
+  riskFlags: z.array(z.string()).default([]),
+  createdAt: z.string(),
+});
+export type FlaggedQueryWire = z.infer<typeof FlaggedQueryWireSchema>;
+
+export const AuditEntrySchema = z.object({
+  auditId: z.string(),
+  tenantId: z.string(),
+  actorUserId: z.string(),
+  actorRole: z.string(),
+  action: z.string(),
+  resourceType: z.string(),
+  resourceId: z.string(),
+  occurredAt: z.string(),
+  details: z.record(z.unknown()).default({}),
+  ipAddress: z.string().nullable().optional(),
+});
+export type AuditEntry = z.infer<typeof AuditEntrySchema>;
+
+export const VisibilitySchema = z.enum([
+  "member",
+  "scholar",
+  "admin_only",
+  "suppressed",
+]);
+export type Visibility = z.infer<typeof VisibilitySchema>;
+
+export const ChunkSchema = z.object({
+  chunkId: z.string(),
+  sourceId: z.string(),
+  tenantId: z.string(),
+  text: z.string(),
+  chunkHash: z.string(),
+  approved: z.boolean(),
+  visibility: VisibilitySchema,
+  father: z.string().nullable().optional(),
+  work: z.string().nullable().optional(),
+  page: z.string().nullable().optional(),
+  timestamp: z.string().nullable().optional(),
+  language: z.string().optional(),
+  reviewNote: z.string().nullable().optional(),
+  createdAt: z.string(),
+});
+export type Chunk = z.infer<typeof ChunkSchema>;
+
+export const PageSchema = <T extends z.ZodTypeAny>(item: T) =>
+  z.object({
+    items: z.array(item).default([]),
+    nextCursor: z.string().nullable(),
+  });
+
+export const RunTracePageSchema = PageSchema(RunTraceSchema);
+export const FlaggedQueryPageSchema = PageSchema(FlaggedQueryWireSchema);
+export const AuditEntryPageSchema = PageSchema(AuditEntrySchema);
+export const ChunkPageSchema = PageSchema(ChunkSchema);
+
+export type Page<T> = { items: T[]; nextCursor: string | null };
