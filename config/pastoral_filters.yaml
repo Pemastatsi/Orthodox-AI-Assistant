@@ -1,38 +1,146 @@
-# Pastoral forbidden-phrase stub. Conservative format-only rules.
-# A6 post-composition filter. reject_answer fails verification.
-# Real Greek + pastoral phrasing requires founder sign-off.
+# Pastoral filters (A6) — v1 real ruleset (T-007).
+#
+# Founder approver:        peterstavrinides0@gmail.com
+# Greek-language reviewer: peterstavrinides0@gmail.com (dual role per T-007 §Owners)
+# Engineering reviewer:    on-call reviewer (structural / startup self-test)
+#
+# Matching: composed answer is NFKC + casefold normalized before each pattern.search
+# (see safety_config.py::_normalize_for_pastoral). Patterns compiled with
+# IGNORECASE | UNICODE.
+#
+# Ordering discipline: reject_answer rules first (so match_pastoral_filter returns
+# the right reject), then warn rules. Existing rule IDs preserved.
+#
+# Coverage matrix:
+#   purpose                       | EN rules                                | EL rules
+#   ------------------------------+-----------------------------------------+--------------------------------------
+#   direct personal advice        | pf_direct_personal_advice_en_001/002/003| pf_direct_personal_advice_el_001
+#   diagnosis                     | pf_diagnosis_en_001/002                 | pf_diagnosis_el_001
+#   electoral guidance            | pf_electoral_guidance_en_001/002        | pf_electoral_guidance_el_001
+#   medication prescription       | pf_prescribe_medication_en_001          | (deferred)
+#   invented quote attribution    | pf_invented_quote_attribution_en_001/002| pf_invented_quote_attribution_el_001
+#   schism promotion              | pf_schism_promotion_en_001              | (deferred)
 
-version: "2026-05-01.1"
+version: "2026-05-28.1"
 schema: "1"
 regex_flavor: python_re
 ordering: first_match_wins
 languages: [en, el]
 
 rules:
+
+  # ===========================================================================
+  # reject_answer — direct personal advice
+  # ===========================================================================
   - id: pf_direct_personal_advice_en_001
     pattern: "\\b(?:you should (?:divorce|leave|quit|abandon))\\b"
     action: reject_answer
     reason_code: safety_blocked
     lang: en
-    notes: "Direct personal advice phrasing must be reframed to teaching."
+    notes: "Direct personal advice phrasing must be reframed to teaching. Unchanged from stub."
 
+  - id: pf_direct_personal_advice_en_002
+    pattern: "\\b(?:you (?:must|ought to|need to|have to) (?:divorce|leave|abandon|quit|file for divorce))\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: en
+
+  - id: pf_direct_personal_advice_en_003
+    pattern: "\\b(?:i (?:advise|recommend|urge|tell) you to (?:divorce|leave|abandon|quit))\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: en
+
+  - id: pf_direct_personal_advice_el_001
+    pattern: "\\b(?:πρέπει να (?:χωρίσεις|αφήσεις|εγκαταλείψεις))\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: el
+
+  # ===========================================================================
+  # reject_answer — diagnosis
+  # ===========================================================================
   - id: pf_diagnosis_en_001
     pattern: "\\byou (?:have|are suffering from) [a-z ]{3,40} (?:disease|disorder|condition)\\b"
     action: reject_answer
     reason_code: safety_blocked
     lang: en
-    notes: "Never diagnose."
+    notes: "Never diagnose. Unchanged from stub."
 
+  - id: pf_diagnosis_en_002
+    pattern: "\\byou (?:definitely have|are diagnosed with|have been diagnosed with|clearly have) [a-z ]{3,40}\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: en
+
+  - id: pf_diagnosis_el_001
+    pattern: "\\bέχεις σίγουρα [α-ωά-ώ ]{3,40} (?:ασθένεια|νόσο|διαταραχή)\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: el
+
+  # ===========================================================================
+  # reject_answer — electoral guidance
+  # Ordering: _001 first so existing tests keep getting pf_electoral_guidance_en_001
+  # as the first match for "vote for" phrasings.
+  # ===========================================================================
   - id: pf_electoral_guidance_en_001
     pattern: "\\b(?:vote for|don't vote for|the right candidate is)\\b"
     action: reject_answer
     reason_code: safety_blocked
     lang: en
-    notes: "Never give electoral guidance."
+    notes: "Never give electoral guidance. Unchanged from stub."
 
+  - id: pf_electoral_guidance_en_002
+    pattern: "\\b(?:should vote (?:for|against)|never vote (?:for|democrat|republican)|always vote (?:for|democrat|republican)|the candidate (?:to vote for|of moral virtue) is)\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: en
+
+  - id: pf_electoral_guidance_el_001
+    pattern: "\\b(?:ψήφισε (?:τον|την|το)|μην ψηφίσεις)\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: el
+
+  # ===========================================================================
+  # reject_answer — medication prescription
+  # ===========================================================================
+  - id: pf_prescribe_medication_en_001
+    pattern: "\\b(?:take (?:aspirin|ibuprofen|paracetamol|tylenol|advil)|stop (?:taking )?your (?:medication|meds|prescription)|you should take \\d+ ?mg)\\b"
+    action: reject_answer
+    reason_code: safety_blocked
+    lang: en
+    notes: "Never prescribe specific medications or dosing."
+
+  # ===========================================================================
+  # warn — invented quote attribution (logged for review, does not fail A6)
+  # ===========================================================================
   - id: pf_invented_quote_attribution_en_001
     pattern: "\\bsaint [a-z]+ said[: ]\\s*\"[^\"]+\""
     action: warn
     reason_code: verifier_failed
     lang: en
-    notes: "Quote attribution without an explicit citation marker — likely fabricated; warn for review."
+    notes: "Quote attribution without an explicit citation marker — likely fabricated; warn for review. Unchanged from stub."
+
+  - id: pf_invented_quote_attribution_en_002
+    pattern: "\\b(?:father|elder|st\\.?|saint) [a-z]+ (?:said|wrote|taught)[: ]\\s*\"[^\"]+\""
+    action: warn
+    reason_code: verifier_failed
+    lang: en
+
+  - id: pf_invented_quote_attribution_el_001
+    pattern: "\\bάγιος [α-ωά-ώ]+ (?:είπε|έγραψε)[: ]\\s*[«\"][^»\"]+[»\"]"
+    action: warn
+    reason_code: verifier_failed
+    lang: el
+
+  # ===========================================================================
+  # warn — schism promotion
+  # ===========================================================================
+  - id: pf_schism_promotion_en_001
+    pattern: "\\b(?:break communion with|you should leave (?:the )?(?:church|patriarchate|jurisdiction|orthodox church)|join a (?:traditionalist|true orthodox|genuine orthodox) (?:church|jurisdiction|synod))\\b"
+    action: warn
+    reason_code: verifier_failed
+    lang: en
+    notes: "Schism-promoting phrasing — log for review; not auto-rejected (pastoral nuance possible)."
