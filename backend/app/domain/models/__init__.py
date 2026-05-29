@@ -35,6 +35,12 @@ from app.domain.models.progress_event import (
     ProgressStage,
     ProgressVariant,
 )
+from app.domain.models.retrieval_eval_run import (
+    RetrievalConfigLabel,
+    RetrievalEvalPurpose,
+    RetrievalEvalRegression,
+    RetrievalEvalRun,
+)
 from app.domain.models.retrieval_plan import (
     RetrievalBoost,
     RetrievalConfig,
@@ -98,6 +104,10 @@ __all__ = [
     "Reframing",
     "RetrievalBoost",
     "RetrievalConfig",
+    "RetrievalConfigLabel",
+    "RetrievalEvalPurpose",
+    "RetrievalEvalRegression",
+    "RetrievalEvalRun",
     "RetrievalFilters",
     "RetrievalPlan",
     "RetrievalRerankerConfig",

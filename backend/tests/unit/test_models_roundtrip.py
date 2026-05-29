@@ -15,6 +15,8 @@ from app.domain.models import (
     EvidencePacket,
     Principal,
     Reframing,
+    RetrievalEvalRegression,
+    RetrievalEvalRun,
     RetrievalFilters,
     RetrievalPlan,
     Source,
@@ -64,6 +66,34 @@ def test_chunk_roundtrips() -> None:
     _roundtrip(c)
     # contextPrefix (chunk.schema.json field) must survive the camelCase wire round-trip.
     assert c.model_dump(by_alias=True, mode="json")["contextPrefix"] == c.context_prefix
+
+
+def test_retrieval_eval_run_roundtrips() -> None:
+    r = RetrievalEvalRun(
+        retrieval_eval_run_id="reval_01",
+        route_id="embedding_openai_large@2026-05-29.1",
+        purpose="embedding",
+        config_label="dense_only",
+        gold_set_tenant_id="tenant_smoke",
+        gold_set_version="2026-05-29.1",
+        case_count=6,
+        scores={"recall_at_6": 1.0, "mrr": 1.0},
+        passed=False,
+        is_first_run=False,
+        judge_applied=False,
+        regressions=[
+            RetrievalEvalRegression(metric="recall_at_6", baseline=0.8, observed=0.75)
+        ],
+        initiated_by="usr_owner",
+        started_at=NOW,
+        finished_at=NOW,
+        created_at=NOW,
+    )
+    _roundtrip(r)
+    dumped = r.model_dump(by_alias=True, mode="json")
+    assert dumped["retrievalEvalRunId"] == "reval_01"
+    assert dumped["goldSetVersion"] == "2026-05-29.1"
+    assert dumped["judgeApplied"] is False
 
 
 def test_source_roundtrips() -> None:
