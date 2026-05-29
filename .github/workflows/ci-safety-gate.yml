@@ -112,7 +112,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
-      - run: pnpm test --run
+      # `--` forwards --run to vitest; pnpm 9 otherwise consumes it as a pnpm flag.
+      - run: pnpm test -- --run
 
   safety-suite-fixtures:
     name: Theological Safety Suite — Fixture Validation (20 cases present, well-shaped)
@@ -125,7 +126,10 @@ jobs:
       - name: Install pytest
         run: pip install pytest
       - name: Validate canonical 20-case fixture structure
-        run: pytest tests/safety -v
+        # Lightweight job (pytest only): runs just the canonical fixture-shape
+        # test. The paraphrase execution tests need the full backend and run in
+        # the safety-suite-execution job instead.
+        run: pytest tests/safety/test_20_queries.py -v
 
   safety-suite-execution:
     name: Theological Safety Suite — Execution (20 cases through live pipeline)

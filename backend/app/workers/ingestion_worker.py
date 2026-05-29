@@ -70,7 +70,7 @@ async def stash_upload(
 
 async def _load_upload(redis: Redis, job_id: str) -> tuple[bytes, dict[str, str]] | None:
     raw = await redis.get(_bytes_key(job_id))
-    meta = await redis.hgetall(_meta_key(job_id))
+    meta = await redis.hgetall(_meta_key(job_id))  # type: ignore[misc]
     if raw is None or not meta:
         return None
     decoded_meta = {
