@@ -55,12 +55,15 @@ def test_chunk_roundtrips() -> None:
         chunk_hash=SHA,
         approved=True,
         visibility="member",
+        context_prefix="From Athanasius, Letters to Serapion, on the divinity of the Holy Spirit.",
         embedding_model="text-embedding-3-small",
         embedding_dimension=1536,
         corpus_version="fixture-2026-05-01",
         created_at=NOW,
     )
     _roundtrip(c)
+    # contextPrefix (chunk.schema.json field) must survive the camelCase wire round-trip.
+    assert c.model_dump(by_alias=True, mode="json")["contextPrefix"] == c.context_prefix
 
 
 def test_source_roundtrips() -> None:

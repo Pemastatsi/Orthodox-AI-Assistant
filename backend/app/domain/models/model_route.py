@@ -9,7 +9,9 @@ from pydantic import Field
 
 from app.domain.models._base import WireModel
 
-RoutePurpose = Literal["query_analyzer", "compose", "verifier_judge", "embedding"]
+RoutePurpose = Literal[
+    "query_analyzer", "compose", "verifier_judge", "embedding", "retrieval_eval_judge"
+]
 RouteProvider = Literal["anthropic", "openai"]
 CertificationStatus = Literal["draft", "experiment", "certified", "deprecated"]
 
