@@ -1,4 +1,9 @@
-"""Re-export shared backend test fixtures so integration tests under `tests/` can use them.
+"""Re-export shared backend test fixtures for the integration tests in this directory.
+
+Lives in `tests/integration/` (not the shared `tests/` root) on purpose: this re-export
+pulls in backend dependencies, and scoping it here keeps lightweight suites like
+`tests/safety/` runnable with pytest alone (the CI safety-suite-fixtures job installs
+pytest only).
 
 The actual fixture definitions live in `backend/tests/conftest.py`. Without this re-export,
 tests in `tests/integration/` that reference `postgres_available`, `qdrant_available`,

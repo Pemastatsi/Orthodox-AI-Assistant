@@ -33,7 +33,7 @@ class Bm25SparseEmbedder:
     def embed(self, texts: list[str]) -> list[SparseVector]:
         if not texts:
             return []
-        model: SparseTextEmbedding = self._ensure_model()  # type: ignore[assignment]
+        model: SparseTextEmbedding = self._ensure_model()
         out: list[SparseVector] = []
         for emb in model.embed(texts):
             out.append(
