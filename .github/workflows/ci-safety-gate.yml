@@ -15,6 +15,9 @@
 name: CI Safety Gate
 
 on:
+  # Manual trigger for the cost-controlled paraphrase-live-llm job (see below).
+  # Must exist on the default branch for the "Run workflow" button to appear.
+  workflow_dispatch:
   pull_request:
     branches: [main]
   push:
@@ -168,16 +171,27 @@ jobs:
 
   paraphrase-live-llm:
     name: Paraphrase suite (live A1 classifier via OpenRouter)
-    # Cost-controlled: only runs on main pushes (post-merge regression check) and
-    # manual workflow_dispatch (founder-triggered). NOT collected in per-PR runs.
-    # The regex-layer paraphrase invariants run on every PR via safety-suite-execution
-    # above (`-m "not live_llm"`); this job is the semantic / non-hard-trigger gate.
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # Cost-controlled: manual workflow_dispatch ONLY (founder-triggered). Deliberately
+    # NOT run on per-PR or push-to-main events — each run makes ~88-91 paid Haiku-4.5
+    # calls via OpenRouter. The regex-layer paraphrase invariants still run on every PR
+    # via safety-suite-execution above (`-m "not live_llm"`); this job is the on-demand
+    # semantic / non-hard-trigger gate.
+    if: github.event_name == 'workflow_dispatch'
     needs: safety-suite-execution
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
+      - name: Require OPENROUTER_API_KEY secret
+        # Fail loudly on a missing/empty secret. Without this guard the live test
+        # would skip (pytest exits 0) and this job would pass GREEN without actually
+        # verifying anything. The secret value is never printed.
+        run: |
+          if [ -z "${OPENROUTER_API_KEY}" ]; then
+            echo "::error::OPENROUTER_API_KEY is empty. Add it as a repository (or org) Actions secret named exactly OPENROUTER_API_KEY, then re-run this workflow."
+            exit 1
+          fi
+          echo "OPENROUTER_API_KEY is present (value not printed)."
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
