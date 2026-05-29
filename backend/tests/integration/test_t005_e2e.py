@@ -13,6 +13,7 @@ import os
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -48,8 +49,11 @@ from tests.fixtures.fakes import ComposerFakeProvider, FakeStructuredProvider
 
 pytestmark = pytest.mark.asyncio
 
-_SENSITIVITY_PATH = "/home/user/Orthodox-AI-Assistant/config/sensitivity_keywords.yaml"
-_PASTORAL_PATH = "/home/user/Orthodox-AI-Assistant/config/pastoral_filters.yaml"
+# Repo-root-relative so the suite runs in any checkout (CI included), not only a
+# /home/user/Orthodox-AI-Assistant container. Mirrors app/core/config.py's _REPO_ROOT.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_SENSITIVITY_PATH = str(_REPO_ROOT / "config" / "sensitivity_keywords.yaml")
+_PASTORAL_PATH = str(_REPO_ROOT / "config" / "pastoral_filters.yaml")
 
 
 def _dev_header(*, tenant_id: str = "tn_test", role: str = "member") -> dict[str, str]:

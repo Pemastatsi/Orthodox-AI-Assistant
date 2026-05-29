@@ -11,6 +11,7 @@ import base64
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from app.adapters.vector_store.base import (
@@ -46,8 +47,11 @@ from tests.fixtures.fakes import (
     default_query_analyzer_responder,
 )
 
-_SENSITIVITY_PATH = "/home/user/Orthodox-AI-Assistant/config/sensitivity_keywords.yaml"
-_PASTORAL_PATH = "/home/user/Orthodox-AI-Assistant/config/pastoral_filters.yaml"
+# Repo-root-relative so the suite runs in any checkout (CI included), not only a
+# /home/user/Orthodox-AI-Assistant container. Mirrors app/core/config.py's _REPO_ROOT.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_SENSITIVITY_PATH = str(_REPO_ROOT / "config" / "sensitivity_keywords.yaml")
+_PASTORAL_PATH = str(_REPO_ROOT / "config" / "pastoral_filters.yaml")
 
 
 @dataclass
