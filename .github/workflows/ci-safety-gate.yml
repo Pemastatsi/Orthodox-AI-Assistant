@@ -1,16 +1,16 @@
 # CI Safety Gate
 #
-# Job status expectations during Phase 1 implementation:
+# Job status expectations:
 #   contracts                  — green on every PR (schemas + safety YAML + OpenAPI lint).
 #   safety-suite-fixtures      — green on every PR (validates the 20-case fixture shape).
-#   backend                    — skipped until backend/pyproject.toml lands (T-001).
-#   frontend                   — skipped until web/package.json lands (T-001).
-#   safety-suite-execution     — INTENTIONALLY FAILING until T-006 ships
+#   backend                    — runs on every PR (ruff + mypy + pytest); T-001 has landed.
+#   frontend                   — runs on every PR (eslint + tsc + vitest); T-001 has landed.
+#   safety-suite-execution     — runs the 20 cases end-to-end now that T-006 shipped
 #                                backend/tests/safety/test_20_queries_harness.py.
-#                                See lines 118-138 below for the in-job rationale.
+#                                See the in-job rationale on the safety-suite-execution job.
 #
-# A red ❌ on safety-suite-execution before T-006 is not a regression. Do not
-# attempt to "fix" it by deleting the gate; the gate is the contract.
+# safety-suite-execution MUST stay a required check on main. Do not "fix" a red
+# result by deleting the gate; the gate is the contract.
 
 name: CI Safety Gate
 
@@ -80,7 +80,6 @@ jobs:
   backend:
     name: Backend (ruff + mypy + pytest)
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('backend/pyproject.toml') != '' }}
     defaults:
       run:
         working-directory: backend
@@ -99,7 +98,6 @@ jobs:
   frontend:
     name: Frontend (eslint + tsc + vitest)
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('web/package.json') != '' }}
     defaults:
       run:
         working-directory: web
