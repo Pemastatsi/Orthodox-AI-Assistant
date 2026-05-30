@@ -24,11 +24,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import ulid
+from app.adapters.providers.openai_provider import OpenAIProvider
+from app.adapters.sparse.bm25_embedder import Bm25SparseEmbedder
+from app.adapters.vector_store.qdrant_store import QdrantStore
+from app.core.auth import make_dev_principal
+from app.core.config import Settings
+from app.domain.models.model_route import ModelRoute
 from app.domain.models.retrieval_eval_run import (
     RetrievalEvalPurpose,
     RetrievalEvalRegression,
     RetrievalEvalRun,
 )
+from app.domain.services.retriever import Retriever
 
 from tests.retrieval_eval.baselines import load_baseline
 from tests.retrieval_eval.harness import (
@@ -46,9 +53,7 @@ from tests.retrieval_eval.metrics import aggregate_metrics, compare_to_baseline
 GOLD_SETS_DIR = Path(__file__).parent / "gold_sets"
 
 
-def resolve_gold_set_path(
-    spec: str, *, gold_sets_dir: Path | None = None
-) -> Path:
+def resolve_gold_set_path(spec: str, *, gold_sets_dir: Path | None = None) -> Path:
     """Resolve a ``<tenant_id>/<version>`` spec to its gold-set JSON path.
 
     e.g. ``tenant_smoke/2026-05-29.1`` -> ``gold_sets/tenant_smoke/2026-05-29.1.json``.
@@ -128,8 +133,56 @@ async def run_eval(
     )
 
 
+def build_live_harness(
+    *,
+    route: ModelRoute,
+    settings: Settings,
+    collection: str,
+    tenant_id: str,
+    role: str = "scholar",
+) -> RetrievalHarness:
+    """Assemble a real A3 harness for a candidate embedding route over a backfilled Qdrant
+    collection — the only path that issues paid embedding calls + real Qdrant I/O, used by the
+    founder-gated certification run (never by CI).
+
+    The **openai** candidate (`text-embedding-3-large`) is runnable today. The **bge** candidate
+    (BGE-M3) raises until its heavy runtime dependency is approved (a deferred, founder-gated
+    decision). Construction makes **no** network call — I/O only happens when `.run()` is later
+    awaited, which CI never does. ``collection`` targets the candidate's dual-index backfill
+    collection (via the new `QdrantStore(collection=…)` option); ``tenant_id`` scopes the
+    retrieval principal to the tenant whose corpus was backfilled.
+    """
+    if route.provider == "bge":
+        raise NotImplementedError(
+            "The bge candidate (BGE-M3) is not runnable yet: its runtime dependency "
+            "(FlagEmbedding / sentence-transformers, ~2.3GB, or a hosted route) is a deferred, "
+            "founder-/budget-gated decision. Run the openai candidate, or land the bge dep first."
+        )
+    if route.provider != "openai":
+        raise ValueError(
+            f"build_live_harness supports the openai/bge embedding candidates; "
+            f"got provider={route.provider!r} for {route.route_id}"
+        )
+
+    provider = OpenAIProvider(settings=settings, model=route.model)
+    store = QdrantStore(
+        embedding_dimension=provider.embedding_dimension,
+        settings=settings,
+        collection=collection,
+    )
+    retriever = Retriever(
+        embedding_provider=provider,
+        vector_store=store,
+        sparse_embedder=Bm25SparseEmbedder(),
+        embedding_route_id=route.route_id,
+    )
+    principal = make_dev_principal(tenant_id=tenant_id, role=role, user_id="usr_founder")
+    return RetrievalHarness(retriever=retriever, principal=principal)
+
+
 __all__ = [
     "GOLD_SETS_DIR",
+    "build_live_harness",
     "resolve_gold_set_path",
     "run_eval",
 ]

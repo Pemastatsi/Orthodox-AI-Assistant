@@ -112,10 +112,13 @@ class QdrantStore:
         embedding_dimension: int,
         settings: Settings | None = None,
         client: AsyncQdrantClient | None = None,
+        collection: str | None = None,
     ) -> None:
         self._embedding_dimension = embedding_dimension
         cfg = settings or get_settings()
-        self._collection = cfg.qdrant_collection_prefix or "chunks"
+        # `collection` lets a candidate embedding route target its dual-index backfill collection
+        # (the retrieval-eval live run); it defaults to today's settings-derived name otherwise.
+        self._collection = collection or cfg.qdrant_collection_prefix or "chunks"
         if client is not None:
             self._client = client
         else:
