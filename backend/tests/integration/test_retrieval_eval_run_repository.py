@@ -70,11 +70,7 @@ async def test_insert_then_get_round_trips_wire_shape(
     seed_tenant: tuple[str, str],
 ) -> None:
     _tenant_id, user_id = seed_tenant
-    run = _make_run(
-        run_id="reval_itest_passing",
-        initiated_by=user_id,
-        passed=True,
-    )
+    run = _make_run(run_id="reval_itest_passing", initiated_by=user_id, passed=True)
     try:
         async with session_scope() as session:
             inserted_id = await RetrievalEvalRunRepository(session).insert(run)
@@ -135,9 +131,7 @@ async def test_get_latest_passing_picks_newest(seed_tenant: tuple[str, str]) -> 
         ],
     )
     passing = _make_run(
-        run_id="reval_itest_latest_pass",
-        initiated_by=user_id,
-        passed=True,
+        run_id="reval_itest_latest_pass", initiated_by=user_id, passed=True
     )
     try:
         async with session_scope() as session:
