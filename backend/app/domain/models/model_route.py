@@ -29,6 +29,7 @@ class ModelRoute(WireModel):
     supports_batch: bool = False
     supports_json_mode: bool = False
     safety_suite_run_id: str | None = None
+    retrieval_eval_run_id: str | None = None
     certified_by: str | None = None
     certified_at: datetime | None = None
     deprecated_at: datetime | None = None

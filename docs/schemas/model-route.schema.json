@@ -44,6 +44,10 @@
       "type": ["string", "null"],
       "description": "Reference to the aggregate safety_suite_runs row that certified this route. A safety_suite_runs row groups all 20 individual run_traces.run_id entries produced by one pass of the canonical safety suite (tests/safety/test_20_queries.py). See ADR 0004 for the certification protocol and db-schema.md for the safety_suite_runs table shape."
     },
+    "retrievalEvalRunId": {
+      "type": ["string", "null"],
+      "description": "Reference to the retrieval_eval_runs row that certified this route's retrieval quality. The second binding gate for purpose IN ('embedding','rerank') routes (docs/contracts/retrieval-eval-suite.md), alongside safetySuiteRunId. NULL for routes whose purpose has no retrieval-eval gate."
+    },
     "certifiedBy": { "type": ["string", "null"] },
     "certifiedAt": { "type": ["string", "null"], "format": "date-time" },
     "deprecatedAt": { "type": ["string", "null"], "format": "date-time" },
