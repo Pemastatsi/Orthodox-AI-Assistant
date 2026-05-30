@@ -1,4 +1,4 @@
-.PHONY: dev test safety lint typecheck migrate up down install
+.PHONY: dev test safety lint typecheck migrate up down install retrieval-eval-run
 
 install:
 	(cd backend && uv sync)
@@ -30,3 +30,26 @@ up:
 
 down:
 	docker compose -f infrastructure/docker-compose.yml down
+
+# Retrieval-eval operator run (T-009 Phase-A). Offline + free by default; flags add DB/owner steps.
+#   make retrieval-eval-run                                   # offline metrics report (no spend)
+#   make retrieval-eval-run GOLD_SET=t/v ROUTE_ID=r CONFIG=hybrid
+#   make retrieval-eval-run PERSIST=1                         # also write the run row (needs DB)
+#   make retrieval-eval-run PERSIST=1 ATTACH=1 SAFETY_RUN_ID=ssr_x  # owner: link both cert gates
+#   make retrieval-eval-run ESTABLISH_BASELINE=1             # owner: pin a passing run as baseline
+#   make retrieval-eval-run LIVE=1 COLLECTION=chunks_candidate     # paid live run (founder/infra)
+#   RETRIEVAL_EVAL_RUN_JUDGE=1 make retrieval-eval-run JUDGE=1     # paid LLM-judge path (gated)
+GOLD_SET ?= tenant_smoke/2026-05-29.1
+ROUTE_ID ?= embedding_openai_large@2026-05-29.1
+CONFIG ?= dense_only
+
+retrieval-eval-run:
+	(cd backend && uv run python ../scripts/run_retrieval_eval.py \
+		--gold-set $(GOLD_SET) --route-id $(ROUTE_ID) --config $(CONFIG) \
+		$(if $(LIVE),,--offline) \
+		$(if $(COLLECTION),--collection $(COLLECTION),) \
+		$(if $(PERSIST),--persist,) \
+		$(if $(ATTACH),--attach,) \
+		$(if $(SAFETY_RUN_ID),--safety-run-id $(SAFETY_RUN_ID),) \
+		$(if $(ESTABLISH_BASELINE),--establish-baseline,) \
+		$(if $(JUDGE),--judge,))

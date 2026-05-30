@@ -85,4 +85,47 @@ class ModelRouteRepository:
         return _row_to_model_route(row)
 
 
+    async def attach_safety_suite_run(
+        self, *, route_id: str, run_id: str
+    ) -> ModelRoute:
+        """Link a (passing) safety-suite run to a route — the ADR-0004 gate pointer.
+
+        Owner-gated at the call site (the CLI / a future endpoint). Populating
+        `safety_suite_runs` *rows* remains T-006's harness domain; this only wires the pointer so
+        the certification gate isn't left half-satisfiable.
+        """
+        result = await self._session.execute(
+            text(
+                """
+                UPDATE model_routes
+                SET safety_suite_run_id = :run_id
+                WHERE route_id = :rid
+                RETURNING *
+                """
+            ),
+            {"run_id": run_id, "rid": route_id},
+        )
+        row = result.mappings().one()
+        return _row_to_model_route(row)
+
+    async def attach_retrieval_eval_run(
+        self, *, route_id: str, run_id: str
+    ) -> ModelRoute:
+        """Link a (passing) retrieval-eval run to a route — the second cert gate pointer
+        (`docs/contracts/retrieval-eval-suite.md`). Owner-gated at the call site."""
+        result = await self._session.execute(
+            text(
+                """
+                UPDATE model_routes
+                SET retrieval_eval_run_id = :run_id
+                WHERE route_id = :rid
+                RETURNING *
+                """
+            ),
+            {"run_id": run_id, "rid": route_id},
+        )
+        row = result.mappings().one()
+        return _row_to_model_route(row)
+
+
 __all__ = ["ModelRouteRepository"]
