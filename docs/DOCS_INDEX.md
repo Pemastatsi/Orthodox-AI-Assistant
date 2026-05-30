@@ -89,6 +89,8 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/schemas/parsed-block.schema.json` | contract | Typographic block emitted by a `Parser`; consumed by chunking to detect headings and assemble Chunks. |
 | `docs/schemas/progress-event.schema.json` | contract | Typed SSE payload for `POST /query` when `streamProgress=true` (progress / done / error variants). |
 | `docs/schemas/scored-chunk.schema.json` | contract | Retrieval hit composed of a Chunk plus cosine `score` and optional `rerankScore`; returned by `VectorStore.search`. |
+| `docs/schemas/retrieval-eval-gold-set.schema.json` | contract | Per-tenant, version-pinned gold set for the retrieval-eval suite (`docs/contracts/retrieval-eval-suite.md`). Confidential. |
+| `docs/schemas/retrieval-eval-run.schema.json` | contract | One retrieval-eval suite execution (`retrieval_eval_runs` row); second binding gate for embedding/rerank route certification. |
 
 ## Architecture Decision Records
 

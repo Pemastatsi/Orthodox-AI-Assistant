@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "tenantId": "tenant_smoke",
+  "version": "2026-05-29.1",
+  "createdBy": "synthetic-smoke",
+  "reviewedBy": ["synthetic-smoke"],
+  "corpusVersionAtCuration": "fixture-2026-05-01",
+  "cases": [
+    {
+      "id": "RE-001",
+      "query": "Why does the Eastern Church reject papal supremacy?",
+      "language": "en",
+      "expectedChunkIds": ["chunk-papacy-001"],
+      "minimallySufficientChunkIds": ["chunk-papacy-001"],
+      "answerMode": "institutional_policy",
+      "sensitivityPrimary": "normal",
+      "notes": "SYNTHETIC smoke case over the fixture corpus; not a certification gold set. Distinctive vocab: papal supremacy, Eastern Church."
+    },
+    {
+      "id": "RE-002",
+      "query": "Is the Eucharist truly the Body and Blood of Christ?",
+      "language": "en",
+      "expectedChunkIds": ["chunk-eucharist-001"],
+      "minimallySufficientChunkIds": ["chunk-eucharist-001"],
+      "answerMode": "consensus",
+      "sensitivityPrimary": "normal",
+      "notes": "SYNTHETIC smoke case. Distinctive vocab: Eucharist, Body, Blood, Christ."
+    },
+    {
+      "id": "RE-003",
+      "query": "What is the toll-houses tradition and why is it disputed?",
+      "language": "en",
+      "expectedChunkIds": ["chunk-tollhouses-001"],
+      "minimallySufficientChunkIds": ["chunk-tollhouses-001"],
+      "answerMode": "scholarly_dispute",
+      "sensitivityPrimary": "canonical_dispute",
+      "notes": "SYNTHETIC smoke case. Distinctive vocab: toll-houses, disputed."
+    },
+    {
+      "id": "RE-004",
+      "query": "How does ancestral sin differ from the Western original sin?",
+      "language": "en",
+      "expectedChunkIds": ["chunk-ancestral-sin-001"],
+      "minimallySufficientChunkIds": ["chunk-ancestral-sin-001"],
+      "answerMode": "scholarly_dispute",
+      "sensitivityPrimary": "canonical_dispute",
+      "notes": "SYNTHETIC smoke case. Distinctive vocab: ancestral sin, original sin, Western."
+    },
+    {
+      "id": "RE-005",
+      "query": "What did Saint John Chrysostom teach about wealth and almsgiving?",
+      "language": "en",
+      "expectedChunkIds": ["chunk-wealth-001"],
+      "minimallySufficientChunkIds": ["chunk-wealth-001"],
+      "answerMode": "direct_citation",
+      "sensitivityPrimary": "normal",
+      "notes": "SYNTHETIC smoke case. Distinctive vocab: Chrysostom, wealth, almsgiving."
+    },
+    {
+      "id": "RE-006",
+      "query": "What is the spiritual purpose of fasting?",
+      "language": "en",
+      "expectedChunkIds": ["chunk-fasting-001"],
+      "minimallySufficientChunkIds": ["chunk-fasting-001"],
+      "answerMode": "consensus",
+      "sensitivityPrimary": "medical",
+      "notes": "SYNTHETIC smoke case exercising a sensitive-tier case. Distinctive vocab: fasting, spiritual purpose."
+    }
+  ]
+}

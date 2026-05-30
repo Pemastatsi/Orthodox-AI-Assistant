@@ -22,18 +22,25 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from pydantic import Field
 
 from app.api.v1._deps import get_session, require_scope
 from app.domain.models._base import WireModel
 from app.domain.models.audit_entry import AuditEntry
 from app.domain.models.flagged_query import FlaggedQuery
+from app.domain.models.model_route import ModelRoute
 from app.domain.models.principal import Principal
 from app.domain.models.run_trace import RunTrace
 from app.domain.repositories._base import AsyncSession
 from app.domain.repositories.audit_repository import AuditRepository
 from app.domain.repositories.flagged_query_repository import FlaggedQueryRepository
+from app.domain.repositories.model_route_repository import ModelRouteRepository
 from app.domain.repositories.run_trace_repository import RunTraceRepository
+from app.domain.services.route_certification import (
+    evaluate_certification,
+    requires_retrieval_eval_gate,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -131,6 +138,77 @@ async def list_admin_audit(
         since=since,
     )
     return AdminAuditListResponse(items=items, next_cursor=next_cursor)
+
+
+class CertifyModelRouteRequest(WireModel):
+    certification_notes: str = Field(min_length=1)
+
+
+@router.patch(
+    "/model-routes/{routeId}/certify",
+    response_model=ModelRoute,
+    response_model_by_alias=True,
+)
+async def certify_model_route(
+    body: CertifyModelRouteRequest,
+    route_id: str = Path(alias="routeId"),
+    # `require_scope` is resolved before `get_session`, so a non-owner is rejected (403) without
+    # ever opening a DB transaction.
+    principal: Principal = Depends(require_scope("model_route:certify")),
+    session: AsyncSession = Depends(get_session),
+) -> ModelRoute:
+    """Owner-only PATCH that promotes a route to `certified` (ADR-0004), enforcing the binding
+    gates: a passing safety-suite run for every route, plus a passing retrieval-eval run for
+    embedding/rerank routes (`docs/contracts/retrieval-eval-suite.md`). Records an
+    `action='model_route_certified'` audit entry.
+    """
+    repo = ModelRouteRepository(session)
+    route = await repo.get(route_id)
+    if route is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "not_found", "message": f"model route {route_id} not found"},
+        )
+
+    safety_passed = (
+        await repo.safety_run_passed(route.safety_suite_run_id)
+        if route.safety_suite_run_id
+        else False
+    )
+    retrieval_eval_passed: bool | None = None
+    if requires_retrieval_eval_gate(route):
+        retrieval_eval_passed = (
+            await repo.retrieval_eval_run_passed(route.retrieval_eval_run_id)
+            if route.retrieval_eval_run_id
+            else False
+        )
+
+    decision = evaluate_certification(
+        route, safety_passed=safety_passed, retrieval_eval_passed=retrieval_eval_passed
+    )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "route_not_certifiable", "message": decision.reason},
+        )
+
+    certified = await repo.mark_certified(
+        route_id=route_id, certified_by=principal.user_id
+    )
+    await AuditRepository(session).insert(
+        tenant_id=principal.tenant_id,
+        actor_user_id=principal.user_id,
+        actor_role=principal.role,
+        action="model_route_certified",
+        resource_type="model_route",
+        resource_id=route_id,
+        details={
+            "certificationNotes": body.certification_notes,
+            "safetySuiteRunId": route.safety_suite_run_id,
+            "retrievalEvalRunId": route.retrieval_eval_run_id,
+        },
+    )
+    return certified
 
 
 __all__ = ["router"]

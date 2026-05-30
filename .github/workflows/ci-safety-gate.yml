@@ -206,3 +206,28 @@ jobs:
       - name: Run live A1 paraphrase suite
         working-directory: backend
         run: uv run pytest -m live_llm -v ../tests/safety/test_20_queries_paraphrases.py
+
+  retrieval-eval-regression:
+    name: Retrieval-Eval Regression (deterministic metrics; offline, no API cost)
+    # The empirical retrieval-quality gate for purpose IN ('embedding','rerank') route
+    # certification (docs/contracts/retrieval-eval-suite.md) — the counterpart to the safety suite.
+    # Runs the DETERMINISTIC metrics offline (Recall@K / Precision@K / MRR / nDCG@K): zero API cost,
+    # no DB. The paid Ragas-style LLM-judge metrics stay gated behind RETRIEVAL_EVAL_RUN_JUDGE + a
+    # certified retrieval_eval_judge route and never run here — so no path filter is needed (the
+    # contract's path filter exists only to avoid judge cost, which is moot while the judge is off).
+    # Should be a required check on main alongside safety-suite-execution.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend deps
+        run: |
+          pip install uv
+          uv sync
+      - name: Run retrieval-eval suite (deterministic metrics; judge path gated off)
+        run: uv run pytest tests/retrieval_eval -v

@@ -9,8 +9,10 @@ from pydantic import Field
 
 from app.domain.models._base import WireModel
 
-RoutePurpose = Literal["query_analyzer", "compose", "verifier_judge", "embedding"]
-RouteProvider = Literal["anthropic", "openai"]
+RoutePurpose = Literal[
+    "query_analyzer", "compose", "verifier_judge", "embedding", "retrieval_eval_judge"
+]
+RouteProvider = Literal["anthropic", "openai", "bge"]
 CertificationStatus = Literal["draft", "experiment", "certified", "deprecated"]
 
 
@@ -27,6 +29,7 @@ class ModelRoute(WireModel):
     supports_batch: bool = False
     supports_json_mode: bool = False
     safety_suite_run_id: str | None = None
+    retrieval_eval_run_id: str | None = None
     certified_by: str | None = None
     certified_at: datetime | None = None
     deprecated_at: datetime | None = None

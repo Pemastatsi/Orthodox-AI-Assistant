@@ -31,6 +31,7 @@ class Chunk(WireModel):
     page_start: int | None = Field(default=None, ge=1)
     page_end: int | None = Field(default=None, ge=1)
     parent_chunk_id: str | None = None
+    context_prefix: str | None = Field(default=None, max_length=200)
     embedding_model: str
     embedding_dimension: int = Field(ge=1)
     corpus_version: str

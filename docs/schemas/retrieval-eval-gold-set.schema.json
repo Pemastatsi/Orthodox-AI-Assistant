@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "retrieval-eval-gold-set.schema.json",
+  "title": "RetrievalEvalGoldSet",
+  "description": "Per-tenant, version-pinned gold set for the retrieval evaluation suite (docs/contracts/retrieval-eval-suite.md). Confidential (CLAUDE.md §1): hand-curated theological queries; must not be committed to public-readable repositories. One file per tenant per version at tests/retrieval_eval/gold_sets/<tenantId>/<version>.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tenantId",
+    "version",
+    "createdBy",
+    "reviewedBy",
+    "corpusVersionAtCuration",
+    "cases"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "tenantId": {
+      "type": "string",
+      "description": "Owning tenant. Gold sets are not shared across tenants."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[0-9]+$",
+      "description": "Date-prefixed identifier matching the ModelRoute.routeId convention: YYYY-MM-DD.NN. Frozen after first CI run on a certification path; changes ship as a new version."
+    },
+    "createdBy": {
+      "type": "string",
+      "description": "User id / role of the curator."
+    },
+    "reviewedBy": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "Reviewers; must be non-empty. Reviewers hold role IN ('content_manager','admin','owner')."
+    },
+    "corpusVersionAtCuration": {
+      "type": "string",
+      "description": "corpusVersion the expectedChunkIds were curated against."
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "query",
+        "language",
+        "expectedChunkIds",
+        "minimallySufficientChunkIds",
+        "answerMode",
+        "sensitivityPrimary",
+        "notes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^RE-[0-9]+$",
+          "description": "Stable case id (RE-NNN); not reused after a case is deprecated."
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The user-form question, exactly as the chatbot would receive it."
+        },
+        "language": {
+          "type": "string",
+          "enum": ["en", "el", "grc"],
+          "description": "Modern English, modern Greek, or Polytonic Greek. Determines which embedding/reranker variants the case exercises."
+        },
+        "expectedChunkIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Approved chunks that together fully answer the question. Stable chunk_id values, not URLs."
+        },
+        "minimallySufficientChunkIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Subset of expectedChunkIds that alone is enough to answer; used for Recall@K and MRR."
+        },
+        "answerMode": {
+          "type": "string",
+          "enum": [
+            "direct_citation",
+            "consensus",
+            "historical_development",
+            "scholarly_dispute",
+            "institutional_policy"
+          ],
+          "description": "Expected EvidencePacket.answerMode (answer-mode.schema.json)."
+        },
+        "sensitivityPrimary": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "pastoral_advice",
+            "political",
+            "medical",
+            "comparative_religion",
+            "canonical_dispute",
+            "other_sensitive"
+          ],
+          "description": "Expected ClassifiedQuery.sensitivityPrimary. Hard-trigger queries (self_harm / medical_emergency) are forbidden here — they live in the safety suite."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Curator's rationale for inclusion; admin-readable only, never surfaced to users."
+        }
+      }
+    }
+  }
+}
