@@ -123,6 +123,14 @@ class TestEvaluateCertification:
         assert decision.allowed is True
 
 
+def test_bge_provider_is_accepted() -> None:
+    # T-009 widens RouteProvider to include the BGE-M3 candidate's provider.
+    route = _route(
+        route_id="embedding_bge_m3@2026-05-29.1", provider="bge", model="bge-m3"
+    )
+    assert route.provider == "bge"
+
+
 def test_certify_endpoint_is_registered() -> None:
     # DB-free: importing the app constructs all routes. This also proves the Path(alias="routeId")
     # binding is valid (FastAPI raises at construction otherwise).

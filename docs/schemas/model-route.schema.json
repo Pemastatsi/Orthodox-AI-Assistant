@@ -28,7 +28,8 @@
     },
     "provider": {
       "type": "string",
-      "enum": ["anthropic", "openai"]
+      "enum": ["anthropic", "openai", "bge"],
+      "description": "Provider/model family. 'bge' (BAAI BGE-M3) is a T-009 embedding candidate served locally via fastembed/FlagEmbedding or a hosted endpoint."
     },
     "model": { "type": "string" },
     "promptVersion": { "type": "string" },

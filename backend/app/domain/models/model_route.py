@@ -12,7 +12,7 @@ from app.domain.models._base import WireModel
 RoutePurpose = Literal[
     "query_analyzer", "compose", "verifier_judge", "embedding", "retrieval_eval_judge"
 ]
-RouteProvider = Literal["anthropic", "openai"]
+RouteProvider = Literal["anthropic", "openai", "bge"]
 CertificationStatus = Literal["draft", "experiment", "certified", "deprecated"]
 
 
