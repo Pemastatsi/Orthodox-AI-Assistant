@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "Copy to <tenantId>/<version>.json, fill in real cases, delete every _comment. Validate with scripts/validate_gold_set.py --check-corpus before gating. This file is a skeleton, not a valid gold set (it has no cases); it is excluded from CI by living at the gold_sets/ root, not under a <tenantId>/ dir.",
+  "tenantId": "tenant_orthodox_ethos",
+  "version": "YYYY-MM-DD.NN",
+  "createdBy": "usr_or_role_of_curator",
+  "reviewedBy": ["usr_reviewer_content_manager_or_owner"],
+  "corpusVersionAtCuration": "the corpusVersion the chunk ids were curated against",
+  "cases": [
+    {
+      "_comment": "Duplicate this block per case. id is RE-NNN, unique, never reused.",
+      "id": "RE-001",
+      "query": "The user-form question, exactly as the chatbot would receive it.",
+      "language": "en",
+      "expectedChunkIds": ["chunk_id_that_together_answer_the_question"],
+      "minimallySufficientChunkIds": ["subset_of_expected_that_alone_suffices"],
+      "answerMode": "direct_citation",
+      "sensitivityPrimary": "normal",
+      "notes": "Curator rationale for inclusion; admin-readable only."
+    }
+  ]
+}
