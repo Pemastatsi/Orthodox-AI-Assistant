@@ -83,6 +83,28 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # Postgres service so the DB-gated integration tests (RLS isolation, route
+    # certify/attach, audit, billing, retention, repos) actually RUN here instead of
+    # skipping. Mirrors infrastructure/docker-compose.yml (postgres:16, orthodox/orthodox/
+    # orthodox), which is exactly the app's default DATABASE_URL — so no env override is
+    # needed. REQUIRE_DB=1 (below) turns a missing/unreachable DB into a hard failure so the
+    # suite can never silently regress to "all integration tests skipped".
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: orthodox
+          POSTGRES_PASSWORD: orthodox
+          POSTGRES_DB: orthodox
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      REQUIRE_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -93,6 +115,10 @@ jobs:
       - run: uv sync
       - run: uv run ruff check .
       - run: uv run mypy app
+      # Build the schema + the app_runtime/app_admin roles (migrations 0002 + 0005) the RLS
+      # isolation suite's `SET ROLE app_runtime` depends on. Mirrors `make migrate`.
+      - name: Run migrations
+        run: uv run alembic upgrade head
       - run: uv run pytest -q
 
   frontend:

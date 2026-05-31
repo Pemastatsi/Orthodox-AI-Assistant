@@ -90,22 +90,49 @@ def upgrade() -> None:
     )
 
     # Enable RLS + FORCE + tenant_isolation_policy on every multi-tenant table.
+    # Each table is guarded by a `to_regclass` existence check so a table that hasn't been
+    # created yet is skipped silently instead of aborting the whole migration. This matters for
+    # `graph_candidates`, which ADR-0016 scopes in "once REC-013 lands" — the table is named in
+    # RLS_TABLES (so RLS auto-applies the moment it exists) but no migration creates it yet. When
+    # REC-013's migration adds the table, re-running this is unnecessary; its own migration should
+    # enable RLS, and this guard keeps a fresh `alembic upgrade head` green in the meantime.
+    # Mirrors the role-creation guards above. (Table names are trusted constants, not user input.)
     for table in RLS_TABLES:
-        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;")
-        op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY;")
         op.execute(
             f"""
-            DROP POLICY IF EXISTS tenant_isolation_policy ON {table};
-            CREATE POLICY tenant_isolation_policy ON {table}
-                USING (tenant_id = current_setting('app.current_tenant_id', true))
-                WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true));
+            DO $$
+            BEGIN
+                IF to_regclass('public.{table}') IS NOT NULL THEN
+                    EXECUTE 'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY';
+                    EXECUTE 'ALTER TABLE {table} FORCE ROW LEVEL SECURITY';
+                    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation_policy ON {table}';
+                    EXECUTE 'CREATE POLICY tenant_isolation_policy ON {table}
+                        USING (tenant_id = current_setting(''app.current_tenant_id'', true))
+                        WITH CHECK (tenant_id = current_setting(''app.current_tenant_id'', true))';
+                ELSE
+                    RAISE NOTICE 'skipping RLS for {table} (table does not exist yet)';
+                END IF;
+            END
+            $$;
             """
         )
 
 
 def downgrade() -> None:
+    # Same existence guard as upgrade(): tables not yet created (e.g. graph_candidates) are
+    # skipped rather than erroring on a non-existent relation.
     for table in RLS_TABLES:
-        op.execute(f"DROP POLICY IF EXISTS tenant_isolation_policy ON {table};")
-        op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY;")
-        op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY;")
+        op.execute(
+            f"""
+            DO $$
+            BEGIN
+                IF to_regclass('public.{table}') IS NOT NULL THEN
+                    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation_policy ON {table}';
+                    EXECUTE 'ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY';
+                    EXECUTE 'ALTER TABLE {table} DISABLE ROW LEVEL SECURITY';
+                END IF;
+            END
+            $$;
+            """
+        )
     # Roles are intentionally not dropped — they may still own objects or be in use.
