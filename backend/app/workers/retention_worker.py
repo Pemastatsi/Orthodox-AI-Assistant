@@ -46,7 +46,9 @@ class WorkerSettings:
     async def on_startup(ctx: dict[str, Any]) -> None:
         del ctx
         configure_logging()
-        init_engine()
+        # Retention sweeps every tenant's expired rows — connect as app_admin (BYPASSRLS) per
+        # ADR-0016 Rule 5 so the cross-tenant cleanup is not filtered by RLS.
+        init_engine(admin=True)
 
 
 __all__ = ["WorkerSettings"]

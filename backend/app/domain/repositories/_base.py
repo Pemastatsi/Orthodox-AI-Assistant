@@ -24,14 +24,22 @@ _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
-def init_engine(settings: Settings | None = None) -> AsyncEngine:
-    """Idempotent engine init. Call once per process (e.g., FastAPI startup, worker startup)."""
+def init_engine(settings: Settings | None = None, *, admin: bool = False) -> AsyncEngine:
+    """Idempotent engine init. Call once per process (e.g., FastAPI startup, worker startup).
+
+    `admin=True` selects the `database_admin_url` (the `app_admin` BYPASSRLS role) for
+    intentionally cross-tenant processes — migrations, seeders, and the retention/ingestion
+    workers (ADR-0016 Rules 3 & 5). It falls back to `database_url` when no admin URL is
+    configured, so dev (single superuser URL) keeps working. The request path uses the default
+    (`admin=False`) → the `app_runtime` role, which is subject to RLS.
+    """
     global _engine, _sessionmaker
     if _engine is not None:
         return _engine
     cfg = settings or get_settings()
+    url = (cfg.database_admin_url or cfg.database_url) if admin else cfg.database_url
     _engine = create_async_engine(
-        cfg.database_url,
+        url,
         future=True,
         echo=False,
         pool_pre_ping=True,

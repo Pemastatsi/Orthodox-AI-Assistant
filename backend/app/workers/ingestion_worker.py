@@ -95,7 +95,10 @@ async def _run(job_id: str, *, redis: Redis) -> None:
     file_bytes, meta = payload
 
     settings = get_settings()
-    init_engine(settings)
+    # Ingestion writes sources/chunks/ingest_jobs (RLS tables) without setting a per-tenant GUC,
+    # so it connects as app_admin (BYPASSRLS) per ADR-0016 Rule 5. Setting the GUC per job (so
+    # ingestion runs as app_runtime) is a documented follow-up.
+    init_engine(settings, admin=True)
 
     # Fetch the latest job state so we use the right tenant/source ids of record.
     async with session_scope() as session:
@@ -159,7 +162,7 @@ class WorkerSettings:
     @staticmethod
     async def on_startup(ctx: dict[str, Any]) -> None:
         del ctx  # arq passes its own context; we just need to wake the engine
-        init_engine()
+        init_engine(admin=True)  # ADR-0016 Rule 5: ingestion runs as app_admin (see _run)
 
 
 __all__ = [

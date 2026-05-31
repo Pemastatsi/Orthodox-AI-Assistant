@@ -25,7 +25,11 @@ def _sync_db_url(async_url: str) -> str:
     )
 
 
-config.set_main_option("sqlalchemy.url", _sync_db_url(settings.database_url))
+# Migrations run as app_admin (BYPASSRLS + DDL) per ADR-0016 Rule 3: prefer the admin URL,
+# falling back to database_url so dev (single superuser URL) still migrates.
+config.set_main_option(
+    "sqlalchemy.url", _sync_db_url(settings.database_admin_url or settings.database_url)
+)
 
 
 def run_migrations_offline() -> None:

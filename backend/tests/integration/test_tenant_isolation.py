@@ -58,15 +58,27 @@ async def seed_two_tenants(clean_tables: None) -> AsyncIterator[tuple[str, str]]
     yield _TENANT_A, _TENANT_B
 
 
+# The app/test DB connection is the bootstrap superuser, which BYPASSES RLS. To exercise the
+# policy we `SET LOCAL ROLE app_runtime` (the non-BYPASSRLS runtime role from migration 0002)
+# inside the assertion transaction — a superuser may assume any role, and the FORCE'd policy then
+# applies. SET LOCAL keeps the role switch transaction-scoped so a pooled connection never leaks it.
+_RLS_ROLE = "app_runtime"
+
+
+async def _assume_rls_role(session: Any) -> None:
+    await session.execute(text(f"SET LOCAL ROLE {_RLS_ROLE}"))
+
+
 async def _assert_only_tenant_a_visible(
     table: str, sql_filter: str, params_a: dict[str, Any], params_b: dict[str, Any]
 ) -> None:
-    """Run two queries under tn_a's GUC and assert RLS hides tn_b's row."""
+    """Run two queries under tn_a's GUC (as app_runtime) and assert RLS hides tn_b's row."""
     from app.core.tenant_context import set_tenant_guc
     from app.domain.repositories._base import get_sessionmaker
 
     sm = get_sessionmaker()
     async with sm() as session, session.begin():
+        await _assume_rls_role(session)
         await set_tenant_guc(session, _TENANT_A)
 
         # No tenant_id filter — RLS alone must filter out tn_b.
@@ -306,3 +318,99 @@ async def test_raw_sensitive_logs_isolated(seed_two_tenants: tuple[str, str]) ->
         params_a={"l": "rsl_iso_a"},
         params_b={"l": "rsl_iso_b"},
     )
+
+
+# ---------------------------------------------------------------------------------------------
+# RLS enforcement-mechanism tests (ADR-0016): fail-closed, WITH CHECK, and the request path.
+# These assert *that the GUC + app_runtime role is what enforces isolation* — the runtime wiring
+# added in T-008 GS-1 — not just that the policy exists.
+# ---------------------------------------------------------------------------------------------
+
+
+async def test_unset_guc_fails_closed(seed_two_tenants: tuple[str, str]) -> None:
+    """No GUC set under app_runtime → every tenant table reads zero rows (not an error)."""
+    from app.domain.repositories._base import get_sessionmaker
+
+    sm = get_sessionmaker()
+    async with sm() as session, session.begin():
+        await _assume_rls_role(session)
+        # Deliberately do NOT set the GUC. current_setting(...) is NULL → policy matches nothing.
+        rows = await session.execute(text("SELECT tenant_id FROM tenants"))
+        assert rows.all() == [], "RLS fail-closed breach: rows visible with no tenant GUC set"
+
+
+async def test_with_check_rejects_cross_tenant_insert(
+    seed_two_tenants: tuple[str, str],
+) -> None:
+    """An INSERT whose tenant_id != the GUC is rejected by the policy's WITH CHECK clause."""
+    from app.core.tenant_context import set_tenant_guc
+    from app.domain.repositories._base import get_sessionmaker
+    from sqlalchemy.exc import ProgrammingError
+
+    sm = get_sessionmaker()
+    with pytest.raises(ProgrammingError):  # asyncpg InsufficientPrivilegeError (RLS violation)
+        async with sm() as session, session.begin():
+            await _assume_rls_role(session)
+            await set_tenant_guc(session, _TENANT_A)
+            # Insert a source row for tn_b while the GUC says tn_a → WITH CHECK rejects.
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO sources (
+                        source_id, tenant_id, title, language, source_type, source_hash,
+                        extraction_method, corpus_version, created_at
+                    ) VALUES (:s, :t, 'x', 'en', 'txt', :h, 'plain', '2026-05-01.1', now())
+                    """
+                ),
+                {"s": "src_wc_b", "t": _TENANT_B, "h": "sha256:" + "9" * 64},
+            )
+
+
+async def test_request_path_tenant_session_isolates(
+    seed_two_tenants: tuple[str, str],
+) -> None:
+    """Regression: GET /admin/queries through get_tenant_session returns only the caller's tenant.
+
+    This guards the get_session -> get_tenant_session dependency swap (the SET LOCAL GUC must not
+    break the endpoint) and the end-to-end tenant-isolation invariant. NOTE: in the test DB the app
+    connects as the superuser, so RLS is bypassed here and the app-layer `WHERE tenant_id` filter is
+    what isolates — the *pure-RLS* enforcement of the request-path GUC is proven by the fail-closed
+    / WITH CHECK tests above (run under app_runtime) plus the manual app_runtime run in the runbook.
+    """
+    import base64
+    import json
+
+    from app.domain.repositories._base import get_sessionmaker
+    from app.main import app
+    from fastapi.testclient import TestClient
+
+    sm = get_sessionmaker()
+    async with sm() as session, session.begin():
+        for tid, uid, rid in [
+            (_TENANT_A, _USER_A, "run_req_a"),
+            (_TENANT_B, _USER_B, "run_req_b"),
+        ]:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO run_traces (
+                        run_id, tenant_id, user_id, started_at, cache_hit, stages, usage
+                    ) VALUES (:r, :t, :u, now(), false, '[]'::jsonb, '{}'::jsonb)
+                    """
+                ),
+                {"r": rid, "t": tid, "u": uid},
+            )
+
+    header = {
+        "x-dev-principal": base64.b64encode(
+            json.dumps(
+                {"tenantId": _TENANT_A, "role": "owner", "userId": _USER_A}
+            ).encode("utf-8")
+        ).decode("ascii")
+    }
+    with TestClient(app) as client:
+        resp = client.get("/api/v1/admin/queries", headers=header)
+    assert resp.status_code == 200, resp.text
+    run_ids = {item["runId"] for item in resp.json()["items"]}
+    # tn_a's row is visible; tn_b's must not be (RLS via the request-path GUC).
+    assert "run_req_b" not in run_ids, "RLS leak: tn_b run_trace visible to tn_a via the API"

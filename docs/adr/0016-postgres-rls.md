@@ -117,6 +117,15 @@ In addition to the integration test in Rule 4:
 - **App-layer-only with stricter linting** (e.g., a custom ruff rule that requires every SQLAlchemy query against a multi-tenant model to include a `.filter(Model.tenant_id == X)` call). Rejected as fragile: complex joins and raw `text()` queries are hard to lint deterministically, and the failure mode is silent (no test catches it unless the test happens to exercise the leaked join).
 - **Per-tenant Postgres schema / per-tenant database.** Rejected for Phase 1: provisioning cost and Alembic complexity per tenant make this a Phase-3 escape hatch, not a Phase-1 default. ADR-0015 (regional tenancy) and a future per-tenant-schema ADR could revisit this if a tenant's compliance posture requires it.
 
+## Implementation status (T-008 GS-1)
+
+The DB layer shipped with T-005 (migration `0002_rls_and_app_roles.py`): RLS `ENABLE` + `FORCE` and the `tenant_isolation_policy` on every multi-tenant table; roles `app_runtime` (NOLOGIN) and `app_admin` (NOLOGIN BYPASSRLS). The runtime wiring that makes the backstop actually engage landed in T-008 GS-1:
+
+- **Request path (Rule 2).** `app/api/v1/_deps.py::get_tenant_session` resolves the `Principal` and calls `app/core/tenant_context.py::set_tenant_guc` (`SET LOCAL app.current_tenant_id`) inside the request transaction. All authenticated tenant-scoped routes depend on it; `query.py` sets the GUC inline on its own session. `get_session` is retained as an explicit RLS-bypass for platform-table callers.
+- **Role split (Rules 3 & 5).** `init_engine(admin=…)` selects `database_url` (→ `app_runtime`, subject to RLS) for the request path and `database_admin_url` (→ `app_admin`, BYPASSRLS) for migrations (`alembic/env.py`), the retention worker, and the ingestion worker. Both fall back to `database_url` when no admin URL is set, so dev's single-superuser URL keeps working (RLS inert locally). Migration `0005_app_runtime_login.py` grants `app_runtime` LOGIN; its password is provisioned out-of-band (never committed).
+- **Deploy contract.** Production sets `DATABASE_URL` to the `app_runtime` connection string and `DATABASE_ADMIN_URL` to the `app_admin` connection string. That is the single switch that turns enforcement on; if `DATABASE_URL` stays a superuser, RLS is bypassed and only the app-layer filter applies.
+- **Follow-ups.** Per-job GUC for the ingestion worker so it runs as `app_runtime` rather than `app_admin` (Rule 5); wiring a Postgres service into CI so the isolation suite runs there instead of skipping.
+
 ## References
 
 - ADR-0003 (Multi-Tenant Day One) — the parent decision this ADR strengthens.

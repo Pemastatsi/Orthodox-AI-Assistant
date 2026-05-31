@@ -25,7 +25,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import Field
 
-from app.api.v1._deps import get_session, require_scope
+from app.api.v1._deps import get_tenant_session, require_scope
 from app.domain.models._base import WireModel
 from app.domain.models.audit_entry import AuditEntry
 from app.domain.models.flagged_query import FlaggedQuery
@@ -76,7 +76,7 @@ async def list_admin_queries(
     ),
     since: datetime | None = Query(default=None),
     principal: Principal = Depends(require_scope("admin:queries:read")),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_tenant_session),
 ) -> AdminQueryListResponse:
     items, next_cursor = await RunTraceRepository(session).list_by_tenant(
         tenant_id=principal.tenant_id,
@@ -99,7 +99,7 @@ async def list_admin_flagged(
     limit: int = Query(default=25, ge=1, le=100),
     flag_reason: str | None = Query(default=None, alias="flagReason"),
     principal: Principal = Depends(require_scope("admin:flagged:read")),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_tenant_session),
 ) -> AdminFlaggedListResponse:
     items, next_cursor = await FlaggedQueryRepository(session).list_by_tenant(
         tenant_id=principal.tenant_id,
@@ -127,7 +127,7 @@ async def list_admin_audit(
     resource_type: str | None = Query(default=None, alias="resourceType"),
     since: datetime | None = Query(default=None),
     principal: Principal = Depends(require_scope("admin:audit:read")),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_tenant_session),
 ) -> AdminAuditListResponse:
     items, next_cursor = await AuditRepository(session).list_by_tenant(
         tenant_id=principal.tenant_id,
@@ -152,10 +152,10 @@ class CertifyModelRouteRequest(WireModel):
 async def certify_model_route(
     body: CertifyModelRouteRequest,
     route_id: str = Path(alias="routeId"),
-    # `require_scope` is resolved before `get_session`, so a non-owner is rejected (403) without
-    # ever opening a DB transaction.
+    # `require_scope` is resolved before `get_tenant_session`, so a non-owner is rejected (403)
+    # without ever opening a DB transaction.
     principal: Principal = Depends(require_scope("model_route:certify")),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_tenant_session),
 ) -> ModelRoute:
     """Owner-only PATCH that promotes a route to `certified` (ADR-0004), enforcing the binding
     gates: a passing safety-suite run for every route, plus a passing retrieval-eval run for

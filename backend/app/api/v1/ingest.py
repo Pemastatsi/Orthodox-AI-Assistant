@@ -11,8 +11,8 @@ from redis.asyncio import Redis
 
 from app.api.v1._deps import (
     get_redis,
-    get_session,
     get_settings_dep,
+    get_tenant_session,
     require_scope,
 )
 from app.core.config import Settings
@@ -58,7 +58,7 @@ async def upload_source(
     work: str | None = Form(default=None),
     language: Literal["en", "el", "mixed"] = Form(default="en"),
     principal: Principal = Depends(require_scope("corpus:write")),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_tenant_session),
     redis: Redis = Depends(get_redis),
     settings: Settings = Depends(get_settings_dep),
 ) -> IngestUploadResponse:
@@ -128,7 +128,7 @@ async def upload_source(
 async def get_ingest_job(
     job_id: str,
     principal: Principal = Depends(require_scope("corpus:read")),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_tenant_session),
 ) -> IngestJob:
     job = await IngestJobRepository(session).get(
         tenant_id=principal.tenant_id, job_id=job_id
