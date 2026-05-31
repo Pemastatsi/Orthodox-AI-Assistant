@@ -35,6 +35,29 @@ def _parse_host_port(url: str, default_port: int) -> tuple[str, int]:
     return parsed.hostname or "localhost", parsed.port or default_port
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """Fail loudly when a DB is required but absent (CI), instead of silently skipping.
+
+    The integration tests skip when Postgres is unreachable so local `pytest` stays simple. But in
+    CI we provision a Postgres service and set `REQUIRE_DB=1` — there, an unreachable DB must be a
+    hard error, otherwise the whole integration suite (RLS isolation, certification, etc.) would
+    silently regress to "skipped" and CI would stay green without verifying anything. Reuses the
+    same connection probe the `postgres_available` fixture uses; no DB → exit before collection.
+    """
+    del config
+    if os.environ.get("REQUIRE_DB", "").strip().lower() not in {"1", "true", "yes"}:
+        return
+    from app.core.config import get_settings
+
+    host, port = _parse_host_port(get_settings().database_url, 5432)
+    if not _can_connect(host, port):
+        raise pytest.UsageError(
+            f"REQUIRE_DB is set but Postgres is unreachable at {host}:{port}. "
+            "The DB-gated integration tests must run (not skip) in this environment. "
+            "Start Postgres (e.g. `make up`) or unset REQUIRE_DB for a DB-less local run."
+        )
+
+
 @pytest.fixture(scope="session")
 def postgres_available() -> bool:
     from app.core.config import get_settings
