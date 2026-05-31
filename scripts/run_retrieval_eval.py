@@ -53,7 +53,6 @@ from app.domain.repositories.model_route_repository import (  # noqa: E402
 from app.domain.repositories.retrieval_eval_run_repository import (  # noqa: E402
     RetrievalEvalRunRepository,
 )
-
 from tests.retrieval_eval.baselines import (  # noqa: E402
     load_baseline,
     write_baseline,
