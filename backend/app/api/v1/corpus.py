@@ -9,7 +9,7 @@ import ulid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 
-from app.api.v1._deps import get_session, require_scope
+from app.api.v1._deps import get_tenant_session, require_scope
 from app.domain.models._base import WireModel
 from app.domain.models.chunk import Chunk
 from app.domain.models.principal import Principal
@@ -48,7 +48,7 @@ async def list_corpus(
     visibility: Visibility | None = Query(default=None),
     source_id: str | None = Query(default=None, alias="sourceId"),
     principal: Principal = Depends(require_scope("corpus:read")),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_tenant_session),
 ) -> CorpusListResponse:
     items, next_cursor = await ChunkRepository(session).list_by_tenant(
         tenant_id=principal.tenant_id,
@@ -70,7 +70,7 @@ async def review_chunk(
     chunk_id: str,
     body: CorpusReviewRequest,
     principal: Principal = Depends(require_scope("corpus:approve")),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_tenant_session),
 ) -> Chunk:
     if body.approved is None and body.visibility is None and body.review_note is None:
         raise HTTPException(

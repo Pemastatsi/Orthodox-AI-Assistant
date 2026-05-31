@@ -20,6 +20,7 @@ from app.adapters.vector_store.qdrant_store import QdrantStore
 from app.core.auth import resolve_principal
 from app.core.config import Settings, get_settings
 from app.core.errors import ForbiddenRoleError
+from app.core.tenant_context import set_tenant_guc
 from app.domain.agents.composer import Composer
 from app.domain.agents.evidence_packager import EvidencePackager
 from app.domain.agents.query_analyzer import QueryAnalyzer
@@ -84,7 +85,27 @@ def require_scope(
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
+    """RLS-bypass session: NO tenant GUC is set, so under the `app_runtime` role every
+    tenant-scoped table reads zero rows (fail closed). Reserve for genuinely cross-tenant /
+    platform-table callers; authenticated tenant-scoped routes MUST use `get_tenant_session`
+    so Postgres RLS (ADR-0016) enforces the tenant boundary at the engine layer."""
     async with session_scope() as session:
+        yield session
+
+
+async def get_tenant_session(
+    principal: Principal = Depends(get_principal),
+) -> AsyncIterator[AsyncSession]:
+    """Per-request session with the RLS tenant GUC set from the resolved Principal (ADR-0016).
+
+    `session_scope()` opens the transaction; `set_tenant_guc` issues `SET LOCAL
+    app.current_tenant_id = <principal.tenant_id>` inside it (transaction-scoped, never
+    `SET SESSION` — ADR-0016 Rule 6). Under the `app_runtime` role this makes the
+    `tenant_isolation_policy` enforce the boundary; if this dependency is ever omitted on a
+    tenant route, the unset GUC means zero rows (fail closed) rather than a cross-tenant leak.
+    """
+    async with session_scope() as session:
+        await set_tenant_guc(session, principal.tenant_id)
         yield session
 
 
@@ -315,6 +336,7 @@ __all__ = [
     "get_session",
     "get_settings_dep",
     "get_sparse_embedder",
+    "get_tenant_session",
     "get_vector_store",
     "get_verifier_provider",
     "require_scope",
