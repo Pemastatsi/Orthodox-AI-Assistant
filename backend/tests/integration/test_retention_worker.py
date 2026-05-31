@@ -7,6 +7,7 @@ log assertions use structlog's capture utility so we don't depend on stdout seri
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -15,6 +16,25 @@ import structlog
 from sqlalchemy import text
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _reset_structlog() -> Iterator[None]:
+    """Isolate structlog config per test so LogCapture assertions are deterministic.
+
+    `app.core.logging.configure_logging()` (run by any earlier test that starts the app via
+    TestClient) sets `cache_logger_on_first_use=True`. With caching on, the module-level `logger`
+    proxy in `retention_cleanup` caches a bound logger wired to the *first* test's LogCapture, so a
+    later test's fresh `structlog.configure(processors=[cap])` is ignored and `cap.entries` stays
+    empty. `reset_defaults()` turns caching back off (and clears global config) before each test so
+    every call re-resolves the active processors; we reset again afterwards so this file does not
+    leak its own structlog state into later tests.
+    """
+    structlog.reset_defaults()
+    try:
+        yield
+    finally:
+        structlog.reset_defaults()
 
 
 @pytest_asyncio.fixture()
