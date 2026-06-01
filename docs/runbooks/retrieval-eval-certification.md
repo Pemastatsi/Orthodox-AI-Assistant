@@ -24,6 +24,39 @@ corpus DB, Qdrant, API budget, and owner authority.
 4. A passing **safety-suite run** row exists for the route (`safety_suite_runs`) — T-006's harness
    domain. Certification needs both gates.
 
+## Phase-A pre-flight checklist (founder)
+
+The offline smoke (Step 1 below) proves the loop today, free. A **paid live** Phase-A benchmark of a
+real tenant needs these in order — each maps to a command that already exists, so nothing is
+improvised at spend time:
+
+1. **Ingested, approved corpus for the tenant** with stable `chunk_id`s (T-002 ingestion). The gold
+   set's `expectedChunkIds` reference these; `corpusVersionAtCuration` records the version.
+2. **A curated, validated gold set** — `tests/retrieval_eval/gold_sets/<tenant>/<version>.json` per
+   `CURATION.md` (Confidential; founder + reviewer authority). Gate it:
+   ```bash
+   cd backend
+   uv run python ../scripts/validate_gold_set.py ../path/to/<version>.json                 # offline
+   uv run python ../scripts/validate_gold_set.py --check-corpus ../path/to/<version>.json   # + corpus
+   ```
+   (CI already runs the offline check on every committed gold set; `--check-corpus` needs the DB.)
+3. **Qdrant reachable + the candidate's dual-index collection backfilled** — paid embedding calls,
+   founder action (`embedding-upgrade-sop.md` §Stage 2). Dry-run first (free), then `--execute`:
+   ```bash
+   cd backend
+   uv run python ../scripts/run_embedding_backfill.py --tenant-id <tenant> --route-id <route>   # dry run
+   uv run python ../scripts/run_embedding_backfill.py --tenant-id <tenant> --route-id <route> \
+       --collection <cand_collection> --execute --verify                                        # paid
+   ```
+   The **openai** candidate (`text-embedding-3-large`) runs today; the **bge** candidate is blocked
+   pending the runtime-dependency decision (ADR-0017 / register D-EMB-001) — only the openai arm of
+   Phase-A is runnable now, which is enough to reach a winner-or-no-winner outcome.
+4. **A passing `safety_suite_runs` row** for the candidate route (T-006 harness) — the second gate.
+5. **Cost approval.** The live backfill + any judge run incur paid API calls; get explicit owner
+   sign-off and a budget ceiling before `--execute` (CLAUDE.md §10).
+
+With 1–4 satisfied, proceed to Step 1 (live invocation), then Steps 2–4 below.
+
 ## Step 1 — Run + persist the retrieval-eval
 
 Offline smoke (free; proves the loop without spend):

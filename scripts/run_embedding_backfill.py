@@ -67,8 +67,8 @@ def _embedder_for(route: ModelRoute) -> OpenAIProvider:
     if route.provider == "bge":
         raise SystemExit(
             "error: the bge candidate (BGE-M3) is not runnable yet — its runtime dependency is a "
-            "deferred, founder-/budget-gated decision (see docs/adr/0017). Run the openai "
-            "candidate, or land the bge dependency first."
+            "deferred, founder-/budget-gated decision (see docs/adr/0017, register D-EMB-001). Run "
+            "the openai candidate, or land the bge dependency first."
         )
     if route.provider != "openai":
         raise SystemExit(

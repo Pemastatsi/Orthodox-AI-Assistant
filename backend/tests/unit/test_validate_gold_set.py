@@ -115,3 +115,78 @@ def test_committed_smoke_gold_set_validates() -> None:
     report = validate_gold_set.validate_offline(json.loads(path.read_text()))
     assert report.ok, report.errors
     assert report.case_count == 6
+
+
+# --------------------------------------------------------------------------------------------
+# Published-schema <-> pydantic-model drift guard (T-009 Phase-A readiness).
+#
+# `validate_offline` enforces the gold-set shape via the pydantic `GoldSet` model
+# (tests/retrieval_eval/harness.py), and `load_gold_set` drops `$schema` and validates through that
+# same model — so the *published* JSON schema (docs/schemas/retrieval-eval-gold-set.schema.json),
+# which curators read and tooling advertises, is never actually checked against the model that
+# bites. These stdlib-only tests (no `jsonschema` dependency — the repo's Contracts CI job is
+# deliberately stdlib-only) fail if the two drift apart on the contract surface: required fields and
+# the documented patterns/enums.
+# --------------------------------------------------------------------------------------------
+import json  # noqa: E402  (kept local to this guard block)
+
+
+def _published_schema() -> dict[str, Any]:
+    path = (
+        Path(__file__).resolve().parents[3]
+        / "docs"
+        / "schemas"
+        / "retrieval-eval-gold-set.schema.json"
+    )
+    return json.loads(path.read_text())
+
+
+def test_published_schema_required_fields_match_model() -> None:
+    """Top-level + per-case required fields in the published schema match the pydantic model
+    (compared by camelCase alias, since WireModel uses alias_generator=to_camel)."""
+    from tests.retrieval_eval.harness import GoldCase, GoldSet
+
+    schema = _published_schema()
+
+    model_top = set(GoldSet.model_json_schema(by_alias=True)["required"])
+    assert set(schema["required"]) == model_top, (
+        "top-level required fields drifted between the published schema and GoldSet"
+    )
+
+    model_case = set(GoldCase.model_json_schema(by_alias=True)["required"])
+    schema_case = set(schema["$defs"]["case"]["required"])
+    assert schema_case == model_case, (
+        "per-case required fields drifted between the published schema and GoldCase"
+    )
+
+
+def test_published_schema_patterns_and_enums_match_validator_and_model() -> None:
+    """The version/case-id regexes and the language/sensitivity enums in the published schema match
+    the validator's hand-coded rules and the pydantic model's Literals — so a curator validating
+    against the published schema gets the same verdict the gate will."""
+    from tests.retrieval_eval.harness import GoldCase
+
+    schema = _published_schema()
+    case_props = schema["$defs"]["case"]["properties"]
+
+    # Patterns the validator enforces directly (validate_gold_set._VERSION_RE / _CASE_ID_RE).
+    assert schema["properties"]["version"]["pattern"] == validate_gold_set._VERSION_RE
+    assert case_props["id"]["pattern"] == validate_gold_set._CASE_ID_RE
+
+    # Enums must match the pydantic Literals exactly (order-insensitive).
+    import typing
+
+    model_fields = GoldCase.model_fields
+    enum_pairs = [("language", "language"), ("sensitivityPrimary", "sensitivity_primary")]
+    for wire_name, py_name in enum_pairs:
+        schema_enum = set(case_props[wire_name]["enum"])
+        # Literal[...] args live on the field annotation.
+        literal_args = set(typing.get_args(model_fields[py_name].annotation))
+        assert schema_enum == literal_args, f"{wire_name} enum drifted from the model Literal"
+
+    # The hard-trigger ban the validator layers on top must NOT be expressible via the enum (the
+    # forbidden aliases are intentionally absent from sensitivityPrimary).
+    assert not (
+        validate_gold_set._FORBIDDEN_SENSITIVITY_ALIASES
+        & set(case_props["sensitivityPrimary"]["enum"])
+    )

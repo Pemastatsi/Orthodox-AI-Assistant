@@ -156,7 +156,8 @@ def build_live_harness(
         raise NotImplementedError(
             "The bge candidate (BGE-M3) is not runnable yet: its runtime dependency "
             "(FlagEmbedding / sentence-transformers, ~2.3GB, or a hosted route) is a deferred, "
-            "founder-/budget-gated decision. Run the openai candidate, or land the bge dep first."
+            "founder-/budget-gated decision (see docs/adr/0017, register D-EMB-001). Run the "
+            "openai candidate, or land the bge dependency first."
         )
     if route.provider != "openai":
         raise ValueError(
