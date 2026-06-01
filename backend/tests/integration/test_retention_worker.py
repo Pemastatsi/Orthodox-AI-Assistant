@@ -167,3 +167,42 @@ async def test_non_expired_row_is_preserved(
             {"l": log_id},
         )
         assert row.one_or_none() is not None
+
+
+@pytest.mark.asyncio
+async def test_writes_retention_purged_audit_row(
+    seed_tenant: tuple[str, str], session_factory
+) -> None:
+    """Every run writes one `retention_purged` audit row attributed to the platform sentinel —
+    the DB-visible signal exit criterion #8c reads. Asserted on a no-expired-rows run so the row
+    is shown to be unconditional (deleted_count == 0), mirroring the always-emitted log event."""
+    del seed_tenant
+    from app.domain.repositories._base import session_scope
+    from app.workers.tasks.retention_cleanup import run_retention_cleanup
+
+    result = await run_retention_cleanup(session_factory=session_factory)
+    assert result["deleted_count"] == 0
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                text(
+                    """
+                    SELECT tenant_id, actor_user_id, actor_role, resource_type, resource_id,
+                           details
+                    FROM audit_entries
+                    WHERE action = 'retention_purged'
+                    ORDER BY occurred_at DESC
+                    LIMIT 1
+                    """
+                )
+            )
+        ).mappings().one_or_none()
+
+    assert row is not None, "retention_purged audit row must be written every run"
+    assert row["tenant_id"] == "tn_platform"
+    assert row["actor_user_id"] == "usr_system"
+    assert row["actor_role"] == "system"
+    assert row["resource_type"] == "raw_sensitive_logs"
+    assert row["details"]["deleted_count"] == 0
+    assert "next_run_at" in row["details"]

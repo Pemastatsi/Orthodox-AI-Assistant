@@ -96,33 +96,50 @@ async def db_engine(postgres_available: bool) -> AsyncIterator[object]:
         await dispose_engine()
 
 
-@pytest_asyncio.fixture()
-async def clean_tables(db_engine: object) -> AsyncIterator[None]:
-    """Truncate all tenant-scoped tables before each integration test."""
-    from app.domain.repositories._base import get_sessionmaker
+async def _truncate_and_restore_sentinel(sm: object) -> None:
+    """Truncate all tenant-scoped tables, then restore the platform sentinel.
+
+    The sentinel tenant/user (`tn_platform`/`usr_system`, migration 0006) is platform
+    infrastructure that production always has — the retention worker attributes its
+    `retention_purged` audit row to it. TRUNCATE … CASCADE wipes it along with tenant data, so we
+    re-seed it after each truncation to restore the migration invariant every test relies on.
+    """
     from sqlalchemy import text
 
+    async with sm() as session:  # type: ignore[operator]
+        await session.execute(
+            text(
+                "TRUNCATE TABLE audit_entries, flagged_queries, raw_sensitive_logs, "
+                "run_traces, ingest_jobs, sessions, billing_usage, chunks, sources, "
+                "users, tenants RESTART IDENTITY CASCADE"
+            )
+        )
+        await session.execute(
+            text(
+                "INSERT INTO tenants (tenant_id, name, clerk_org_id, status, data_region) "
+                "VALUES ('tn_platform', 'Platform (system)', 'clerk_org_platform_sentinel', "
+                "'active', 'us') ON CONFLICT (tenant_id) DO NOTHING"
+            )
+        )
+        await session.execute(
+            text(
+                "INSERT INTO users (user_id, clerk_user_id, tenant_id, role, status) "
+                "VALUES ('usr_system', 'clerk_usr_system_sentinel', 'tn_platform', 'member', "
+                "'active') ON CONFLICT (user_id) DO NOTHING"
+            )
+        )
+        await session.commit()
+
+
+@pytest_asyncio.fixture()
+async def clean_tables(db_engine: object) -> AsyncIterator[None]:
+    """Truncate all tenant-scoped tables before each integration test (sentinel preserved)."""
+    from app.domain.repositories._base import get_sessionmaker
+
     sm = get_sessionmaker()
-    async with sm() as session:
-        # Truncate in FK-safe order.
-        await session.execute(
-            text(
-                "TRUNCATE TABLE audit_entries, flagged_queries, raw_sensitive_logs, "
-                "run_traces, ingest_jobs, sessions, billing_usage, chunks, sources, "
-                "users, tenants RESTART IDENTITY CASCADE"
-            )
-        )
-        await session.commit()
+    await _truncate_and_restore_sentinel(sm)
     yield
-    async with sm() as session:
-        await session.execute(
-            text(
-                "TRUNCATE TABLE audit_entries, flagged_queries, raw_sensitive_logs, "
-                "run_traces, ingest_jobs, sessions, billing_usage, chunks, sources, "
-                "users, tenants RESTART IDENTITY CASCADE"
-            )
-        )
-        await session.commit()
+    await _truncate_and_restore_sentinel(sm)
 
 
 @pytest_asyncio.fixture()
