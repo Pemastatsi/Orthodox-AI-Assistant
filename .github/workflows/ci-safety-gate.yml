@@ -255,5 +255,24 @@ jobs:
         run: |
           pip install uv
           uv sync
+      - name: Validate committed gold sets (offline; schema + curation rules; no DB, no API)
+        # Catches a malformed committed gold set before it can gate a certification. Offline only
+        # (no --check-corpus) so it stays free + DB-less. Only real gold sets under a <tenant>/ dir
+        # are checked; the gold_sets/ root holds _TEMPLATE.json (a skeleton with no cases), which is
+        # intentionally excluded — matching the harness's own root-vs-<tenant>/ convention.
+        run: |
+          shopt -s nullglob
+          files=(tests/retrieval_eval/gold_sets/*/*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No committed gold sets under a <tenant>/ dir — nothing to validate."
+            exit 0
+          fi
+          rc=0
+          for f in "${files[@]}"; do
+            echo "::group::validate $f"
+            uv run python ../scripts/validate_gold_set.py "$f" || rc=1
+            echo "::endgroup::"
+          done
+          exit $rc
       - name: Run retrieval-eval suite (deterministic metrics; judge path gated off)
         run: uv run pytest tests/retrieval_eval -v
