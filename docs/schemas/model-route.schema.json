@@ -33,6 +33,10 @@
     },
     "model": { "type": "string" },
     "promptVersion": { "type": "string" },
+    "promptId": {
+      "type": ["string", "null"],
+      "description": "GS-3 prompt-registry path stem identifying which prompt template tree under /prompts this route draws from, e.g. 'a1_classifier/en'. Optional during the Phase-1 bootstrap; combined with promptVersion it locates the exact /prompts/<promptId>/<version>.j2 file once the runtime prompt-loader (GS-3 follow-up) lands."
+    },
     "schemaVersion": { "type": "string" },
     "supportsPromptCache": { "type": "boolean", "default": false },
     "supportsBatch": { "type": "boolean", "default": false },

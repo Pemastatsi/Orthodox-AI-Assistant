@@ -22,6 +22,11 @@ class ModelRoute(WireModel):
     provider: RouteProvider
     model: str
     prompt_version: str
+    # GS-3 prompt registry: path stem (e.g. "a1_classifier/en") identifying which prompt
+    # template tree under /prompts this route draws from. Optional during the Phase-1
+    # bootstrap; pairs with prompt_version to locate /prompts/<prompt_id>/<version>.j2 once
+    # the runtime loader lands. See /prompts/README.md.
+    prompt_id: str | None = None
     schema_version: str
     certification_status: CertificationStatus
     created_at: datetime
