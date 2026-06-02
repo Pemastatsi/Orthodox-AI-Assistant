@@ -157,6 +157,26 @@ jobs:
         # the safety-suite-execution job instead.
         run: pytest tests/safety/test_20_queries.py -v
 
+  prompts-gate:
+    name: Prompt Registry Gate (layout + drift vs inline source)
+    # GS-3: validates the /prompts registry on every PR — every prompt file is
+    # <stage>/<language>/<version>.j2, non-empty, with a stage README, and each
+    # versioned answer-path prompt stays byte-identical to the inline _SYSTEM_PROMPT
+    # it currently mirrors (tests/prompts/test_prompt_files_match_inline.py). Dep-free
+    # (pytest only), mirroring safety-suite-fixtures. NOTE: a change to prompt *text*
+    # additionally requires the safety-suite-execution and retrieval-eval-regression
+    # checks (route re-certification per ADR-0004 / docs/contracts).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: pip install pytest
+      - name: Validate /prompts registry (layout + drift vs inline source)
+        run: pytest tests/prompts/test_prompt_files_match_inline.py -v
+
   safety-suite-execution:
     name: Theological Safety Suite — Execution (20 cases through live pipeline)
     runs-on: ubuntu-latest
