@@ -50,7 +50,8 @@ registry text its active route advertises. A change to prompt *text* also requir
 
 ## Deferred
 
-- **`retrieval_eval_judge`** — the Ragas-style retrieval-eval judge
-  (`docs/contracts/retrieval-eval-suite.md`) is migrated with its own suite.
+- **`retrieval_eval_judge`** — the Ragas-style retrieval-eval judge uses **DeepEval's
+  built-in metric prompts** (library-owned), routed through our certified judge route
+  (`docs/contracts/retrieval-eval-suite.md`); there is no prompt of ours to register here.
 - **Templating** — Jinja rendering (autoescape disabled for prompt text) + per-prompt JSON
   schema sidecars, added when a prompt first needs variables.

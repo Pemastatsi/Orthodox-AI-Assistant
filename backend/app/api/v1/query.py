@@ -341,7 +341,7 @@ async def post_query(
             fresh_model_run=False,
             stages=[
                 _stage_a1a2(started_at, settings, outcome="ok"),
-                _stage("a5_composer", started_at, outcome="error", notes=type(exc).__name__),
+                _stage_a5(started_at, settings, outcome="error", notes=type(exc).__name__),
             ],
             flag_reason="verifier_failed",
             cipher=cipher,
@@ -382,7 +382,7 @@ async def post_query(
         fresh_model_run=True,
         stages=[
             _stage_a1a2(started_at, settings, outcome="ok"),
-            _stage("a5_composer", started_at, outcome="ok"),
+            _stage_a5(started_at, settings, outcome="ok"),
             _stage("a6_verifier", started_at, outcome="ok" if a6_passed else "fallback"),
         ],
         flag_reason=None if a6_passed else "verifier_failed",
@@ -427,6 +427,7 @@ def _stage(
     outcome: str,
     notes: str | None = None,
     model_route_id: str | None = None,
+    details: dict[str, str] | None = None,
 ) -> Stage:
     now = datetime.now(UTC)
     return Stage(
@@ -436,6 +437,7 @@ def _stage(
         outcome=outcome,
         model_route_id=model_route_id,
         notes=notes,
+        details=details or {},
     )
 
 
@@ -445,6 +447,26 @@ def _stage_a1a2(started_at: datetime, settings: Settings, *, outcome: str) -> St
         started_at,
         outcome=outcome,
         model_route_id=settings.active_model_route_a1a2,
+        details={
+            "promptVersion": settings.active_prompt_version_a1a2,
+            "promptId": "a1_classifier/en",
+        },
+    )
+
+
+def _stage_a5(
+    started_at: datetime, settings: Settings, *, outcome: str, notes: str | None = None
+) -> Stage:
+    return _stage(
+        "a5_composer",
+        started_at,
+        outcome=outcome,
+        notes=notes,
+        model_route_id=settings.active_model_route_a5,
+        details={
+            "promptVersion": settings.active_prompt_version_a5,
+            "promptId": "a5_composer/en",
+        },
     )
 
 
