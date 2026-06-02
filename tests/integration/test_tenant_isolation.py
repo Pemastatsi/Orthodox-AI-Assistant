@@ -14,15 +14,15 @@ below (T-003); A4/A5 and cache/run-trace checks remain stubs pending T-004 and T
 
 Fixture reference — isolationCases from tiny_other_tenant_corpus.json:
   tenant_a_query_about_prayer:
-    submittingTenant: orthodox_ethos_v1
+    submittingTenant: tn_orthodoxethos
     query: "What do the Fathers teach about prayer?"
     mustNotReturnChunkIds: ["chunk-other-prayer-001"]
   tenant_a_query_about_eucharist:
-    submittingTenant: orthodox_ethos_v1
+    submittingTenant: tn_orthodoxethos
     query: "What is the Orthodox view of the Eucharist?"
     mustNotReturnChunkIds: ["chunk-other-eucharist-001"]
   tenant_a_query_about_philokalia:
-    submittingTenant: orthodox_ethos_v1
+    submittingTenant: tn_orthodoxethos
     query: "Tell me about the Philokalia."
     mustNotReturnChunkIds: ["chunk-other-philokalia-001"]
 
@@ -55,8 +55,8 @@ with open(_FIXTURE_PATH, encoding="utf-8") as _f:
 _ISOLATION_CASES = _OTHER_TENANT_FIXTURE["isolationCases"]
 
 # Derived constants for assertion bodies
-_TENANT_A_ID = "orthodox_ethos_v1"
-_TENANT_B_ID = _OTHER_TENANT_FIXTURE["tenantId"]  # "other_tenant_v1"
+_TENANT_A_ID = "tn_orthodoxethos"
+_TENANT_B_ID = _OTHER_TENANT_FIXTURE["tenantId"]  # "tn_other"
 
 # All chunk IDs that must NEVER appear in Tenant A results
 _ALL_MUST_NOT_CHUNK_IDS: set[str] = set()

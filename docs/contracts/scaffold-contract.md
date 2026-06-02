@@ -206,7 +206,9 @@ ACTIVE_PROMPT_VERSION_A5=a5_compose@2026-05-01.1
 ACTIVE_MODEL_ROUTE_A1A2=qa_analyze_anthropic@2026-05-01.1
 ACTIVE_MODEL_ROUTE_A5=a5_compose_anthropic@2026-05-01.1
 ACTIVE_MODEL_ROUTE_EMBEDDING=embedding_openai@2026-05-01.1
-ACTIVE_MODEL_ROUTE_VERIFIER=     # optional; absence disables A6 judge (deterministic citation checks still run)
+ACTIVE_MODEL_ROUTE_VERIFIER=               # optional; absence disables A6 judge (deterministic citation checks still run)
+ACTIVE_MODEL_ROUTE_RERANK=                 # optional; absence disables A3 reranking (dense+hybrid retrieval still runs); see ADR-0012
+ACTIVE_MODEL_ROUTE_RETRIEVAL_EVAL_JUDGE=   # optional; absence disables Ragas-style LLM-judge metrics in retrieval-eval CI (deterministic Recall@K/Precision@K still run); see docs/contracts/retrieval-eval-suite.md
 
 # --- Frontend ---
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_REPLACE_ME

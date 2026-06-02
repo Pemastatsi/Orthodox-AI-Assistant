@@ -124,7 +124,7 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `docs/task_cards/phase1/T-004-evidence-composer-verifier.md` | contract | A4, A5, and A6. |
 | `docs/task_cards/phase1/T-005-cache-logs-billing.md` | contract | Cache, logs, billing counters, privacy. |
 | `docs/task_cards/phase1/T-006-admin-chat-safety-gate.md` | contract | Chat UI, admin UI, safety gate. |
-| `docs/task_cards/phase1/T-007-real-safety-configs.md` | contract | Real (non-stub) safety config delivery; founder + Greek-language reviewer ownership. Required by exit criterion #9. |
+| `docs/task_cards/phase1/T-007-real-safety-configs.md` | contract | Real (non-stub) safety config delivery; founder sole ownership (recorded as a `safety_config_approved` audit row). Required by exit criterion #9. |
 | `docs/task_cards/phase1/T-008-doc-hygiene-and-codegen.md` | contract | Master tracker for the 2026-05-22 frontier meta-evaluation: all doc amendments + code-deferred acceptance criteria for T-001..T-006. |
 | `docs/task_cards/phase1/T-009-embedding-upgrade.md` | contract | Dual-index embedding benchmark (BGE-M3 + text-embedding-3-large vs baseline); late chunking gated on winner; ColBERT 3rd retrieval signal; Modal Llama-3-70B A5-peer certification (GS-4). |
 | `docs/task_cards/phase2/T-2XX-vector-store-swap-evaluation.md` | contract (Phase 2) | Conditional swap evaluation for Turbopuffer / pgvector+ParadeDB at REC-022 trigger conditions. |
@@ -214,7 +214,7 @@ These files are superseded planning drafts. They have headers warning future age
 - Self-harm and medical-emergency bounded fallbacks are platform-fixed text (988 / local emergency redirect); never tenant-overridable. Other bounded fallbacks accept a tenant `disclaimerTemplateId` override.
 - Only `role='owner'` may PATCH `model_routes.certification_status` to `certified`. Codified in ADR 0004.
 - Founder Phase-2 sign-off is recorded as an `audit_entries` row with `action='founder_phase2_signoff'` and a JSON checklist in `details`.
-- Phase-1→2 exit criterion #9 (added 2026-05-02): real safety-config rules approved by founder + Greek-language reviewer; CI startup test fails when stub baseline is still in place under `APP_ENV='production'`.
+- Phase-1→2 exit criterion #9 (added 2026-05-02, simplified 2026-05-20): real safety-config rules approved by the founder via an `audit_entries(action='safety_config_approved')` row; CI startup test fails when stub baseline is still in place under `APP_ENV='production'`. The earlier "+ named Greek-language reviewer" gate was dropped — Greek-language coverage is still required in the configs, but the founder owns linguistic correctness and may solicit informal review without a contractual reviewer slot.
 - Cache-key V3 SHA-256 corrected on 2026-05-02 to match the documented canonical JSON; V4 added for calendar-profile bumps.
 
 ### Audit Response — Phase 1 Pre-Implementation Audit (2026-05-04)
@@ -236,7 +236,7 @@ The 2026-05-04 pre-implementation audit identified 34 findings (F-01 through F-3
 - 📋 **F-13 (P1):** `tests/integration/test_tenant_isolation.py` skeleton created with 6 tests covering A3 retrieval, A4 admission, citations, cache keys, run-trace stages, and `/admin/queries`; T-005 acceptance lists this file.
 - 📋 **F-14 (P2):** `tests/unit/test_quote_overlap.py` skeleton parametrized over V1–V6 vectors; T-004 acceptance lists ±0.01 tolerance.
 - 📋 **F-15 (P3):** `tests/unit/test_cache_key.py` skeleton parametrized over V1–V4 vectors with literal SHA-256 + from-input-dict assertions; logs Python version on failure for V3 Greek casefold regression debugging.
-- 📋 **F-16 (P1):** New task card `T-007-real-safety-configs.md` opens the non-coding workstream owned by the founder + a named Greek-language reviewer; placeholders in the card MUST be filled before work begins. Required by exit criterion #9.
+- 📋 **F-16 (P1):** New task card `T-007-real-safety-configs.md` opens the non-coding workstream owned by the founder. The named-Greek-language-reviewer slot was dropped on 2026-05-20; founder signoff via `audit_entries(action='safety_config_approved')` is the single contractual gate, and Greek-language coverage is enforced through the configs themselves. Required by exit criterion #9.
 - ✅ **F-17 (P1):** Appendix A of `phase1-implementation-contract.md` defines canonical bounded-fallback texts for cases 6, 10, 12, 17, 20 (each keyed by case class + schemaVersion); `tests/safety/test_20_queries.py` carries `CANONICAL_TEXT_SUBSTRINGS` matching the appendix.
 - ✅ **F-18 (P2):** Run-trace persistence is unconditional (every served request, including hard-safety bypass, mints a runId and persists a minimal `run_traces` row); `BoundedFallbackResponse` now requires `runId`; `observability.md` documents the rule.
 - 📋 **F-19 (P2):** `tests/safety/test_20_queries_paraphrases.py` skeleton; paraphrase content delivered by T-007. `safety-config-format.md §Paraphrase Coverage` documents the gating rule.

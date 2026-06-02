@@ -23,8 +23,8 @@
     },
     "purpose": {
       "type": "string",
-      "enum": ["query_analyzer", "compose", "verifier_judge", "embedding", "retrieval_eval_judge"],
-      "description": "Which pipeline stage this route is certified for. 'retrieval_eval_judge' is the Ragas-style judge route for the retrieval-eval suite (docs/contracts/retrieval-eval-suite.md), certified separately from any answer-path route."
+      "enum": ["query_analyzer", "compose", "verifier_judge", "embedding", "rerank", "retrieval_eval_judge"],
+      "description": "Which pipeline stage this route is certified for. 'rerank' is the cross-encoder reranker route (ADR-0012); 'retrieval_eval_judge' is the Ragas-style judge route for the retrieval-eval suite (docs/contracts/retrieval-eval-suite.md), certified separately from any answer-path route."
     },
     "provider": {
       "type": "string",
