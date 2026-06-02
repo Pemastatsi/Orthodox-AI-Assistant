@@ -76,6 +76,7 @@ class Settings(BaseSettings):
 
     sensitivity_keywords_path: str = str(_REPO_ROOT / "config" / "sensitivity_keywords.yaml")
     pastoral_filters_path: str = str(_REPO_ROOT / "config" / "pastoral_filters.yaml")
+    prompts_dir: str = str(_REPO_ROOT / "prompts")
 
 
 @lru_cache
