@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.adapters.providers.base import LLMProvider
+from app.core.config import get_settings
 from app.core.errors import ProviderRefusedError
 from app.core.logging import get_logger
 from app.domain.agents.composer import ComposerOutput
@@ -40,6 +41,7 @@ from app.domain.models.verified_response import (
 )
 from app.domain.services.bounded_fallback import build_bounded_fallback
 from app.domain.services.citation_formatter import format_citation
+from app.domain.services.prompt_loader import load_prompt
 from app.domain.services.quote_overlap import (
     QUOTE_OVERLAP_THRESHOLD,
     quote_overlap,
@@ -56,6 +58,13 @@ _LINEAGE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bis a translation of\b", re.IGNORECASE),
     re.compile(r"\bcontrasts with\b", re.IGNORECASE),
     re.compile(r"\bsame passage as\b", re.IGNORECASE),
+)
+
+# A6 optional consistency-judge system prompt — canonical text lives in the /prompts
+# registry (GS-3), selected by Settings.active_verifier_version. The judge is disabled by
+# default (F-08); loaded at import so a misconfigured registry fails fast. See /prompts/README.md.
+_JUDGE_SYSTEM_PROMPT = load_prompt(
+    "a6_judge", "en", get_settings().active_verifier_version.split("@", 1)[-1]
 )
 
 
@@ -286,11 +295,7 @@ class Verifier:
         messages = [
             ChatMessage(
                 role="system",
-                content=(
-                    "You are a closed-corpus consistency judge. Given EVIDENCE and ANSWER, "
-                    "return JSON {\"consistent\": true|false}. consistent=false ONLY when "
-                    "the answer asserts something not derivable from the evidence."
-                ),
+                content=_JUDGE_SYSTEM_PROMPT,
             ),
             ChatMessage(
                 role="user",

@@ -17,36 +17,38 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROMPTS_DIR = REPO_ROOT / "prompts"
 
-# Builder modules whose _SYSTEM_PROMPT must be loaded from the registry, not inlined.
-BUILDERS = [
-    "backend/app/domain/prompts/query_analyzer_a1_a2.py",
-    "backend/app/domain/prompts/composer_a5.py",
+# Module-level prompt constants that MUST be loaded from the registry, never inlined:
+# (source file relative to repo root, constant name).
+LOADED_PROMPTS = [
+    ("backend/app/domain/prompts/query_analyzer_a1_a2.py", "_SYSTEM_PROMPT"),
+    ("backend/app/domain/prompts/composer_a5.py", "_SYSTEM_PROMPT"),
+    ("backend/app/domain/agents/verifier.py", "_JUDGE_SYSTEM_PROMPT"),
 ]
 
 
-def _system_prompt_value(py_path: Path) -> ast.expr | None:
+def _assigned_value(py_path: Path, name: str) -> ast.expr | None:
     tree = ast.parse(py_path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "_SYSTEM_PROMPT" for t in node.targets
+            isinstance(t, ast.Name) and t.id == name for t in node.targets
         ):
             return node.value
     return None
 
 
-@pytest.mark.parametrize("rel", BUILDERS)
-def test_system_prompt_is_loaded_not_embedded(rel: str) -> None:
-    value = _system_prompt_value(REPO_ROOT / rel)
-    assert value is not None, f"{rel}: no _SYSTEM_PROMPT assignment found"
+@pytest.mark.parametrize("rel, name", LOADED_PROMPTS)
+def test_prompt_constant_is_loaded_not_embedded(rel: str, name: str) -> None:
+    value = _assigned_value(REPO_ROOT / rel, name)
+    assert value is not None, f"{rel}: no {name} assignment found"
     assert not isinstance(value, (ast.Constant, ast.JoinedStr)), (
-        f"{rel}: _SYSTEM_PROMPT is an inline literal — answer-path prompts MUST be loaded "
-        f"from /prompts via load_prompt() (GS-3 no-embedded-prompts rule)."
+        f"{rel}: {name} is an inline literal — prompts MUST be loaded from /prompts via "
+        f"load_prompt() (GS-3 no-embedded-prompts rule)."
     )
     assert (
         isinstance(value, ast.Call)
         and isinstance(value.func, ast.Name)
         and value.func.id == "load_prompt"
-    ), f"{rel}: _SYSTEM_PROMPT must be assigned from load_prompt(...)"
+    ), f"{rel}: {name} must be assigned from load_prompt(...)"
 
 
 def test_registry_layout_is_well_formed() -> None:

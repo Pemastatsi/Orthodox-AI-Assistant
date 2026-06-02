@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.config import get_settings
+from app.domain.agents import verifier
 from app.domain.prompts import composer_a5, query_analyzer_a1_a2
 from app.domain.services.prompt_loader import PromptNotFoundError, load_prompt
 
@@ -46,3 +47,10 @@ def test_a5_builder_loads_active_registry_prompt() -> None:
     )
     assert expected, "active A5 prompt is empty"
     assert composer_a5._SYSTEM_PROMPT == expected
+
+
+def test_a6_judge_loads_active_registry_prompt() -> None:
+    settings = get_settings()
+    expected = load_prompt("a6_judge", "en", _file_version(settings.active_verifier_version))
+    assert expected.startswith("You are a closed-corpus consistency judge")
+    assert verifier._JUDGE_SYSTEM_PROMPT == expected

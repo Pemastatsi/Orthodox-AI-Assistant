@@ -46,13 +46,10 @@ registry text its active route advertises. A change to prompt *text* also requir
 |---|---|---|---|
 | `a1_classifier` | `a1_classifier/en/2026-05-01.1.j2` | `query_analyzer_a1_a2.py` (via `load_prompt`) | `Settings.active_prompt_version_a1a2` |
 | `a5_composer` | `a5_composer/en/2026-05-01.1.j2` | `composer_a5.py` (via `load_prompt`) | `Settings.active_prompt_version_a5` |
+| `a6_judge` | `a6_judge/en/2026-05-01.1.j2` | `verifier.py` (via `load_prompt`; judge **disabled by default**, F-08) | `Settings.active_verifier_version` |
 
 ## Deferred
 
-- **`a6_judge`** — the optional closed-corpus consistency judge (ADR-0004) is **disabled by
-  default** (`judge_route_id` empty, finding F-08) and its prompt is an inline concatenated
-  literal inside `verifier.py::_run_judge` (not a module constant). Migrated when the judge is
-  productionized.
 - **`retrieval_eval_judge`** — the Ragas-style retrieval-eval judge
   (`docs/contracts/retrieval-eval-suite.md`) is migrated with its own suite.
 - **Templating** — Jinja rendering (autoescape disabled for prompt text) + per-prompt JSON
