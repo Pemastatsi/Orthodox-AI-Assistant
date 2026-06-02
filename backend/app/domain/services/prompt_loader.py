@@ -24,6 +24,13 @@ class PromptNotFoundError(RuntimeError):
     """A requested prompt file is absent from the `/prompts` registry."""
 
 
+def registry_version(prompt_version: str) -> str:
+    """Map a route ``promptVersion`` ("{name}@{YYYY-MM-DD.N}") to its registry file stem
+    ("{YYYY-MM-DD.N}"). The on-disk template is ``{stage}/{language}/{stem}.j2``; the
+    ``{name}@`` prefix is the route/cache identifier, stripped here to locate the file."""
+    return prompt_version.split("@", 1)[-1]
+
+
 @lru_cache(maxsize=None)
 def load_prompt(stage: str, language: str, version: str) -> str:
     """Return the verbatim text of `prompts/<stage>/<language>/<version>.j2`.
@@ -40,4 +47,4 @@ def load_prompt(stage: str, language: str, version: str) -> str:
         ) from exc
 
 
-__all__ = ["PromptNotFoundError", "load_prompt"]
+__all__ = ["PromptNotFoundError", "load_prompt", "registry_version"]

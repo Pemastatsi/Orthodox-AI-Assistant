@@ -14,14 +14,14 @@ from __future__ import annotations
 
 from app.adapters.providers.base import ChatMessage
 from app.core.config import get_settings
-from app.domain.services.prompt_loader import load_prompt
+from app.domain.services.prompt_loader import load_prompt, registry_version
 from app.domain.services.safety_config import SafetyMatch
 
 _STAGE, _LANGUAGE = "a1_classifier", "en"
 # A1/A2 system prompt — canonical text lives in the /prompts registry (GS-3), not inline;
 # selected by Settings.active_prompt_version_a1a2. See /prompts/README.md.
 _PROMPT_VERSION = get_settings().active_prompt_version_a1a2
-_SYSTEM_PROMPT = load_prompt(_STAGE, _LANGUAGE, _PROMPT_VERSION.split("@", 1)[-1])
+_SYSTEM_PROMPT = load_prompt(_STAGE, _LANGUAGE, registry_version(_PROMPT_VERSION))
 
 
 def build_messages(

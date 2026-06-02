@@ -80,6 +80,7 @@ from app.domain.services.cache_service import (
     cache_key,
 )
 from app.domain.services.encryption_service import SensitiveLogCipher
+from app.domain.services.prompt_loader import registry_version
 from app.domain.services.redaction_service import (
     redact_query_text,
     should_capture_raw_sensitive,
@@ -441,6 +442,13 @@ def _stage(
     )
 
 
+# Registry path identifiers for the model-backed stages (GS-3). The RunTrace promptVersion is
+# the full registry path — {promptId}/{version-stem} — so an operator can reconstruct the exact
+# template via `git show prompts/<promptVersion>.j2` (docs/contracts/prompt-management.md).
+_A1A2_PROMPT_ID = "a1_classifier/en"
+_A5_PROMPT_ID = "a5_composer/en"
+
+
 def _stage_a1a2(started_at: datetime, settings: Settings, *, outcome: str) -> Stage:
     return _stage(
         "a1_a2_query_analyzer",
@@ -448,8 +456,8 @@ def _stage_a1a2(started_at: datetime, settings: Settings, *, outcome: str) -> St
         outcome=outcome,
         model_route_id=settings.active_model_route_a1a2,
         details={
-            "promptVersion": settings.active_prompt_version_a1a2,
-            "promptId": "a1_classifier/en",
+            "promptId": _A1A2_PROMPT_ID,
+            "promptVersion": f"{_A1A2_PROMPT_ID}/{registry_version(settings.active_prompt_version_a1a2)}",
         },
     )
 
@@ -464,8 +472,8 @@ def _stage_a5(
         notes=notes,
         model_route_id=settings.active_model_route_a5,
         details={
-            "promptVersion": settings.active_prompt_version_a5,
-            "promptId": "a5_composer/en",
+            "promptId": _A5_PROMPT_ID,
+            "promptVersion": f"{_A5_PROMPT_ID}/{registry_version(settings.active_prompt_version_a5)}",
         },
     )
 

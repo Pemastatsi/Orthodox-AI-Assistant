@@ -41,7 +41,7 @@ from app.domain.models.verified_response import (
 )
 from app.domain.services.bounded_fallback import build_bounded_fallback
 from app.domain.services.citation_formatter import format_citation
-from app.domain.services.prompt_loader import load_prompt
+from app.domain.services.prompt_loader import load_prompt, registry_version
 from app.domain.services.quote_overlap import (
     QUOTE_OVERLAP_THRESHOLD,
     quote_overlap,
@@ -64,7 +64,7 @@ _LINEAGE_PATTERNS: tuple[re.Pattern[str], ...] = (
 # registry (GS-3), selected by Settings.active_verifier_version. The judge is disabled by
 # default (F-08); loaded at import so a misconfigured registry fails fast. See /prompts/README.md.
 _JUDGE_SYSTEM_PROMPT = load_prompt(
-    "a6_judge", "en", get_settings().active_verifier_version.split("@", 1)[-1]
+    "a6_judge", "en", registry_version(get_settings().active_verifier_version)
 )
 
 

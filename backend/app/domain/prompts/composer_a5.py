@@ -17,13 +17,13 @@ from app.adapters.providers.base import ChatMessage
 from app.core.config import get_settings
 from app.domain.models.classified_query import ClassifiedQuery
 from app.domain.models.evidence_packet import EvidencePacket
-from app.domain.services.prompt_loader import load_prompt
+from app.domain.services.prompt_loader import load_prompt, registry_version
 
 _STAGE, _LANGUAGE = "a5_composer", "en"
 # A5 system prompt — canonical text lives in the /prompts registry (GS-3), not inline;
 # selected by Settings.active_prompt_version_a5. See /prompts/README.md.
 _PROMPT_VERSION = get_settings().active_prompt_version_a5
-_SYSTEM_PROMPT = load_prompt(_STAGE, _LANGUAGE, _PROMPT_VERSION.split("@", 1)[-1])
+_SYSTEM_PROMPT = load_prompt(_STAGE, _LANGUAGE, registry_version(_PROMPT_VERSION))
 
 
 def composer_output_schema() -> dict[str, Any]:

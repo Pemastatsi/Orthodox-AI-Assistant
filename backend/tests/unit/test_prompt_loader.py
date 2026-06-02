@@ -12,12 +12,15 @@ import pytest
 from app.core.config import get_settings
 from app.domain.agents import verifier
 from app.domain.prompts import composer_a5, query_analyzer_a1_a2
-from app.domain.services.prompt_loader import PromptNotFoundError, load_prompt
+from app.domain.services.prompt_loader import (
+    PromptNotFoundError,
+    load_prompt,
+    registry_version,
+)
 
 
 def _file_version(prompt_version: str) -> str:
-    # Route promptVersion is "<name>@<YYYY-MM-DD.NN>"; the registry file is the date.seq part.
-    return prompt_version.split("@", 1)[-1]
+    return registry_version(prompt_version)
 
 
 def test_load_prompt_returns_registry_text() -> None:
@@ -54,3 +57,11 @@ def test_a6_judge_loads_active_registry_prompt() -> None:
     expected = load_prompt("a6_judge", "en", _file_version(settings.active_verifier_version))
     assert expected.startswith("You are a closed-corpus consistency judge")
     assert verifier._JUDGE_SYSTEM_PROMPT == expected
+
+
+def test_active_prompt_versions_resolve_to_files() -> None:
+    settings = get_settings()
+    # Startup self-check: every active prompt version maps to an on-disk registry file.
+    assert load_prompt("a1_classifier", "en", registry_version(settings.active_prompt_version_a1a2))
+    assert load_prompt("a5_composer", "en", registry_version(settings.active_prompt_version_a5))
+    assert load_prompt("a6_judge", "en", registry_version(settings.active_verifier_version))

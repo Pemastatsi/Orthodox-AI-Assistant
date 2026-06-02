@@ -60,3 +60,41 @@ def test_registry_layout_is_well_formed() -> None:
         assert len(rel.parts) == 3, f"{rel} must be <stage>/<language>/<version>.j2"
         assert jf.stat().st_size > 0, f"{jf} is empty"
         assert (jf.parent.parent / "README.md").is_file(), f"stage '{rel.parts[0]}' missing README.md"
+
+
+def _bare_string_constant_ids(tree: ast.AST) -> set[int]:
+    """ids of string Constants used as bare expressions (docstrings / standalone strings),
+    excluded from the embedded-prompt scan."""
+    ids: set[int] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            ids.add(id(node.value))
+    return ids
+
+
+def test_no_embedded_prompt_literals_in_app_source() -> None:
+    """Defense-in-depth heuristic (docs/contracts/prompt-management.md §Forbidden patterns):
+    no string literal >200 chars containing 'You are'/'Your task is' may live in backend/app
+    source — prompts belong in /prompts, loaded via load_prompt()."""
+    app_dir = REPO_ROOT / "backend" / "app"
+    offenders: list[str] = []
+    for py in sorted(app_dir.rglob("*.py")):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        bare = _bare_string_constant_ids(tree)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and id(node) not in bare
+                and len(node.value) > 200
+                and ("You are" in node.value or "Your task is" in node.value)
+            ):
+                offenders.append(f"{py.relative_to(REPO_ROOT)}:{node.lineno}")
+    assert not offenders, (
+        f"Embedded prompt-like literal(s) found; move into /prompts and load via load_prompt(): "
+        f"{offenders}"
+    )
