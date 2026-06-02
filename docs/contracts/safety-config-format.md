@@ -118,7 +118,7 @@ For every paraphrase under every case, the A1 classifier — running with the re
 
 ### Authoring discipline
 
-Paraphrases are authored by the founder + Greek-language reviewer named in T-007. They are not LLM-generated at CI time — the same paraphrase set must produce the same result across runs for the suite to function as a regression gate. Adding, removing, or modifying a paraphrase is a config change that requires a safety-suite run before merge (same procedure as the YAML files themselves).
+Paraphrases are authored by the founder under T-007. They are not LLM-generated at CI time — the same paraphrase set must produce the same result across runs for the suite to function as a regression gate. Adding, removing, or modifying a paraphrase is a config change that requires a safety-suite run before merge (same procedure as the YAML files themselves). The founder may solicit informal Greek-reading review for paraphrases in the `lang: el` slots, but no named reviewer is required by contract.
 
 ### Why this discipline catches the failure mode the canonical suite cannot
 
@@ -134,6 +134,6 @@ Real-rule sets must:
 
 - Cover every `sensitivityPrimary` enum value with at least one keyword (`normal` excepted — it is the absence of a match).
 - Cover every `riskFlags` value with at least one hard-trigger or candidate rule.
-- Include reviewed Greek (`lang: el`) variants matching the corresponding English rule, per the project's Orthodox-Ethos linguistic scope.
+- Include Greek (`lang: el`) variants matching the corresponding English rule, per the project's Orthodox-Ethos linguistic scope. The founder is responsible for their linguistic correctness; soliciting informal Greek-reading review before signoff is recommended.
 - Pass the full safety suite (20 cases) end-to-end through the live pipeline with no regressions.
-- Be reviewed by a Greek-language-competent reviewer named in the PR description; the founder owns final sign-off.
+- Be approved by the founder (`role='owner'`) via an `audit_entries(action='safety_config_approved')` row referenced in the PR description; see T-007.

@@ -120,12 +120,12 @@ Criteria block at the point the file is opened for code work.
 - A mental run of the proposed `scripts/check_docs_index.py` check passes — every file in `docs/adr/`, `docs/contracts/`, `docs/schemas/` appears in `docs/DOCS_INDEX.md`; every index row maps to a present file.
 - No application code, no scripts, no JSON-schema-as-code files outside `docs/schemas/`, no CI workflow files are modified by this task card.
 - No file under `config/`, no file in `tests/`, no file under `scripts/` is touched by this card (those are reserved for code-phase task cards).
-- T-007 placeholders (founder + Greek reviewer ownership + target merge date) remain UNCHANGED. T-008 does not unblock T-007.
+- T-007 ownership (founder sole sign-off) and target merge date remain UNCHANGED by this card. T-008 does not unblock T-007.
 - The `contracts` CI job in `.github/workflows/ci-safety-gate.yml` still passes (JSON schemas validate; OpenAPI lints).
 
 ## Open Blockers
 
-- **T-007 (REC-004) — founder + Greek-language reviewer action.** Out-of-scope for this card. Founder (`peterstavrinides0@gmail.com`) must name two reviewers, set target merge date, produce real safety rules covering every `sensitivityPrimary` + `riskFlags` value in English and Greek, and populate the paraphrase test (3–5 entries per case). Exit criterion #9 cannot close until then. T-008 deliberately does not touch `config/sensitivity_keywords.yaml`, `config/pastoral_filters.yaml`, or `tests/safety/test_20_queries_paraphrases.py`.
+- **T-007 (REC-004) — founder action.** Out-of-scope for this card. Founder (`peterstavrinides0@gmail.com`) must set the target merge date, produce real safety rules covering every `sensitivityPrimary` + `riskFlags` value in English and Greek, record approval as an `audit_entries(action='safety_config_approved')` row, and populate the paraphrase test (3–5 entries per case). Exit criterion #9 cannot close until then. T-008 deliberately does not touch `config/sensitivity_keywords.yaml`, `config/pastoral_filters.yaml`, or `tests/safety/test_20_queries_paraphrases.py`.
 
 ## Forbidden Scope
 

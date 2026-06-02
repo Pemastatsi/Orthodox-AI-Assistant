@@ -42,7 +42,7 @@ CI job status expectations are documented at the top of `.github/workflows/ci-sa
 
 These items are not coding work but block the Phase 1 → Phase 2 exit. Start them in parallel with implementation:
 
-- **T-007 founder + Greek-language reviewer assignment** ([`docs/task_cards/phase1/T-007-real-safety-configs.md`](docs/task_cards/phase1/T-007-real-safety-configs.md) — the `<TBD: founder to specify>` placeholders must be filled before T-007 work begins). Exit criterion #9 cannot close without these reviewers.
+- **T-007 founder safety-config sign-off** ([`docs/task_cards/phase1/T-007-real-safety-configs.md`](docs/task_cards/phase1/T-007-real-safety-configs.md) — the founder owns the real safety rules and records approval as an `audit_entries(action='safety_config_approved')` row). Exit criterion #9 cannot close without it.
 
 ## Reporting Issues
 

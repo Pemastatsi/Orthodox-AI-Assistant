@@ -264,7 +264,7 @@ The `action` column is constrained at the API layer (not in DDL) to the enum in 
 ```sql
 CREATE TABLE model_routes (
     route_id              text PRIMARY KEY,
-    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding')),
+    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding','rerank','retrieval_eval_judge')),
     provider              text NOT NULL CHECK (provider IN ('anthropic','openai')),
     model                 text NOT NULL,
     prompt_version        text NOT NULL,
@@ -289,7 +289,7 @@ Aggregate row that groups one full pass of the canonical 20-case safety suite. R
 ```sql
 CREATE TABLE safety_suite_runs (
     safety_suite_run_id   text PRIMARY KEY,                       -- ULID
-    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding')),
+    purpose               text NOT NULL CHECK (purpose IN ('query_analyzer','compose','verifier_judge','embedding','rerank','retrieval_eval_judge')),
     provider              text NOT NULL CHECK (provider IN ('anthropic','openai')),
     model                 text NOT NULL,
     prompt_version        text NOT NULL,                           -- FK to prompt_versions added below
