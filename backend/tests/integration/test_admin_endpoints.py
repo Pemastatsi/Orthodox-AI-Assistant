@@ -145,6 +145,7 @@ async def test_raw_sensitive_log_get_by_run_id_round_trips(
     from app.domain.repositories.raw_sensitive_log_repository import (
         RawSensitiveLogRepository,
     )
+    from app.domain.repositories.run_trace_repository import RunTraceRepository
     from app.domain.services.encryption_service import (
         EncryptedBlob,
         SensitiveLogCipher,
@@ -159,6 +160,21 @@ async def test_raw_sensitive_log_get_by_run_id_round_trips(
     run_id = f"run_rawtest_{os.urandom(4).hex()}"
 
     async with session_scope() as session:
+        # raw_sensitive_logs.run_id is a FK to run_traces(run_id) — create the run first.
+        await RunTraceRepository(session).insert(
+            RunTrace(
+                run_id=run_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                started_at=datetime.now(UTC),
+                cache_hit=False,
+                stages=[],
+                usage=RunTraceUsage(served_answer_count=1, fresh_model_run_count=1),
+                final_handling="answer",
+                final_confidence_tier="YELLOW",
+                verifier_passed=True,
+            )
+        )
         await RawSensitiveLogRepository(session).insert(
             tenant_id=tenant_id,
             user_id=user_id,
