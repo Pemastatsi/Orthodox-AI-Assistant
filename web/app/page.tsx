@@ -3,9 +3,8 @@
  *   center : transcript + composer
  *   right  : citation panel (lg+ only)
  *
- * Dev-mode auth: when `NEXT_PUBLIC_DEV_PRINCIPAL` is configured
- * (e.g. `tn_test:member:usr_test`), the page sends the dev principal header.
- * Production Clerk JWT wiring lands in a follow-up.
+ * Auth: `useAuthResolver()` yields the request headers — a Clerk JWT bearer token in Clerk mode,
+ * or the dev principal in dev mode (`NEXT_PUBLIC_AUTH_MODE` / `NEXT_PUBLIC_DEV_PRINCIPAL`).
  */
 "use client";
 
@@ -18,7 +17,8 @@ import { ConfidenceBadge } from "@/components/chat/ConfidenceBadge";
 import { DisclaimerBanner } from "@/components/chat/DisclaimerBanner";
 import { ReframingDisclosure } from "@/components/chat/ReframingDisclosure";
 import { StageStatus } from "@/components/chat/StageStatus";
-import type { AuthHeaders } from "@/lib/api-client";
+import { AuthControls } from "@/components/auth/AuthControls";
+import { useAuthResolver } from "@/lib/auth-headers";
 import type { ApiError, SensitivityPrimary, VerifiedResponse } from "@/lib/schemas";
 
 interface Turn {
@@ -27,30 +27,13 @@ interface Turn {
   sensitivity: SensitivityPrimary;
 }
 
-function devAuthFromEnv(): AuthHeaders {
-  const raw = process.env.NEXT_PUBLIC_DEV_PRINCIPAL;
-  if (!raw) {
-    return {
-      devPrincipal: { tenantId: "tn_test", role: "member", userId: "usr_test" },
-    };
-  }
-  const [tenantId, role, userId] = raw.split(":");
-  return {
-    devPrincipal: {
-      tenantId: tenantId ?? "tn_test",
-      role: role ?? "member",
-      userId: userId ?? "usr_test",
-    },
-  };
-}
-
 export default function ChatPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [highlightedCitation, setHighlightedCitation] = useState<string | null>(null);
 
-  const auth = devAuthFromEnv();
+  const resolveAuth = useAuthResolver();
 
   const handleResponse = useCallback((response: VerifiedResponse) => {
     setError(null);
@@ -81,9 +64,12 @@ export default function ChatPage() {
             Closed-corpus theological Q&amp;A. Every answer traceable to approved sources.
           </p>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-success/40 bg-success-soft px-2 py-1 text-xs text-success">
-          <Sparkles className="h-3 w-3" /> Verified routes
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-success/40 bg-success-soft px-2 py-1 text-xs text-success">
+            <Sparkles className="h-3 w-3" /> Verified routes
+          </span>
+          <AuthControls />
+        </div>
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-12">
@@ -149,7 +135,7 @@ export default function ChatPage() {
           </div>
 
           <ChatComposer
-            auth={auth}
+            resolveAuth={resolveAuth}
             onSubmit={setPendingQuestion}
             onResponse={handleResponse}
             onError={handleError}

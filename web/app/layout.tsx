@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
+import { CLERK_ENABLED } from "@/lib/auth-config";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,9 +13,11 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
+  const document = (
     <html lang="en">
       <body>{children}</body>
     </html>
   );
+  // In dev mode (no Clerk key) the app renders without ClerkProvider so it needs no Clerk config.
+  return CLERK_ENABLED ? <ClerkProvider>{document}</ClerkProvider> : document;
 }
