@@ -21,11 +21,16 @@ and Postgres RLS enforces the boundary independently.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import Field
 
-from app.api.v1._deps import get_tenant_session, require_scope
+from app.api.v1._deps import (
+    get_sensitive_log_cipher,
+    get_tenant_session,
+    require_scope,
+)
 from app.domain.models._base import WireModel
 from app.domain.models.audit_entry import AuditEntry
 from app.domain.models.flagged_query import FlaggedQuery
@@ -36,7 +41,15 @@ from app.domain.repositories._base import AsyncSession
 from app.domain.repositories.audit_repository import AuditRepository
 from app.domain.repositories.flagged_query_repository import FlaggedQueryRepository
 from app.domain.repositories.model_route_repository import ModelRouteRepository
+from app.domain.repositories.raw_sensitive_log_repository import (
+    RawSensitiveLogRepository,
+)
 from app.domain.repositories.run_trace_repository import RunTraceRepository
+from app.domain.services.encryption_service import (
+    CipherDecryptError,
+    EncryptedBlob,
+    SensitiveLogCipher,
+)
 from app.domain.services.route_certification import (
     evaluate_certification,
     requires_retrieval_eval_gate,
@@ -58,6 +71,14 @@ class AdminFlaggedListResponse(WireModel):
 class AdminAuditListResponse(WireModel):
     items: list[AuditEntry]
     next_cursor: str | None
+
+
+class AdminRawSensitiveResponse(WireModel):
+    run_id: str
+    tenant_id: str
+    raw_query_text: str
+    raw_sensitive_payload: dict[str, Any] = Field(default_factory=dict)
+    audit_entry_id: str
 
 
 @router.get(
@@ -138,6 +159,79 @@ async def list_admin_audit(
         since=since,
     )
     return AdminAuditListResponse(items=items, next_cursor=next_cursor)
+
+
+@router.get(
+    "/queries/{runId}/raw",
+    response_model=AdminRawSensitiveResponse,
+    response_model_by_alias=True,
+)
+async def get_admin_query_raw(
+    run_id: str = Path(alias="runId"),
+    # `require_scope` resolves before `get_tenant_session`, so a caller lacking the scope is
+    # rejected (403) before any DB transaction opens.
+    principal: Principal = Depends(require_scope("admin:raw_sensitive:read")),
+    session: AsyncSession = Depends(get_tenant_session),
+    cipher: SensitiveLogCipher | None = Depends(get_sensitive_log_cipher),
+) -> AdminRawSensitiveResponse:
+    """Admin-only un-redacted view of a run's raw sensitive log (auth-context.md §Raw views).
+
+    Returns 404 (never 403) when no raw log exists for the run in this tenant, so the endpoint
+    never discloses whether a run id belongs to another tenant's history. Each successful read
+    decrypts the stored blob and writes an `action='raw_sensitive_view'` audit row.
+    """
+    log = await RawSensitiveLogRepository(session).get_by_run_id(
+        tenant_id=principal.tenant_id, run_id=run_id
+    )
+    if log is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "not_found", "message": f"no raw sensitive log for run {run_id}"},
+        )
+    if cipher is None:
+        # Unreachable in production (the boot guard requires the key) — fail closed regardless.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "internal_error",
+                "message": "sensitive-log decryption key is not configured",
+            },
+        )
+    try:
+        raw_query_text = cipher.decrypt(
+            EncryptedBlob(
+                nonce=log.nonce, ciphertext=log.ciphertext, key_version=log.key_version
+            )
+        )
+    except CipherDecryptError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "internal_error",
+                "message": "failed to decrypt raw sensitive log",
+            },
+        ) from exc
+
+    audit_entry_id = await AuditRepository(session).insert(
+        tenant_id=principal.tenant_id,
+        actor_user_id=principal.user_id,
+        actor_role=principal.role,
+        action="raw_sensitive_view",
+        resource_type="run",
+        resource_id=run_id,
+    )
+    return AdminRawSensitiveResponse(
+        run_id=run_id,
+        tenant_id=principal.tenant_id,
+        raw_query_text=raw_query_text,
+        raw_sensitive_payload={
+            "logId": log.log_id,
+            "keyVersion": log.key_version,
+            "capturedAt": log.created_at.isoformat(),
+            "expiresAt": log.expires_at.isoformat(),
+        },
+        audit_entry_id=audit_entry_id,
+    )
 
 
 class CertifyModelRouteRequest(WireModel):

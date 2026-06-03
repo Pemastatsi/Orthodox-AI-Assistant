@@ -132,6 +132,72 @@ async def seed_admin_fixtures(
     yield tenant_id, user_id
 
 
+async def test_raw_sensitive_log_get_by_run_id_round_trips(
+    seed_tenant: tuple[str, str],
+) -> None:
+    """`get_by_run_id` returns the run's raw log (and None for an unknown run), and the stored
+    blob round-trips through the cipher — the core of GET /admin/queries/{runId}/raw."""
+    import base64
+    import os
+
+    tenant_id, user_id = seed_tenant
+    from app.domain.repositories._base import session_scope
+    from app.domain.repositories.raw_sensitive_log_repository import (
+        RawSensitiveLogRepository,
+    )
+    from app.domain.repositories.run_trace_repository import RunTraceRepository
+    from app.domain.services.encryption_service import (
+        EncryptedBlob,
+        SensitiveLogCipher,
+        load_key_map_from_env,
+    )
+
+    cipher = SensitiveLogCipher(
+        keys=load_key_map_from_env(base64.b64encode(os.urandom(32)).decode("ascii"), "v1"),
+        active_version="v1",
+    )
+    plaintext = "raw sensitive query: a private pastoral disclosure"
+    run_id = f"run_rawtest_{os.urandom(4).hex()}"
+
+    async with session_scope() as session:
+        # raw_sensitive_logs.run_id is a FK to run_traces(run_id) — create the run first.
+        await RunTraceRepository(session).insert(
+            RunTrace(
+                run_id=run_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                started_at=datetime.now(UTC),
+                cache_hit=False,
+                stages=[],
+                usage=RunTraceUsage(served_answer_count=1, fresh_model_run_count=1),
+                final_handling="answer",
+                final_confidence_tier="YELLOW",
+                verifier_passed=True,
+            )
+        )
+        await RawSensitiveLogRepository(session).insert(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            run_id=run_id,
+            blob=cipher.encrypt(plaintext),
+            retention_days=30,
+        )
+        await session.commit()
+
+    async with session_scope() as session:
+        repo = RawSensitiveLogRepository(session)
+        row = await repo.get_by_run_id(tenant_id=tenant_id, run_id=run_id)
+        missing = await repo.get_by_run_id(tenant_id=tenant_id, run_id="run_does_not_exist")
+
+    assert missing is None
+    assert row is not None
+    assert row.run_id == run_id
+    decrypted = cipher.decrypt(
+        EncryptedBlob(nonce=row.nonce, ciphertext=row.ciphertext, key_version=row.key_version)
+    )
+    assert decrypted == plaintext
+
+
 async def test_run_trace_list_by_tenant_paginates(
     seed_admin_fixtures: tuple[str, str],
 ) -> None:
