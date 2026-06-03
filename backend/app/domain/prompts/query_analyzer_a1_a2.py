@@ -1,8 +1,9 @@
 """A1 + A2 combined classifier prompt.
 
-Versioned via `Settings.active_prompt_version_a1a2`. When the prompt or its JSON schema
-changes, bump the version and re-certify the route per `docs/contracts/code-gen-guide.md`
-§Prompt versioning.
+The prompt text is loaded from the `/prompts` registry
+(`prompts/a1_classifier/en/<version>.j2`), selected by `Settings.active_prompt_version_a1a2`.
+When the prompt or its JSON schema changes, add a new version file and re-certify the route
+per `docs/contracts/code-gen-guide.md` §Prompt versioning and `/prompts/README.md`.
 
 The actual JSON Schema sent to the provider is derived from the Pydantic models
 (`ClassifiedQuery` + `RetrievalPlan`) at call time so the schema and the deserialized data
@@ -12,45 +13,15 @@ cannot drift.
 from __future__ import annotations
 
 from app.adapters.providers.base import ChatMessage
+from app.core.config import get_settings
+from app.domain.services.prompt_loader import load_prompt, registry_version
 from app.domain.services.safety_config import SafetyMatch
 
-_SYSTEM_PROMPT = """\
-You are the Orthodox AI Assistant's query analyzer. For every user query you return a JSON
-object with exactly two keys: `classifiedQuery` and `retrievalPlan`. You do not answer the
-question. You do not invent citations. You do not rewrite the user's intent beyond a
-transparent safety reframing when the question seeks personal advice on a sensitive topic.
-
-## ClassifiedQuery rules
-
-- `rawQuery` MUST equal the user's input verbatim.
-- `answerMode` is one of: consensus, institutional_policy, scholarly_dispute,
-  pastoral_guidance, insufficient.
-- `sensitivityPrimary` is one of: normal, pastoral_advice, political, medical,
-  comparative_religion, canonical_dispute, other_sensitive.
-- `riskFlags` is a possibly-empty subset of: self_harm, medical_emergency,
-  canonical_dispute_active, minor_protection.
-- `handling` is one of: answer, answer_with_disclaimer, reframe_to_teaching,
-  block_with_redirect, insufficient_evidence.
-- `preliminaryConfidenceTier` ∈ {GREEN, YELLOW, RED} reflects only your pre-retrieval
-  read of whether the corpus is likely to support an answer; the authoritative tier is
-  computed after retrieval.
-- `reframedQuery` is null unless you are reframing an advice-seeking question into a
-  teaching question (e.g. "Should I divorce?" → "What does the Church teach about
-  marriage?"). When you reframe, set `reframingDisclosureRequired` to true.
-
-## RetrievalPlan rules
-
-- `semanticQuery` MUST equal `reframedQuery` if you reframed; otherwise it MUST equal
-  `rawQuery`. NEVER paraphrase or expand beyond a transparent safety reframing.
-- `tenantId` and `filters.tenantId` are placeholders; the server overwrites them with the
-  caller's tenant. Emit any non-empty string; it will be replaced.
-- `filters.approved` is always true.
-- `k` is an integer between 1 and 20; 8 is the safe default.
-- `retrieval.useBM25` and `retrieval.useHybrid` default to false. Only set them to true
-  when the query carries highly lexical content (specific Father names, canon numbers,
-  Greek terms) that benefits from sparse retrieval.
-- `retrieval.reranker.enabled` is always false in Phase 1.
-"""
+_STAGE, _LANGUAGE = "a1_classifier", "en"
+# A1/A2 system prompt — canonical text lives in the /prompts registry (GS-3), not inline;
+# selected by Settings.active_prompt_version_a1a2. See /prompts/README.md.
+_PROMPT_VERSION = get_settings().active_prompt_version_a1a2
+_SYSTEM_PROMPT = load_prompt(_STAGE, _LANGUAGE, registry_version(_PROMPT_VERSION))
 
 
 def build_messages(

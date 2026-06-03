@@ -1,6 +1,8 @@
 """A5 composer prompt — closed-corpus answer composition.
 
-Versioned via `Settings.active_prompt_version_a5`. The composer receives ONLY the
+The prompt text is loaded from the `/prompts` registry
+(`prompts/a5_composer/en/<version>.j2`), selected by `Settings.active_prompt_version_a5`. The
+composer receives ONLY the
 `EvidencePacket.admittedChunks` (plus the user's reframed query when present). No
 tenant config, no model knowledge primers, no chain-of-thought, no external corpora.
 See `AGENTS.md §Closed-Corpus Rules` and ADR-0001.
@@ -12,31 +14,16 @@ import json
 from typing import Any
 
 from app.adapters.providers.base import ChatMessage
+from app.core.config import get_settings
 from app.domain.models.classified_query import ClassifiedQuery
 from app.domain.models.evidence_packet import EvidencePacket
+from app.domain.services.prompt_loader import load_prompt, registry_version
 
-_SYSTEM_PROMPT = """\
-You are the Orthodox AI Assistant's closed-corpus composer. You answer the user's question
-using ONLY the evidence chunks provided below. You MUST follow these rules:
-
-1. You may only state claims that are directly supported by one or more of the provided
-   chunks. If the chunks do not support an answer, return an `answer` that explicitly says
-   so in one or two sentences. NEVER use general knowledge, training data, or anything
-   outside the provided chunks.
-2. Every substantive claim in your answer must be supportable by one of the cited chunks.
-   In `citedChunkIds` you list the `chunkId`s you actually used. List every chunk you relied
-   on; do not list chunks you did not use.
-3. Do not invent or attribute statements. Do not quote a Father without anchoring the quote
-   to a chunk in `citedChunkIds`.
-4. Do not claim lineage relations ("X quotes Y", "X builds on Y", "X is a translation of
-   Y") unless the chunks themselves contain that relation in their text. Lineage edges are
-   not provided as separate metadata in Phase 1.
-5. Do not give personal advice, medical diagnosis, or electoral guidance. Present the
-   library's teaching only.
-6. Keep the answer concise (target 3 short paragraphs at most). Use plain prose.
-7. Output a JSON object with exactly two keys: `answer` (string) and `citedChunkIds`
-   (array of strings, each appearing in the provided evidence).
-"""
+_STAGE, _LANGUAGE = "a5_composer", "en"
+# A5 system prompt — canonical text lives in the /prompts registry (GS-3), not inline;
+# selected by Settings.active_prompt_version_a5. See /prompts/README.md.
+_PROMPT_VERSION = get_settings().active_prompt_version_a5
+_SYSTEM_PROMPT = load_prompt(_STAGE, _LANGUAGE, registry_version(_PROMPT_VERSION))
 
 
 def composer_output_schema() -> dict[str, Any]:
