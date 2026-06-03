@@ -8,7 +8,6 @@ gate in ``tests/prompts/test_prompt_registry.py``.
 from __future__ import annotations
 
 import pytest
-
 from app.core.config import get_settings
 from app.domain.agents import verifier
 from app.domain.prompts import composer_a5, query_analyzer_a1_a2
@@ -40,7 +39,7 @@ def test_a1_builder_loads_active_registry_prompt() -> None:
         "a1_classifier", "en", _file_version(settings.active_prompt_version_a1a2)
     )
     assert expected, "active A1 prompt is empty"
-    assert query_analyzer_a1_a2._SYSTEM_PROMPT == expected
+    assert expected == query_analyzer_a1_a2._SYSTEM_PROMPT
 
 
 def test_a5_builder_loads_active_registry_prompt() -> None:
@@ -49,14 +48,14 @@ def test_a5_builder_loads_active_registry_prompt() -> None:
         "a5_composer", "en", _file_version(settings.active_prompt_version_a5)
     )
     assert expected, "active A5 prompt is empty"
-    assert composer_a5._SYSTEM_PROMPT == expected
+    assert expected == composer_a5._SYSTEM_PROMPT
 
 
 def test_a6_judge_loads_active_registry_prompt() -> None:
     settings = get_settings()
     expected = load_prompt("a6_judge", "en", _file_version(settings.active_verifier_version))
     assert expected.startswith("You are a closed-corpus consistency judge")
-    assert verifier._JUDGE_SYSTEM_PROMPT == expected
+    assert expected == verifier._JUDGE_SYSTEM_PROMPT
 
 
 def test_active_prompt_versions_resolve_to_files() -> None:

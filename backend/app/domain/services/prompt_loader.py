@@ -14,7 +14,7 @@ serving an empty system prompt. See `/prompts/README.md`.
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -31,7 +31,7 @@ def registry_version(prompt_version: str) -> str:
     return prompt_version.split("@", 1)[-1]
 
 
-@lru_cache(maxsize=None)
+@cache
 def load_prompt(stage: str, language: str, version: str) -> str:
     """Return the verbatim text of `prompts/<stage>/<language>/<version>.j2`.
 

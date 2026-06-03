@@ -450,6 +450,7 @@ _A5_PROMPT_ID = "a5_composer/en"
 
 
 def _stage_a1a2(started_at: datetime, settings: Settings, *, outcome: str) -> Stage:
+    version = registry_version(settings.active_prompt_version_a1a2)
     return _stage(
         "a1_a2_query_analyzer",
         started_at,
@@ -457,7 +458,7 @@ def _stage_a1a2(started_at: datetime, settings: Settings, *, outcome: str) -> St
         model_route_id=settings.active_model_route_a1a2,
         details={
             "promptId": _A1A2_PROMPT_ID,
-            "promptVersion": f"{_A1A2_PROMPT_ID}/{registry_version(settings.active_prompt_version_a1a2)}",
+            "promptVersion": f"{_A1A2_PROMPT_ID}/{version}",
         },
     )
 
@@ -465,6 +466,7 @@ def _stage_a1a2(started_at: datetime, settings: Settings, *, outcome: str) -> St
 def _stage_a5(
     started_at: datetime, settings: Settings, *, outcome: str, notes: str | None = None
 ) -> Stage:
+    version = registry_version(settings.active_prompt_version_a5)
     return _stage(
         "a5_composer",
         started_at,
@@ -473,7 +475,7 @@ def _stage_a5(
         model_route_id=settings.active_model_route_a5,
         details={
             "promptId": _A5_PROMPT_ID,
-            "promptVersion": f"{_A5_PROMPT_ID}/{registry_version(settings.active_prompt_version_a5)}",
+            "promptVersion": f"{_A5_PROMPT_ID}/{version}",
         },
     )
 
