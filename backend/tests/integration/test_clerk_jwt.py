@@ -24,3 +24,7 @@ def test_staging_clerk_token_verifies() -> None:
     assert _TOKEN is not None
     claims = verify_clerk_token(_TOKEN)
     assert claims.sub
+    # Risk #1 (claim-shape coupling): a real getToken() token must surface an organization
+    # (flat org_id or nested o.id), else the backend rejects it with auth_missing_org. Set an
+    # active org in Clerk when minting CLERK_TEST_TOKEN.
+    assert claims.org_id, "Clerk token carries no organization claim (flat org_id or nested o.id)"
