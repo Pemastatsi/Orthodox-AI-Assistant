@@ -107,6 +107,24 @@ class RawSensitiveLogRepository:
         row = result.mappings().one_or_none()
         return _row_to_obj(row) if row else None
 
+    async def get_by_run_id(
+        self, *, tenant_id: str, run_id: str
+    ) -> RawSensitiveLogRow | None:
+        """Tenant-scoped fetch of the raw log captured for a run, for the admin raw view.
+
+        Callers must additionally write an `audit_entries` row recording the access.
+        """
+        assert_tenant(tenant_id)
+        result = await self._session.execute(
+            text(
+                "SELECT * FROM raw_sensitive_logs "
+                "WHERE tenant_id = :tenant_id AND run_id = :run_id"
+            ),
+            {"tenant_id": tenant_id, "run_id": run_id},
+        )
+        row = result.mappings().one_or_none()
+        return _row_to_obj(row) if row else None
+
     async def delete_expired(self, *, now: datetime | None = None) -> int:
         """Retention worker entry-point. Deletes every expired row across tenants.
 
