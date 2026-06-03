@@ -1,15 +1,24 @@
 """Auth resolution per docs/contracts/auth-context.md.
 
-T-001 ships the dev-mode header decoder plus a Clerk placeholder that raises NotImplementedError.
-Real JWKS verification lands in T-005."""
+Two providers (`AUTH_PROVIDER`):
+- `dev` — the base64 `x-dev-principal` header decoder (`resolve_principal`).
+- `clerk` — `verify_clerk_token` validates a Clerk-issued RS256 JWT against the cached JWKS
+  (issuer + `azp` allowlist + exp/iat + `sub`); the API layer (`app/api/v1/_deps.py`) then resolves
+  the tenant/user and builds the `Principal`. Only token *content* is verified here; the DB identity
+  lookup lives in the API layer because it needs the app_admin (BYPASSRLS) session."""
 
 from __future__ import annotations
 
 import base64
 import json
+from dataclasses import dataclass
 from typing import Any
 
+import jwt
+from jwt import PyJWKClient
+
 from app.core.config import Settings, get_settings
+from app.core.errors import AuthInvalidTokenError, AuthMissingTokenError
 from app.core.logging import get_logger
 from app.domain.models.principal import Principal
 
@@ -108,13 +117,98 @@ def _decode_dev_header(header_value: str) -> Principal | None:
         return None
 
 
+# ---- Clerk JWKS verification (AUTH_PROVIDER=clerk) -----------------------------------
+
+
+@dataclass(frozen=True)
+class ClerkClaims:
+    """The Clerk JWT claims the auth path consumes (auth-context.md §JWT Claims)."""
+
+    sub: str
+    org_id: str | None
+    org_role: str | None
+    azp: str | None
+
+
+_jwks_client: PyJWKClient | None = None
+
+
+def _jwks_url(settings: Settings) -> str:
+    return f"{settings.clerk_jwt_issuer.rstrip('/')}/.well-known/jwks.json"
+
+
+def _get_jwks_client(settings: Settings) -> PyJWKClient:
+    """Process-cached JWKS client. PyJWKClient caches fetched signing keys for
+    `clerk_jwks_cache_seconds` (≤ Clerk's ~1h TTL — auth-context.md §Forbidden patterns)."""
+    global _jwks_client
+    if _jwks_client is None:
+        _jwks_client = PyJWKClient(
+            _jwks_url(settings),
+            cache_keys=True,
+            lifespan=settings.clerk_jwks_cache_seconds,
+        )
+    return _jwks_client
+
+
+def reset_jwks_client_cache() -> None:
+    """Test hook: drop the cached PyJWKClient so a stub key set can be injected."""
+    global _jwks_client
+    _jwks_client = None
+
+
+def bearer_token(authorization: str | None) -> str:
+    """Extract `<token>` from an `Authorization: Bearer <token>` header (fail closed)."""
+    if not authorization:
+        raise AuthMissingTokenError("missing Authorization header")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise AuthMissingTokenError("Authorization header is not a Bearer token")
+    return token.strip()
+
+
+def verify_clerk_token(token: str, settings: Settings | None = None) -> ClerkClaims:
+    """Verify a Clerk RS256 JWT against the cached JWKS and return its claims.
+
+    Validates the signature, `iss` (when configured), `exp`/`iat`, the presence of `sub`, and that
+    `azp` is in the `CLERK_AUTHORIZED_PARTIES` allowlist. Any failure → `AuthInvalidTokenError`
+    (fail closed). Does NOT touch the database — the tenant/user lookup is the caller's job."""
+    cfg = settings or get_settings()
+    try:
+        signing_key = _get_jwks_client(cfg).get_signing_key_from_jwt(token)
+        payload: dict[str, Any] = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            issuer=cfg.clerk_jwt_issuer or None,
+            options={"require": ["exp", "iat", "sub"], "verify_aud": False},
+        )
+    except jwt.PyJWTError as exc:
+        raise AuthInvalidTokenError("Clerk token verification failed") from exc
+
+    azp = payload.get("azp")
+    allowed = {p.strip() for p in cfg.clerk_authorized_parties.split(",") if p.strip()}
+    if allowed and azp not in allowed:
+        raise AuthInvalidTokenError("token azp is not an authorized party")
+
+    return ClerkClaims(
+        sub=str(payload["sub"]),
+        org_id=payload.get("org_id"),
+        org_role=payload.get("org_role"),
+        azp=azp,
+    )
+
+
 def resolve_principal(
     *,
     authorization: str | None,
     dev_principal_header: str | None,
     settings: Settings | None = None,
 ) -> Principal:
-    """Resolve a request to a Principal. Honors AUTH_PROVIDER."""
+    """Resolve a request to a Principal in dev mode (AUTH_PROVIDER=dev).
+
+    The Clerk path is resolved by the API layer (`app/api/v1/_deps.py:get_principal`), which needs
+    async DB access for the tenant/user lookup; this function stays the synchronous dev-only path.
+    """
     cfg = settings or get_settings()
 
     if cfg.auth_provider == "dev":
@@ -124,11 +218,9 @@ def resolve_principal(
                 return decoded
         return make_dev_principal()
 
-    # AUTH_PROVIDER=clerk — JWKS verification lands in T-005.
-    del authorization  # unused in the scaffold stub; T-005 will verify the bearer token here
+    del authorization
     raise NotImplementedError(
-        "Clerk JWKS verification is implemented in T-005; "
-        "set AUTH_PROVIDER=dev for local development."
+        "Clerk auth is resolved in app/api/v1/_deps.py (get_principal), not resolve_principal."
     )
 
 
@@ -142,8 +234,12 @@ def log_auth_startup(settings: Settings | None = None) -> None:
 
 
 __all__ = [
+    "ClerkClaims",
+    "bearer_token",
+    "log_auth_startup",
     "make_dev_principal",
+    "reset_jwks_client_cache",
     "resolve_principal",
     "scopes_for_role",
-    "log_auth_startup",
+    "verify_clerk_token",
 ]

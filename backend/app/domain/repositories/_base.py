@@ -22,6 +22,8 @@ from app.core.config import Settings, get_settings
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_admin_engine: AsyncEngine | None = None
+_admin_sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
 def init_engine(settings: Settings | None = None, *, admin: bool = False) -> AsyncEngine:
@@ -62,12 +64,16 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
 
 
 async def dispose_engine() -> None:
-    """Close the pool. Call once per process at shutdown."""
-    global _engine, _sessionmaker
+    """Close the pool(s). Call once per process at shutdown."""
+    global _engine, _sessionmaker, _admin_engine, _admin_sessionmaker
     if _engine is not None:
         await _engine.dispose()
+    if _admin_engine is not None:
+        await _admin_engine.dispose()
     _engine = None
     _sessionmaker = None
+    _admin_engine = None
+    _admin_sessionmaker = None
 
 
 @asynccontextmanager
@@ -75,6 +81,41 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
     """Open a session with `begin()` semantics — commits on success, rolls back on error."""
     sm = get_sessionmaker()
     async with sm() as session, session.begin():
+        yield session
+
+
+def init_admin_engine(settings: Settings | None = None) -> AsyncEngine:
+    """Lazily build a second engine bound to the `app_admin` (BYPASSRLS) role, for the narrow set
+    of pre-tenant operations the request process must do — auth identity resolution reads
+    `tenants`/`users` before a tenant GUC can be set (the RLS chicken-and-egg). Falls back to
+    `database_url` when no admin URL is configured, so dev (single superuser URL, which already
+    bypasses RLS) keeps working. The normal request path keeps using `session_scope()` →
+    `app_runtime` (RLS-enforced)."""
+    global _admin_engine, _admin_sessionmaker
+    if _admin_engine is not None:
+        return _admin_engine
+    cfg = settings or get_settings()
+    _admin_engine = create_async_engine(
+        cfg.database_admin_url or cfg.database_url,
+        future=True,
+        echo=False,
+        pool_pre_ping=True,
+    )
+    _admin_sessionmaker = async_sessionmaker(
+        _admin_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    return _admin_engine
+
+
+@asynccontextmanager
+async def admin_session_scope() -> AsyncIterator[AsyncSession]:
+    """`session_scope()` counterpart on the `app_admin` (BYPASSRLS) engine. Reserved for the
+    narrow pre-tenant operations in auth identity resolution; commits on success."""
+    global _admin_sessionmaker
+    if _admin_sessionmaker is None:
+        init_admin_engine()
+    assert _admin_sessionmaker is not None
+    async with _admin_sessionmaker() as session, session.begin():
         yield session
 
 
@@ -96,10 +137,12 @@ def to_jsonb(value: Any) -> Any:
 
 __all__ = [
     "AsyncSession",
+    "admin_session_scope",
     "assert_tenant",
     "dispose_engine",
     "get_engine",
     "get_sessionmaker",
+    "init_admin_engine",
     "init_engine",
     "session_scope",
     "to_jsonb",

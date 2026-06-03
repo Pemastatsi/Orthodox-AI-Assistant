@@ -16,7 +16,7 @@ from app.api.v1.ingest import router as ingest_router
 from app.api.v1.query import router as query_router
 from app.core.auth import log_auth_startup
 from app.core.config import Settings, get_settings
-from app.core.errors import ProductionAuthConfigError
+from app.core.errors import ClerkConfigError, ProductionAuthConfigError
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RunIdMiddleware
 from app.domain.repositories._base import dispose_engine, init_engine
@@ -39,6 +39,23 @@ def _production_auth_guard(settings: Settings) -> None:
         )
 
 
+def _clerk_config_guard(settings: Settings) -> None:
+    """Refuse to boot when AUTH_PROVIDER=clerk but the Clerk JWKS settings are incomplete —
+    fail fast instead of 401-ing every request. See auth-context.md §Boot guard."""
+    if settings.auth_provider != "clerk":
+        return
+    missing = [
+        name
+        for name, value in (
+            ("CLERK_JWT_ISSUER", settings.clerk_jwt_issuer),
+            ("CLERK_AUTHORIZED_PARTIES", settings.clerk_authorized_parties),
+        )
+        if not value
+    ]
+    if missing:
+        raise ClerkConfigError(f"AUTH_PROVIDER=clerk requires {', '.join(missing)} to be set.")
+
+
 def _production_sensitive_log_guard(settings: Settings) -> None:
     """Refuse to boot when APP_ENV=production and SENSITIVE_LOG_DATA_KEY_BASE64
     is missing or malformed. Without this guard the key is only validated on the
@@ -56,6 +73,7 @@ def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
     _production_auth_guard(settings)
+    _clerk_config_guard(settings)
     _production_sensitive_log_guard(settings)
     log_auth_startup(settings)
 

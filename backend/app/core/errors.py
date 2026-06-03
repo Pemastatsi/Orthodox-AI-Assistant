@@ -77,6 +77,37 @@ class TenantNotFoundError(ApiException):
     http_status = 404
 
 
+class TenantInactiveError(ApiException):
+    code = ApiErrorCode.TENANT_INACTIVE
+    http_status = 403
+
+
+class TenantMismatchError(ApiException):
+    code = ApiErrorCode.TENANT_MISMATCH
+    http_status = 403
+
+
+class AuthMissingTokenError(ApiException):
+    code = ApiErrorCode.AUTH_MISSING_TOKEN
+    http_status = 401
+
+
+class AuthInvalidTokenError(ApiException):
+    code = ApiErrorCode.AUTH_INVALID_TOKEN
+    http_status = 401
+
+
+class AuthMissingOrgError(ApiException):
+    code = ApiErrorCode.AUTH_MISSING_ORG
+    http_status = 401
+
+
+class ClerkConfigError(RuntimeError):
+    """Raised at startup when AUTH_PROVIDER=clerk but Clerk JWKS settings are incomplete.
+
+    See auth-context.md §Boot guard."""
+
+
 class ProviderUnavailableError(Exception):
     """Adapter-layer: provider returned 5xx or timed out. Mapped to provider_unavailable at API."""
 

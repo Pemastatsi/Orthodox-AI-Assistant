@@ -17,16 +17,35 @@ from app.adapters.providers.openai_provider import (
 from app.adapters.sparse.bm25_embedder import Bm25SparseEmbedder
 from app.adapters.vector_store.base import VectorStore
 from app.adapters.vector_store.qdrant_store import QdrantStore
-from app.core.auth import resolve_principal
+from app.core.auth import (
+    ClerkClaims,
+    bearer_token,
+    resolve_principal,
+    scopes_for_role,
+    verify_clerk_token,
+)
 from app.core.config import Settings, get_settings
-from app.core.errors import ForbiddenRoleError
+from app.core.errors import (
+    ApiException,
+    AuthInvalidTokenError,
+    AuthMissingOrgError,
+    ForbiddenRoleError,
+    TenantInactiveError,
+    TenantMismatchError,
+    TenantNotFoundError,
+)
 from app.core.tenant_context import set_tenant_guc
 from app.domain.agents.composer import Composer
 from app.domain.agents.evidence_packager import EvidencePackager
 from app.domain.agents.query_analyzer import QueryAnalyzer
 from app.domain.agents.verifier import Verifier, VerifierConfig
 from app.domain.models.principal import Principal
-from app.domain.repositories._base import AsyncSession, session_scope
+from app.domain.repositories._base import (
+    AsyncSession,
+    admin_session_scope,
+    session_scope,
+)
+from app.domain.repositories.identity_repository import IdentityRepository
 from app.domain.services.cache_service import ResponseCache
 from app.domain.services.encryption_service import (
     SensitiveLogCipher,
@@ -45,22 +64,59 @@ def get_settings_dep() -> Settings:
     return get_settings()
 
 
+async def _resolve_clerk_identity(claims: ClerkClaims) -> Principal:
+    """Map verified Clerk claims to a Principal: resolve the tenant by org, the user by Clerk id
+    (JIT-provisioning a first-seen member), then build the Principal. Runs on the app_admin
+    (BYPASSRLS) session because the tenant isn't known yet (RLS chicken-and-egg; ADR-0016)."""
+    if not claims.org_id:
+        raise AuthMissingOrgError("Clerk token has no active organization")
+    async with admin_session_scope() as session:
+        repo = IdentityRepository(session)
+        tenant = await repo.get_tenant_by_clerk_org(claims.org_id)
+        if tenant is None:
+            raise TenantNotFoundError("no tenant is mapped to the Clerk organization")
+        if tenant.status != "active":
+            raise TenantInactiveError(f"tenant is {tenant.status}")
+        user = await repo.get_user_by_clerk_id(claims.sub)
+        if user is None:
+            if not claims.org_role:
+                raise AuthInvalidTokenError("cannot provision a user without an org role")
+            user = await repo.jit_provision_user(
+                clerk_user_id=claims.sub, tenant_id=tenant.tenant_id
+            )
+        if user.tenant_id != tenant.tenant_id:
+            raise TenantMismatchError("user does not belong to the resolved tenant")
+    return Principal(
+        user_id=user.user_id,
+        clerk_user_id=claims.sub,
+        tenant_id=tenant.tenant_id,
+        clerk_org_id=claims.org_id,
+        role=user.role,
+        scopes=scopes_for_role(user.role),
+        data_region=tenant.data_region,
+    )
+
+
 async def get_principal(
     request: Request,
     settings: Settings = Depends(get_settings_dep),
 ) -> Principal:
-    authorization = request.headers.get("authorization")
-    dev_header = request.headers.get("x-dev-principal")
-    try:
+    """Resolve the request Principal. Dev mode decodes the `x-dev-principal` header; Clerk mode
+    verifies the bearer JWT then resolves identity. Typed auth/tenant failures map to their HTTP
+    status + error code; we never silently fall back to a dev principal."""
+    if settings.auth_provider == "dev":
         return resolve_principal(
-            authorization=authorization,
-            dev_principal_header=dev_header,
+            authorization=request.headers.get("authorization"),
+            dev_principal_header=request.headers.get("x-dev-principal"),
             settings=settings,
         )
-    except NotImplementedError as exc:  # AUTH_PROVIDER=clerk before T-005 lands
+    try:
+        claims = verify_clerk_token(bearer_token(request.headers.get("authorization")), settings)
+        return await _resolve_clerk_identity(claims)
+    except ApiException as exc:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "auth_provider_unavailable", "message": str(exc)},
+            status_code=exc.http_status,
+            detail={"code": exc.code.value, "message": exc.message},
         ) from exc
 
 
@@ -183,9 +239,7 @@ def get_embedding_provider(
 ) -> LLMProvider:
     global _embedding_provider
     if _embedding_provider is None:
-        _embedding_provider = OpenAIProvider(
-            settings=settings, model="text-embedding-3-small"
-        )
+        _embedding_provider = OpenAIProvider(settings=settings, model="text-embedding-3-small")
     return _embedding_provider
 
 

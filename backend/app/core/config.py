@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     clerk_publishable_key: str = "pk_test_REPLACE_ME"
     clerk_jwt_issuer: str = ""
     clerk_authorized_parties: str = "http://localhost:3000"
+    clerk_jwks_cache_seconds: int = 3600
 
     tesseract_binary_path: str = "/usr/bin/tesseract"
     tesseract_language_pack_path: str = "/usr/share/tesseract-ocr/4.00/tessdata"
