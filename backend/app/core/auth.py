@@ -171,7 +171,9 @@ def verify_clerk_token(token: str, settings: Settings | None = None) -> ClerkCla
 
     Validates the signature, `iss` (when configured), `exp`/`iat`, the presence of `sub`, and that
     `azp` is in the `CLERK_AUTHORIZED_PARTIES` allowlist. Any failure → `AuthInvalidTokenError`
-    (fail closed). Does NOT touch the database — the tenant/user lookup is the caller's job."""
+    (fail closed). Organization claims are read from either the flat `org_id`/`org_role` claims or
+    Clerk's default (v2) nested `o` object. Does NOT touch the database — the tenant/user lookup is
+    the caller's job."""
     cfg = settings or get_settings()
     try:
         signing_key = _get_jwks_client(cfg).get_signing_key_from_jwt(token)
@@ -190,10 +192,20 @@ def verify_clerk_token(token: str, settings: Settings | None = None) -> ClerkCla
     if allowed and azp not in allowed:
         raise AuthInvalidTokenError("token azp is not an authorized party")
 
+    # Organization claims. Clerk's default (v2) session token nests them under `o`
+    # (`o.id` / `o.rol`); a custom JWT template can instead emit flat `org_id`/`org_role`.
+    # Accept either so the default `getToken()` works without a bespoke template.
+    org_id = payload.get("org_id")
+    org_role = payload.get("org_role")
+    org_claim = payload.get("o")
+    if org_id is None and isinstance(org_claim, dict):
+        org_id = org_claim.get("id")
+        org_role = org_claim.get("rol")
+
     return ClerkClaims(
         sub=str(payload["sub"]),
-        org_id=payload.get("org_id"),
-        org_role=payload.get("org_role"),
+        org_id=org_id,
+        org_role=org_role,
         azp=azp,
     )
 

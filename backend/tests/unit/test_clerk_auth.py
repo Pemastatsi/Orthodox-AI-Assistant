@@ -93,6 +93,22 @@ def test_valid_token_returns_claims() -> None:
     assert claims.azp == _AZP
 
 
+def test_nested_org_claim_is_read() -> None:
+    # Clerk's default (v2) session token nests org under `o` with no flat org_id/org_role;
+    # verify_clerk_token must still surface the org so the backend doesn't 401 (auth_missing_org).
+    token = _token(org_id=None, org_role=None, o={"id": "org_clerk_9", "rol": "org:admin"})
+    claims = auth.verify_clerk_token(token, _settings())
+    assert claims.org_id == "org_clerk_9"
+    assert claims.org_role == "org:admin"
+
+
+def test_flat_org_claim_takes_precedence_over_nested() -> None:
+    token = _token(org_id="org_flat", org_role="org:member", o={"id": "org_nested", "rol": "x"})
+    claims = auth.verify_clerk_token(token, _settings())
+    assert claims.org_id == "org_flat"
+    assert claims.org_role == "org:member"
+
+
 def test_bad_signature_rejected() -> None:
     token = _token(key=_OTHER_KEY)  # signed by a key the stubbed JWKS will not match
     with pytest.raises(AuthInvalidTokenError):
