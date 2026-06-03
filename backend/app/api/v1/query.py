@@ -80,6 +80,7 @@ from app.domain.services.cache_service import (
     cache_key,
 )
 from app.domain.services.encryption_service import SensitiveLogCipher
+from app.domain.services.prompt_loader import registry_version
 from app.domain.services.redaction_service import (
     redact_query_text,
     should_capture_raw_sensitive,
@@ -341,7 +342,7 @@ async def post_query(
             fresh_model_run=False,
             stages=[
                 _stage_a1a2(started_at, settings, outcome="ok"),
-                _stage("a5_composer", started_at, outcome="error", notes=type(exc).__name__),
+                _stage_a5(started_at, settings, outcome="error", notes=type(exc).__name__),
             ],
             flag_reason="verifier_failed",
             cipher=cipher,
@@ -382,7 +383,7 @@ async def post_query(
         fresh_model_run=True,
         stages=[
             _stage_a1a2(started_at, settings, outcome="ok"),
-            _stage("a5_composer", started_at, outcome="ok"),
+            _stage_a5(started_at, settings, outcome="ok"),
             _stage("a6_verifier", started_at, outcome="ok" if a6_passed else "fallback"),
         ],
         flag_reason=None if a6_passed else "verifier_failed",
@@ -427,6 +428,7 @@ def _stage(
     outcome: str,
     notes: str | None = None,
     model_route_id: str | None = None,
+    details: dict[str, str] | None = None,
 ) -> Stage:
     now = datetime.now(UTC)
     return Stage(
@@ -436,15 +438,45 @@ def _stage(
         outcome=outcome,
         model_route_id=model_route_id,
         notes=notes,
+        details=details or {},
     )
 
 
+# Registry path identifiers for the model-backed stages (GS-3). The RunTrace promptVersion is
+# the full registry path — {promptId}/{version-stem} — so an operator can reconstruct the exact
+# template via `git show prompts/<promptVersion>.j2` (docs/contracts/prompt-management.md).
+_A1A2_PROMPT_ID = "a1_classifier/en"
+_A5_PROMPT_ID = "a5_composer/en"
+
+
 def _stage_a1a2(started_at: datetime, settings: Settings, *, outcome: str) -> Stage:
+    version = registry_version(settings.active_prompt_version_a1a2)
     return _stage(
         "a1_a2_query_analyzer",
         started_at,
         outcome=outcome,
         model_route_id=settings.active_model_route_a1a2,
+        details={
+            "promptId": _A1A2_PROMPT_ID,
+            "promptVersion": f"{_A1A2_PROMPT_ID}/{version}",
+        },
+    )
+
+
+def _stage_a5(
+    started_at: datetime, settings: Settings, *, outcome: str, notes: str | None = None
+) -> Stage:
+    version = registry_version(settings.active_prompt_version_a5)
+    return _stage(
+        "a5_composer",
+        started_at,
+        outcome=outcome,
+        notes=notes,
+        model_route_id=settings.active_model_route_a5,
+        details={
+            "promptId": _A5_PROMPT_ID,
+            "promptVersion": f"{_A5_PROMPT_ID}/{version}",
+        },
     )
 
 

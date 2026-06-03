@@ -6,9 +6,7 @@ and does **not** invent citations; it only applies a transparent safety reframin
 for sensitive advice-seeking queries. See `AGENTS.md` and the JSON shape derived
 from `ClassifiedQuery` + `RetrievalPlan`.
 
-- **Runtime source of truth** (until the loader migration): `_SYSTEM_PROMPT` in
-  `backend/app/domain/prompts/query_analyzer_a1_a2.py`.
+- **Loaded by** `backend/app/domain/prompts/query_analyzer_a1_a2.py` at import via
+  `load_prompt("a1_classifier", "en", <version>)`.
 - **Version pin:** `Settings.active_prompt_version_a1a2`
   (`qa_analyze@2026-05-01.1` → file `en/2026-05-01.1.j2`).
-- `en/2026-05-01.1.j2` is kept byte-identical to that literal by
-  `tests/prompts/test_prompt_files_match_inline.py`.
