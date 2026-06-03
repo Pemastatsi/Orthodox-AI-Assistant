@@ -2,12 +2,15 @@
  * Server-side fetch helpers for the admin endpoints (T-006 B.4 surfaces).
  * These are intentionally separate from `lib/api-client.ts` because admin
  * pages are React Server Components — they read auth from the server-side
- * environment (a `DEV_PRINCIPAL` env var in development; Clerk's `auth()`
- * helper in production, wired in a follow-up).
+ * environment: Clerk's `auth()` JWT in Clerk mode, or a `DEV_PRINCIPAL` env
+ * var in dev mode.
  *
  * Each helper validates the response with the matching zod schema and throws
  * on schema mismatch so the Next.js error boundary surfaces the failure.
  */
+import { auth } from "@clerk/nextjs/server";
+
+import { CLERK_ENABLED } from "./auth-config";
 import {
   AuditEntryPageSchema,
   ChunkPageSchema,
@@ -37,10 +40,15 @@ function serverDevPrincipal(): { tenantId: string; role: string; userId: string 
   };
 }
 
-function authHeaders(): Record<string, string> {
+async function serverAuthHeaders(): Promise<Record<string, string>> {
+  if (CLERK_ENABLED) {
+    const { getToken } = await auth();
+    const token = await getToken();
+    if (token) return { authorization: `Bearer ${token}` };
+  }
+  // Dev mode (or a missing Clerk token): fall back to the server dev principal.
   const principal = serverDevPrincipal();
-  const json = JSON.stringify(principal);
-  const encoded = Buffer.from(json, "utf-8").toString("base64");
+  const encoded = Buffer.from(JSON.stringify(principal), "utf-8").toString("base64");
   return { "x-dev-principal": encoded };
 }
 
@@ -60,7 +68,7 @@ async function adminFetch(path: string, query: Record<string, string | undefined
   const url = `${API_BASE}${path}${params.toString() ? `?${params}` : ""}`;
   const res = await fetch(url, {
     method: "GET",
-    headers: { ...authHeaders(), "content-type": "application/json" },
+    headers: { ...(await serverAuthHeaders()), "content-type": "application/json" },
     cache: "no-store",
   });
   if (!res.ok) {

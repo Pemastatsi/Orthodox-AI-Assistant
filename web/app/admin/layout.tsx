@@ -8,7 +8,9 @@
  */
 import Link from "next/link";
 import type { Route } from "next";
+import { AuthControls } from "@/components/auth/AuthControls";
 import { TenantSwitcher } from "@/components/admin/TenantSwitcher";
+import { CLERK_ENABLED } from "@/lib/auth-config";
 import { serverDevPrincipal } from "@/lib/admin-api";
 
 const NAV: { href: Route; label: string }[] = [
@@ -38,7 +40,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           >
             ← Back to chat
           </Link>
-          <TenantSwitcher tenantId={principal.tenantId} role={principal.role} />
+          {CLERK_ENABLED ? (
+            <AuthControls />
+          ) : (
+            <TenantSwitcher tenantId={principal.tenantId} role={principal.role} />
+          )}
         </div>
       </header>
 

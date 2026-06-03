@@ -14,8 +14,9 @@ import { postQuery, ApiClientError, type AuthHeaders } from "@/lib/api-client";
 import type { ApiError, VerifiedResponse } from "@/lib/schemas";
 
 export interface ChatComposerProps {
-  /** Caller-supplied auth (Clerk JWT prod, dev principal in development). */
-  auth: AuthHeaders;
+  /** Resolves fresh auth headers per request (Clerk JWT in prod, dev principal in development).
+   *  Async because Clerk session tokens are short-lived and fetched at submit time. */
+  resolveAuth: () => Promise<AuthHeaders>;
   /** Fires the moment the user submits, before the network call returns. */
   onSubmit?: (queryText: string) => void;
   onResponse: (response: VerifiedResponse) => void;
@@ -26,7 +27,7 @@ export interface ChatComposerProps {
 }
 
 export function ChatComposer({
-  auth,
+  resolveAuth,
   onSubmit,
   onResponse,
   onError,
@@ -42,6 +43,7 @@ export function ChatComposer({
     setIsSubmitting(true);
     onSubmit?.(trimmed);
     try {
+      const auth = await resolveAuth();
       const response = await postQuery({ queryText: trimmed }, { auth });
       onResponse(response);
       setValue("");
