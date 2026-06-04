@@ -15,32 +15,19 @@ from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
-from app.main import app
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import text
 
-# Quarantined: TestClient event-loop teardown issue (see tracking issue). __EVENTLOOP_QUARANTINE__
-# Skip (not xfail): these drive the app through the sync TestClient, which runs the ASGI app on a
-# separate anyio portal loop while the async DB fixtures use the pytest loop. On block exit the
-# app's lifespan disposes the shared module-level engine on the wrong loop ("got Future attached to
-# a different loop"), which corrupts the pool and breaks the NEXT DB test in the suite (e.g.
-# test_retention_worker). xfail still executes the body, so it would not stop that pollution; skip
-# does. Pre-existing; surfaced once CI gained a Postgres service so these tests actually run.
-# Follow-up: migrate to httpx.AsyncClient or a NullPool test engine (see tracking issue).
-_EVENTLOOP_SKIP_REASON = (
-    "TestClient event-loop teardown disposes the shared engine on the wrong loop and poisons "
-    "later DB tests; skipped pending httpx.AsyncClient/NullPool migration (see tracking issue)."
-)
-pytestmark = [
-    pytest.mark.asyncio,
-    pytest.mark.skip(reason=_EVENTLOOP_SKIP_REASON),
-]
+pytestmark = pytest.mark.asyncio
 
 # A dedicated, uniquely-named route so the test never mutates the migration-seeded routes.
 _ROUTE_ID = "embedding_certify_test@2026-05-29.1"
 _SSR_ID = "ssr_certify_test"
 _REVAL_ID = "reval_certify_test"
 _SEEDED_EXPERIMENT_ROUTE = "embedding_openai@2026-05-01.1"  # seeded by migration 0001
+# clean_tables TRUNCATE ... CASCADE wipes the migration-seeded model_routes (cascade via
+# safety_suite_runs), so a test needing a real-but-uncertifiable route self-seeds this one.
+_UNGATED_ROUTE_ID = "embedding_ungated_test@2026-05-29.1"
 
 
 def _dev_header(
@@ -138,45 +125,87 @@ async def certifiable_route(seed_tenant: tuple[str, str]) -> AsyncIterator[str]:
     await _delete_test_rows()
 
 
-async def test_non_owner_is_forbidden(seed_tenant: tuple[str, str]) -> None:
-    with TestClient(app) as client:
-        resp = client.patch(
-            f"/api/v1/admin/model-routes/{_SEEDED_EXPERIMENT_ROUTE}/certify",
-            headers=_dev_header(role="content_manager"),
-            json={"certificationNotes": "nope"},
-        )
+async def test_non_owner_is_forbidden(
+    async_client: AsyncClient, seed_tenant: tuple[str, str]
+) -> None:
+    resp = await async_client.patch(
+        f"/api/v1/admin/model-routes/{_SEEDED_EXPERIMENT_ROUTE}/certify",
+        headers=_dev_header(role="content_manager"),
+        json={"certificationNotes": "nope"},
+    )
     assert resp.status_code == 403, resp.text
 
 
-async def test_unknown_route_is_404(seed_tenant: tuple[str, str]) -> None:
-    with TestClient(app) as client:
-        resp = client.patch(
-            "/api/v1/admin/model-routes/does_not_exist@2026-01-01.1/certify",
-            headers=_dev_header(role="owner"),
-            json={"certificationNotes": "x"},
-        )
+async def test_unknown_route_is_404(
+    async_client: AsyncClient, seed_tenant: tuple[str, str]
+) -> None:
+    resp = await async_client.patch(
+        "/api/v1/admin/model-routes/does_not_exist@2026-01-01.1/certify",
+        headers=_dev_header(role="owner"),
+        json={"certificationNotes": "x"},
+    )
     assert resp.status_code == 404, resp.text
 
 
-async def test_ungated_route_is_409(seed_tenant: tuple[str, str]) -> None:
-    # The migration-seeded embedding route has no passing safety/retrieval runs linked.
-    with TestClient(app) as client:
-        resp = client.patch(
-            f"/api/v1/admin/model-routes/{_SEEDED_EXPERIMENT_ROUTE}/certify",
-            headers=_dev_header(role="owner"),
-            json={"certificationNotes": "premature"},
+@pytest_asyncio.fixture()
+async def ungated_route(seed_tenant: tuple[str, str]) -> AsyncIterator[str]:
+    """An experiment route that exists but has NO safety/retrieval runs linked → not certifiable.
+
+    Self-seeded rather than reused from the migration: clean_tables TRUNCATEs with CASCADE, which
+    removes the migration-seeded model_routes, so by the time a test runs the seed route is gone.
+    Sibling tests already self-seed their routes (certifiable_route / unlinked_route).
+    """
+    from app.domain.repositories._base import session_scope
+
+    async def _drop() -> None:
+        async with session_scope() as session:
+            await session.execute(
+                text("DELETE FROM model_routes WHERE route_id = :r"), {"r": _UNGATED_ROUTE_ID}
+            )
+            await session.commit()
+
+    await _drop()
+    async with session_scope() as session:
+        await session.execute(
+            text(
+                """
+                INSERT INTO model_routes (
+                    route_id, purpose, provider, model, prompt_version, schema_version,
+                    certification_status, created_at
+                ) VALUES (
+                    :id, 'embedding', 'openai', 'text-embedding-3-small',
+                    'embedding_none@2026-05-01.1', '1.0', 'experiment', now()
+                )
+                """
+            ),
+            {"id": _UNGATED_ROUTE_ID},
         )
+        await session.commit()
+    yield _UNGATED_ROUTE_ID
+    await _drop()
+
+
+async def test_ungated_route_is_409(
+    async_client: AsyncClient, ungated_route: str
+) -> None:
+    # An experiment route with no passing safety/retrieval runs linked is not certifiable.
+    resp = await async_client.patch(
+        f"/api/v1/admin/model-routes/{ungated_route}/certify",
+        headers=_dev_header(role="owner"),
+        json={"certificationNotes": "premature"},
+    )
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"]["code"] == "route_not_certifiable"
 
 
-async def test_owner_certifies_fully_gated_route(certifiable_route: str) -> None:
-    with TestClient(app) as client:
-        resp = client.patch(
-            f"/api/v1/admin/model-routes/{certifiable_route}/certify",
-            headers=_dev_header(role="owner"),
-            json={"certificationNotes": "Both gates green on 2026-05-29.1."},
-        )
+async def test_owner_certifies_fully_gated_route(
+    async_client: AsyncClient, certifiable_route: str
+) -> None:
+    resp = await async_client.patch(
+        f"/api/v1/admin/model-routes/{certifiable_route}/certify",
+        headers=_dev_header(role="owner"),
+        json={"certificationNotes": "Both gates green on 2026-05-29.1."},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["certificationStatus"] == "certified"
@@ -199,17 +228,18 @@ async def test_owner_certifies_fully_gated_route(certifiable_route: str) -> None
     assert row["details"]["certificationNotes"].startswith("Both gates green")
 
 
-async def test_already_certified_route_is_409(certifiable_route: str) -> None:
-    with TestClient(app) as client:
-        first = client.patch(
-            f"/api/v1/admin/model-routes/{certifiable_route}/certify",
-            headers=_dev_header(role="owner"),
-            json={"certificationNotes": "first"},
-        )
-        assert first.status_code == 200, first.text
-        second = client.patch(
-            f"/api/v1/admin/model-routes/{certifiable_route}/certify",
-            headers=_dev_header(role="owner"),
-            json={"certificationNotes": "again"},
-        )
+async def test_already_certified_route_is_409(
+    async_client: AsyncClient, certifiable_route: str
+) -> None:
+    first = await async_client.patch(
+        f"/api/v1/admin/model-routes/{certifiable_route}/certify",
+        headers=_dev_header(role="owner"),
+        json={"certificationNotes": "first"},
+    )
+    assert first.status_code == 200, first.text
+    second = await async_client.patch(
+        f"/api/v1/admin/model-routes/{certifiable_route}/certify",
+        headers=_dev_header(role="owner"),
+        json={"certificationNotes": "again"},
+    )
     assert second.status_code == 409, second.text

@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+from httpx import AsyncClient
 from sqlalchemy import text
 
 pytestmark = pytest.mark.asyncio
@@ -366,19 +367,8 @@ async def test_with_check_rejects_cross_tenant_insert(
             )
 
 
-# Quarantined: this is the one isolation test that drives the app through the sync TestClient,
-# which disposes the shared engine on a different event loop than the async DB fixtures ("got
-# Future attached to a different loop") and poisons the next DB test. skip (not xfail) keeps the
-# body from running so the pool stays clean. The other 8 tests here exercise RLS directly via the
-# GUC and keep verifying tenant isolation. __EVENTLOOP_QUARANTINE__
-# Follow-up: migrate to httpx.AsyncClient or a NullPool test engine (see tracking issue).
-@pytest.mark.skip(
-    reason=(
-        "TestClient event-loop teardown disposes the shared engine on the wrong loop and poisons "
-        "later DB tests; skipped pending httpx.AsyncClient/NullPool migration (see tracking issue)."
-    )
-)
 async def test_request_path_tenant_session_isolates(
+    async_client: AsyncClient,
     seed_two_tenants: tuple[str, str],
 ) -> None:
     """Regression: GET /admin/queries through get_tenant_session returns only the caller's tenant.
@@ -393,8 +383,6 @@ async def test_request_path_tenant_session_isolates(
     import json
 
     from app.domain.repositories._base import get_sessionmaker
-    from app.main import app
-    from fastapi.testclient import TestClient
 
     sm = get_sessionmaker()
     async with sm() as session, session.begin():
@@ -420,8 +408,7 @@ async def test_request_path_tenant_session_isolates(
             ).encode("utf-8")
         ).decode("ascii")
     }
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/admin/queries", headers=header)
+    resp = await async_client.get("/api/v1/admin/queries", headers=header)
     assert resp.status_code == 200, resp.text
     run_ids = {item["runId"] for item in resp.json()["items"]}
     # tn_a's row is visible; tn_b's must not be (RLS via the request-path GUC).

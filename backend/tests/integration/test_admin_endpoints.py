@@ -19,21 +19,9 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 from app.domain.models.run_trace import RunTrace, RunTraceUsage
-from app.main import app
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 pytestmark = pytest.mark.asyncio
-
-# Quarantined: the TestClient-based endpoint tests below run the ASGI app on a separate anyio
-# portal loop; on block exit the app lifespan disposes the shared module-level engine on the wrong
-# loop ("got Future attached to a different loop"), corrupting the pool and breaking the next DB
-# test in the suite. skip (not xfail) keeps the body from executing so it can't poison the pool.
-# The repository-layer tests in this file do NOT use TestClient and keep running.
-# Follow-up: migrate to httpx.AsyncClient or a NullPool test engine. __EVENTLOOP_QUARANTINE__
-_EVENTLOOP_SKIP_REASON = (
-    "TestClient event-loop teardown disposes the shared engine on the wrong loop and poisons "
-    "later DB tests; skipped pending httpx.AsyncClient/NullPool migration (see tracking issue)."
-)
 
 
 def _dev_header(
@@ -306,16 +294,15 @@ async def test_audit_filter_by_action(
     assert len(rows) >= 1
 
 
-@pytest.mark.skip(reason=_EVENTLOOP_SKIP_REASON)
 async def test_get_admin_queries_endpoint(
+    async_client: AsyncClient,
     seed_admin_fixtures: tuple[str, str],
 ) -> None:
     tenant_id, _ = seed_admin_fixtures
-    with TestClient(app) as client:
-        response = client.get(
-            "/api/v1/admin/queries",
-            headers=_dev_header(tenant_id=tenant_id, role="content_manager"),
-        )
+    response = await async_client.get(
+        "/api/v1/admin/queries",
+        headers=_dev_header(tenant_id=tenant_id, role="content_manager"),
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     assert "items" in body and "nextCursor" in body
@@ -323,29 +310,27 @@ async def test_get_admin_queries_endpoint(
     assert all(item["tenantId"] == tenant_id for item in body["items"])
 
 
-@pytest.mark.skip(reason=_EVENTLOOP_SKIP_REASON)
 async def test_get_admin_queries_rejects_member_role(
+    async_client: AsyncClient,
     seed_admin_fixtures: tuple[str, str],
 ) -> None:
     tenant_id, _ = seed_admin_fixtures
-    with TestClient(app) as client:
-        response = client.get(
-            "/api/v1/admin/queries",
-            headers=_dev_header(tenant_id=tenant_id, role="member"),
-        )
+    response = await async_client.get(
+        "/api/v1/admin/queries",
+        headers=_dev_header(tenant_id=tenant_id, role="member"),
+    )
     assert response.status_code == 403, response.text
 
 
-@pytest.mark.skip(reason=_EVENTLOOP_SKIP_REASON)
 async def test_get_admin_flagged_strips_raw_log_id_for_content_manager(
+    async_client: AsyncClient,
     seed_admin_fixtures: tuple[str, str],
 ) -> None:
     tenant_id, _ = seed_admin_fixtures
-    with TestClient(app) as client:
-        response = client.get(
-            "/api/v1/admin/flagged",
-            headers=_dev_header(tenant_id=tenant_id, role="content_manager"),
-        )
+    response = await async_client.get(
+        "/api/v1/admin/flagged",
+        headers=_dev_header(tenant_id=tenant_id, role="content_manager"),
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     assert len(body["items"]) == 3
@@ -355,16 +340,15 @@ async def test_get_admin_flagged_strips_raw_log_id_for_content_manager(
         )
 
 
-@pytest.mark.skip(reason=_EVENTLOOP_SKIP_REASON)
 async def test_get_admin_flagged_keeps_raw_log_id_for_admin(
+    async_client: AsyncClient,
     seed_admin_fixtures: tuple[str, str],
 ) -> None:
     tenant_id, _ = seed_admin_fixtures
-    with TestClient(app) as client:
-        response = client.get(
-            "/api/v1/admin/flagged",
-            headers=_dev_header(tenant_id=tenant_id, role="admin"),
-        )
+    response = await async_client.get(
+        "/api/v1/admin/flagged",
+        headers=_dev_header(tenant_id=tenant_id, role="admin"),
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     raw_ids = [item["rawSensitiveLogId"] for item in body["items"]]
@@ -373,49 +357,45 @@ async def test_get_admin_flagged_keeps_raw_log_id_for_admin(
     )
 
 
-@pytest.mark.skip(reason=_EVENTLOOP_SKIP_REASON)
 async def test_get_admin_audit_requires_admin_role(
+    async_client: AsyncClient,
     seed_admin_fixtures: tuple[str, str],
 ) -> None:
     tenant_id, _ = seed_admin_fixtures
-    with TestClient(app) as client:
-        cm_response = client.get(
-            "/api/v1/admin/audit",
-            headers=_dev_header(tenant_id=tenant_id, role="content_manager"),
-        )
+    cm_response = await async_client.get(
+        "/api/v1/admin/audit",
+        headers=_dev_header(tenant_id=tenant_id, role="content_manager"),
+    )
     assert cm_response.status_code == 403, cm_response.text
 
-    with TestClient(app) as client:
-        admin_response = client.get(
-            "/api/v1/admin/audit",
-            headers=_dev_header(tenant_id=tenant_id, role="admin"),
-        )
+    admin_response = await async_client.get(
+        "/api/v1/admin/audit",
+        headers=_dev_header(tenant_id=tenant_id, role="admin"),
+    )
     assert admin_response.status_code == 200, admin_response.text
     body = admin_response.json()
     assert len(body["items"]) == 3
 
 
-@pytest.mark.skip(reason=_EVENTLOOP_SKIP_REASON)
 async def test_get_admin_queries_pagination_cursor(
+    async_client: AsyncClient,
     seed_admin_fixtures: tuple[str, str],
 ) -> None:
     tenant_id, _ = seed_admin_fixtures
-    with TestClient(app) as client:
-        first = client.get(
-            "/api/v1/admin/queries?limit=2",
-            headers=_dev_header(tenant_id=tenant_id, role="admin"),
-        )
+    first = await async_client.get(
+        "/api/v1/admin/queries?limit=2",
+        headers=_dev_header(tenant_id=tenant_id, role="admin"),
+    )
     assert first.status_code == 200
     first_body = first.json()
     assert len(first_body["items"]) == 2
     cursor = first_body["nextCursor"]
     assert cursor is not None
 
-    with TestClient(app) as client:
-        second = client.get(
-            f"/api/v1/admin/queries?limit=2&cursor={cursor}",
-            headers=_dev_header(tenant_id=tenant_id, role="admin"),
-        )
+    second = await async_client.get(
+        f"/api/v1/admin/queries?limit=2&cursor={cursor}",
+        headers=_dev_header(tenant_id=tenant_id, role="admin"),
+    )
     assert second.status_code == 200
     second_body = second.json()
     assert len(second_body["items"]) == 1

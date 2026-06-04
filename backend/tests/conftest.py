@@ -97,6 +97,25 @@ async def db_engine(postgres_available: bool) -> AsyncIterator[object]:
 
 
 @pytest_asyncio.fixture()
+async def async_client(db_engine: object) -> AsyncIterator[object]:
+    """An httpx.AsyncClient bound to the ASGI app, running on the test's own event loop.
+
+    Use this for DB-backed endpoint tests instead of fastapi.testclient.TestClient. TestClient runs
+    the app on a separate anyio portal loop and, at block exit, disposes the shared module-level
+    engine on the wrong loop ("got Future attached to a different loop"), corrupting the pool for
+    later tests. ASGITransport runs in-process on this loop and does not trigger lifespan, so the
+    engine that `db_engine` initialized (this loop) is the one the handlers use and dispose. Depends
+    on db_engine so the engine is initialized before the first request.
+    """
+    from app.main import app
+    from httpx import ASGITransport, AsyncClient
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+@pytest_asyncio.fixture()
 async def clean_tables(db_engine: object) -> AsyncIterator[None]:
     """Truncate all tenant-scoped tables before each integration test."""
     from app.domain.repositories._base import get_sessionmaker
