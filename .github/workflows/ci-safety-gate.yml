@@ -77,6 +77,22 @@ jobs:
           redocly bundle docs/api/openapi.yaml --output /tmp/openapi.bundled.yaml
           redocly lint docs/api/openapi.yaml
 
+      - name: Check DOCS_INDEX drift (REC-003)
+        # Fails if docs/{adr,contracts,schemas}/ and docs/DOCS_INDEX.md disagree (a file with no
+        # index row, or an index row pointing at a missing file). Stdlib only — no deps.
+        run: python scripts/check_docs_index.py
+
+      - name: Check schema codegen drift (REC-009; guarded)
+        # REC-009 is scaffolded but not enabled: no _generated/ artifacts exist yet, so this step
+        # skips and stays green. It activates automatically once `make codegen` output is committed
+        # (see scripts/codegen/README.md).
+        run: |
+          if [ -d backend/app/domain/models/_generated ] || [ -d web/lib/schemas/_generated ]; then
+            make codegen-check
+          else
+            echo "REC-009 scaffold: codegen artifacts not generated yet; skipping drift check."
+          fi
+
   backend:
     name: Backend (ruff + mypy + pytest)
     runs-on: ubuntu-latest

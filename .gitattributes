@@ -16,3 +16,9 @@
 *.gif binary
 *.ico binary
 *.zip binary
+
+# REC-009 schema-to-code generated artifacts (see scripts/codegen/README.md). Not produced yet
+# (scaffold); marked here so they are treated as generated once `make codegen` is enabled.
+backend/app/domain/models/_generated/** linguist-generated=true
+web/lib/api-client.generated.ts linguist-generated=true
+web/lib/schemas/_generated/** linguist-generated=true
