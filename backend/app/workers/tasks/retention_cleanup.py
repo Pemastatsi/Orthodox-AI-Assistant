@@ -21,11 +21,18 @@ from typing import Any
 
 from app.core.logging import get_logger
 from app.domain.repositories._base import init_engine, session_scope
+from app.domain.repositories.audit_repository import AuditRepository
 from app.domain.repositories.raw_sensitive_log_repository import (
     RawSensitiveLogRepository,
 )
 
 logger = get_logger(__name__)
+
+# Platform system principal seeded by migration 0006_system_principal. The retention sweep is a
+# cross-tenant system action with no per-tenant actor, so its exit-criterion-#8 audit row is
+# attributed here. Keep in sync with the migration's seeded IDs.
+_SYSTEM_TENANT_ID = "tn_system"
+_SYSTEM_USER_ID = "usr_system"
 
 
 def _next_run_at(now: datetime, cron_minute: int = 5) -> datetime:
@@ -53,6 +60,7 @@ async def run_retention_cleanup(
     the worker runs against the test DB without involving arq.
     """
     when = now or datetime.now(UTC)
+    next_run = _next_run_at(when)
     started = time.perf_counter()
 
     logger.info(
@@ -65,9 +73,21 @@ async def run_retention_cleanup(
     async with factory() as session:
         repo = RawSensitiveLogRepository(session)
         deleted_count = await repo.delete_expired(now=when)
+        # Exit criterion #8: the executable signal the dashboard reads is this audit row, not just
+        # the log event below. Attributed to the platform system principal (migration 0006) because
+        # the sweep is a cross-tenant system action. Written on every run — even deleted_count == 0
+        # — so the criterion is observable on each scheduled sweep.
+        await AuditRepository(session).insert(
+            tenant_id=_SYSTEM_TENANT_ID,
+            actor_user_id=_SYSTEM_USER_ID,
+            actor_role="system",
+            action="retention_purged",
+            resource_type="raw_sensitive_logs",
+            resource_id="retention_sweep",
+            details={"deleted_count": deleted_count, "next_run_at": next_run.isoformat()},
+        )
 
     duration_ms = int((time.perf_counter() - started) * 1000)
-    next_run = _next_run_at(when)
 
     logger.info(
         "worker.retention.completed",
