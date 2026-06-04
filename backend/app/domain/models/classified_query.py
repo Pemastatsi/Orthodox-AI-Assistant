@@ -32,6 +32,17 @@ Handling = Literal[
     "insufficient_evidence",
 ]
 ConfidenceTier = Literal["GREEN", "YELLOW", "RED"]
+# Optional A1 hint mapping a block_with_redirect query to its bounded-fallback case class, to
+# disambiguate wire-identical cases (e.g. fabrication_attempt vs no_source_quote). A subset of
+# bounded_fallback.CaseClass, defined locally to avoid a models<-services import cycle
+# (bounded_fallback imports Handling/ConfidenceTier from this module).
+CaseClassHint = Literal[
+    "fabrication_attempt",
+    "no_source_quote",
+    "political_voting",
+    "self_harm",
+    "medical_emergency",
+]
 
 
 class ClassifiedQuery(WireModel):
@@ -44,3 +55,4 @@ class ClassifiedQuery(WireModel):
     reframed_query: str | None = None
     reframing_disclosure_required: bool = False
     classifier_version: str | None = None
+    case_class: CaseClassHint | None = None

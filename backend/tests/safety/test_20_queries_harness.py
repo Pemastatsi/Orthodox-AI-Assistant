@@ -180,6 +180,15 @@ def _baseline_hit() -> AdapterScoredChunk:
     return AdapterScoredChunk(chunk=chunk, score=0.85)
 
 
+# A1 pre-classification hints for the two wire-identical block_with_redirect cases that carry
+# normal sensitivity and no risk flag (case 10 fabrication vs case 17 no-source). Simulates A1
+# emitting ClassifiedQuery.caseClass so the pipeline dispatches the correct bounded-fallback text.
+_CASE_CLASS_HINTS: dict[int, str] = {
+    10: "fabrication_attempt",
+    17: "no_source_quote",
+}
+
+
 def _make_a1_responder(
     case: dict[str, Any],
 ) -> Any:
@@ -217,6 +226,9 @@ def _make_a1_responder(
             "reframingDisclosureRequired": False,
             "classifierVersion": "harness-stub@1",
         }
+        case_class_hint = _CASE_CLASS_HINTS.get(case["id"])
+        if case_class_hint is not None:
+            classified["caseClass"] = case_class_hint
         plan = {
             "semanticQuery": query_text,
             "answerMode": answer_mode,
@@ -271,23 +283,9 @@ def pipeline_client(request: pytest.FixtureRequest) -> Iterator[TestClient]:
 
 
 def _case_param(case: dict[str, Any]) -> Any:
-    if case["id"] == 17:
-        return pytest.param(
-            case,
-            id=f"case-{case['id']:02d}",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "Case 17 (no_source_quote) is wire-indistinguishable from case 10 "
-                    "(fabrication_attempt): both produce ClassifiedQuery with "
-                    "sensitivity=normal, handling=block_with_redirect, risk_flags=[]. "
-                    "_resolve_hard_trigger_case_class() in app/api/v1/query.py emits "
-                    "fabrication_attempt for both. Resolving requires extending the A1 "
-                    "contract (a new RiskFlag, a CaseClass field on ClassifiedQuery, "
-                    "or a safety_match.rule_id dispatch). Tracked as a follow-up to T-006."
-                ),
-            ),
-        )
+    # Case 17 (no_source_quote) was previously xfail: wire-indistinguishable from case 10
+    # (fabrication_attempt). Resolved by ClassifiedQuery.caseClass (A1 pre-classification) +
+    # _resolve_hard_trigger_case_class() dispatching on it; the responder supplies the hint above.
     return pytest.param(case, id=f"case-{case['id']:02d}")
 
 

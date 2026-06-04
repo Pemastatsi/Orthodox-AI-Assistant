@@ -411,6 +411,11 @@ async def post_query(
 
 
 def _resolve_hard_trigger_case_class(analysis: QueryAnalysis) -> CaseClass:
+    # A1 may pre-classify the bounded-fallback case class (disambiguates wire-identical
+    # block_with_redirect cases, e.g. fabrication_attempt vs no_source_quote). Prefer it.
+    explicit = analysis.classified_query.case_class
+    if explicit is not None:
+        return explicit
     risk_flags = set(analysis.classified_query.risk_flags)
     for flag, case_class in _HARD_TRIGGER_CASE_CLASS.items():
         if flag in risk_flags:
