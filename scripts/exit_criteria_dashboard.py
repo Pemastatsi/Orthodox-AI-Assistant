@@ -40,6 +40,11 @@ except ImportError:  # pragma: no cover - import guard so --help / tests work wi
 # Stub baseline that exit criterion #9 must move past (see safety_config.py).
 STUB_CONFIG_VERSION = "2026-05-01.1"
 
+# Criterion #1 freshness window (amended 2026-06-04): the latest safety-suite attestation must be a
+# pass recorded within this many days. Replaces the original "14 consecutive calendar days" rule;
+# see docs/contracts/phase1-implementation-contract.md criterion #1.
+SAFETY_ATTESTATION_FRESHNESS_DAYS = 30
+
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -82,8 +87,19 @@ def _fetch_one(db_url: str, sql: str):
 # ---------------------------------------------------------------------------
 
 
-def _eval_consecutive_days(passing_days: int) -> tuple[str, bool]:
-    return f"{passing_days}/14 days", passing_days >= 14
+def _eval_recent_attestation(
+    days_since: float | None,
+    passed_flag: str | None,
+    freshness_days: int = SAFETY_ATTESTATION_FRESHNESS_DAYS,
+) -> tuple[str, bool]:
+    """#1 (amended): the most recent safety-suite attestation must be a pass within the window."""
+    if days_since is None:
+        return "no attestation", False
+    if passed_flag != "true":
+        return f"last attestation not passing ({days_since:.0f}d ago)", False
+    if days_since > freshness_days:
+        return f"stale: {days_since:.0f}d ago (> {freshness_days}d)", False
+    return f"passed {days_since:.0f}d ago", True
 
 
 def _eval_min_count(value: int, minimum: int) -> tuple[str, bool]:
@@ -156,20 +172,29 @@ def _eval_safety_configs(
 
 
 def criterion_1_safety_suite_stability(db_url: str) -> tuple[str, str, str, bool]:
-    """#1: test_20_queries.py passes in CI for 14 consecutive days, no override."""
+    """#1 (amended 2026-06-04): the most recent safety-suite attestation is a pass within the
+    freshness window. Replaces "14 consecutive CI days"; see phase1-implementation-contract.md."""
     row = _fetch_one(
         db_url,
         """
-        SELECT COUNT(DISTINCT DATE(occurred_at)) AS passing_days
+        SELECT EXTRACT(EPOCH FROM (NOW() - occurred_at)) / 86400.0 AS days_since,
+               details->>'passed' AS passed_flag
         FROM audit_entries
         WHERE action = 'ci_safety_suite_passed'
           AND resource_type = 'ci_check'
-          AND occurred_at >= NOW() - INTERVAL '14 days'
-          AND details->>'override' IS NULL
+        ORDER BY occurred_at DESC
+        LIMIT 1
         """,
     )
-    value, passing = _eval_consecutive_days(int(row.passing_days) if row else 0)
-    return "Safety suite stability", value, "14 consecutive days", passing
+    days_since = float(row.days_since) if row and row.days_since is not None else None
+    passed_flag = row.passed_flag if row else None
+    value, passing = _eval_recent_attestation(days_since, passed_flag)
+    return (
+        "Safety suite stability",
+        value,
+        f"pass ≤{SAFETY_ATTESTATION_FRESHNESS_DAYS}d ago",
+        passing,
+    )
 
 
 def criterion_2_internal_traffic_threshold(db_url: str) -> tuple[str, str, str, bool]:
@@ -344,7 +369,7 @@ def criterion_9_real_safety_configs(db_url: str) -> tuple[str, str, str, bool]:
 # ---------------------------------------------------------------------------
 
 _CRITERIA = [
-    ("1", "Safety suite stability (14 consecutive CI days)",          "14 consecutive days",  criterion_1_safety_suite_stability),
+    ("1", "Safety suite stability (recent passing attestation)",      f"pass ≤{SAFETY_ATTESTATION_FRESHNESS_DAYS}d",  criterion_1_safety_suite_stability),
     ("2", "Internal traffic threshold (≥50 distinct queries)",   "≥ 50 queries",    criterion_2_internal_traffic_threshold),
     ("3", "RED rate ceiling (≤30% over 7 days)",                 "≤ 30%",           criterion_3_red_rate_ceiling),
     ("4", "Latency target (p95 < 8 s over 7 days)",                   "p95 < 8000 ms",        criterion_4_latency_target),

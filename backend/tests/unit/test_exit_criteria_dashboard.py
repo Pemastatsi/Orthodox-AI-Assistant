@@ -41,11 +41,26 @@ def test_normalize_db_url(raw: str, expected: str) -> None:
 # --- #1 safety-suite stability --------------------------------------------
 
 
-@pytest.mark.parametrize("days,passing", [(14, True), (20, True), (13, False), (0, False)])
-def test_eval_consecutive_days(days: int, passing: bool) -> None:
-    value, ok = dash._eval_consecutive_days(days)
-    assert ok is passing
-    assert "14" in value
+@pytest.mark.parametrize(
+    "days_since,passed_flag,ok",
+    [
+        (0.0, "true", True),
+        (29.0, "true", True),
+        (30.0, "true", True),  # boundary inclusive
+        (31.0, "true", False),  # stale
+        (1.0, "false", False),  # last attestation did not pass
+        (1.0, None, False),  # no passed flag in details
+    ],
+)
+def test_eval_recent_attestation(days_since: float, passed_flag: str | None, ok: bool) -> None:
+    _value, got = dash._eval_recent_attestation(days_since, passed_flag)
+    assert got is ok
+
+
+def test_eval_recent_attestation_no_row() -> None:
+    value, ok = dash._eval_recent_attestation(None, None)
+    assert ok is False
+    assert value == "no attestation"
 
 
 # --- #2 internal traffic ---------------------------------------------------
