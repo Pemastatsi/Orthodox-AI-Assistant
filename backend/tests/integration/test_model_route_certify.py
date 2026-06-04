@@ -25,6 +25,9 @@ _ROUTE_ID = "embedding_certify_test@2026-05-29.1"
 _SSR_ID = "ssr_certify_test"
 _REVAL_ID = "reval_certify_test"
 _SEEDED_EXPERIMENT_ROUTE = "embedding_openai@2026-05-01.1"  # seeded by migration 0001
+# clean_tables TRUNCATE ... CASCADE wipes the migration-seeded model_routes (cascade via
+# safety_suite_runs), so a test needing a real-but-uncertifiable route self-seeds this one.
+_UNGATED_ROUTE_ID = "embedding_ungated_test@2026-05-29.1"
 
 
 def _dev_header(
@@ -144,12 +147,50 @@ async def test_unknown_route_is_404(
     assert resp.status_code == 404, resp.text
 
 
+@pytest_asyncio.fixture()
+async def ungated_route(seed_tenant: tuple[str, str]) -> AsyncIterator[str]:
+    """An experiment route that exists but has NO safety/retrieval runs linked → not certifiable.
+
+    Self-seeded rather than reused from the migration: clean_tables TRUNCATEs with CASCADE, which
+    removes the migration-seeded model_routes, so by the time a test runs the seed route is gone.
+    Sibling tests already self-seed their routes (certifiable_route / unlinked_route).
+    """
+    from app.domain.repositories._base import session_scope
+
+    async def _drop() -> None:
+        async with session_scope() as session:
+            await session.execute(
+                text("DELETE FROM model_routes WHERE route_id = :r"), {"r": _UNGATED_ROUTE_ID}
+            )
+            await session.commit()
+
+    await _drop()
+    async with session_scope() as session:
+        await session.execute(
+            text(
+                """
+                INSERT INTO model_routes (
+                    route_id, purpose, provider, model, prompt_version, schema_version,
+                    certification_status, created_at
+                ) VALUES (
+                    :id, 'embedding', 'openai', 'text-embedding-3-small',
+                    'embedding_none@2026-05-01.1', '1.0', 'experiment', now()
+                )
+                """
+            ),
+            {"id": _UNGATED_ROUTE_ID},
+        )
+        await session.commit()
+    yield _UNGATED_ROUTE_ID
+    await _drop()
+
+
 async def test_ungated_route_is_409(
-    async_client: AsyncClient, seed_tenant: tuple[str, str]
+    async_client: AsyncClient, ungated_route: str
 ) -> None:
-    # The migration-seeded embedding route has no passing safety/retrieval runs linked.
+    # An experiment route with no passing safety/retrieval runs linked is not certifiable.
     resp = await async_client.patch(
-        f"/api/v1/admin/model-routes/{_SEEDED_EXPERIMENT_ROUTE}/certify",
+        f"/api/v1/admin/model-routes/{ungated_route}/certify",
         headers=_dev_header(role="owner"),
         json={"certificationNotes": "premature"},
     )
