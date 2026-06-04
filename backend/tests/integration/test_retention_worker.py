@@ -39,9 +39,35 @@ def _reset_structlog() -> Iterator[None]:
 
 @pytest_asyncio.fixture()
 async def session_factory(seed_tenant: tuple[str, str]):
-    """Inject the standard session_scope as the retention worker's session_factory."""
+    """Inject session_scope as the worker's factory, ensuring the system principal exists.
+
+    clean_tables (via seed_tenant) TRUNCATEs tenants/users, removing the migration-seeded
+    tn_system/usr_system that the retention audit row (exit #8) is written under. Re-seed them
+    idempotently so the worker's AuditRepository.insert satisfies the actor/tenant FKs.
+    """
     del seed_tenant
     from app.domain.repositories._base import session_scope
+
+    async with session_scope() as session:
+        await session.execute(
+            text(
+                """
+                INSERT INTO tenants (tenant_id, name, clerk_org_id, status, data_region)
+                VALUES ('tn_system', 'Platform System', 'org_system', 'active', 'us')
+                ON CONFLICT (tenant_id) DO NOTHING
+                """
+            )
+        )
+        await session.execute(
+            text(
+                """
+                INSERT INTO users (user_id, clerk_user_id, tenant_id, role, status)
+                VALUES ('usr_system', 'user_system', 'tn_system', 'owner', 'active')
+                ON CONFLICT (user_id) DO NOTHING
+                """
+            )
+        )
+        await session.commit()
 
     return session_scope
 
@@ -102,6 +128,18 @@ async def test_deletes_expired_row_and_emits_count_1(
         )
         assert row.one_or_none() is None
 
+    # Exit #8: the sweep wrote a retention_purged audit row carrying the deleted_count.
+    async with session_scope() as session:
+        audit = await session.execute(
+            text(
+                "SELECT details FROM audit_entries WHERE action = 'retention_purged' "
+                "ORDER BY occurred_at DESC LIMIT 1"
+            )
+        )
+        audit_row = audit.mappings().one_or_none()
+    assert audit_row is not None, "exit #8: retention_purged audit row must be written"
+    assert audit_row["details"]["deleted_count"] == 1
+
 
 @pytest.mark.asyncio
 async def test_no_expired_rows_still_emits_count_0(
@@ -122,6 +160,20 @@ async def test_no_expired_rows_still_emits_count_0(
     ]
     assert len(completed) == 1
     assert completed[0]["deleted_count"] == 0
+
+    # Exit #8: the audit row is written even when nothing was purged (observable on every run).
+    from app.domain.repositories._base import session_scope
+
+    async with session_scope() as session:
+        audit = await session.execute(
+            text(
+                "SELECT details FROM audit_entries WHERE action = 'retention_purged' "
+                "ORDER BY occurred_at DESC LIMIT 1"
+            )
+        )
+        audit_row = audit.mappings().one_or_none()
+    assert audit_row is not None, "exit #8: audit row written even on a 0-delete sweep"
+    assert audit_row["details"]["deleted_count"] == 0
 
 
 @pytest.mark.asyncio
