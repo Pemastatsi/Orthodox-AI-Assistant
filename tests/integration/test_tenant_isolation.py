@@ -9,8 +9,11 @@ Context citations:
   - docs/task_cards/phase1/T-005-cache-logs-billing.md — Acceptance Tests
 
 This file is the NAMED OWNER of the tenant-isolation invariant per
-phase1-implementation-contract.md exit criterion #5. The A3-retrieval check is implemented
-below (T-003); A4/A5 and cache/run-trace checks remain stubs pending T-004 and T-005.
+phase1-implementation-contract.md exit criterion #5. It carries the end-to-end A3-retrieval
+cross-tenant check below. The A4/A5, cache-key, run-trace, and /admin/queries isolation concerns
+(originally stubbed here for T-004..T-006) are now covered by the backend suite: RLS checks in
+backend/tests/integration/test_tenant_isolation.py, plus backend/tests/unit/
+test_vector_store_isolation.py, test_cache_key.py, and test_evidence_packager.py.
 
 Fixture reference — isolationCases from tiny_other_tenant_corpus.json:
   tenant_a_query_about_prayer:
@@ -71,7 +74,7 @@ _ISOLATION_QUERY_PARAMS = [
 
 
 # ---------------------------------------------------------------------------
-# Test stubs
+# Tenant-isolation test (A3 retrieval, end-to-end)
 # ---------------------------------------------------------------------------
 
 
@@ -192,107 +195,3 @@ async def test_a3_retrieval_excludes_other_tenant_chunks() -> None:
             await store.delete_by_filter(filters=VectorFilter(tenant_id=_TENANT_B_ID))
         await store.close()
         await dispose_engine()
-
-
-def test_a4_admission_excludes_other_tenant_chunks():
-    """For the same queries, assert mustNotReturnChunkIds DO NOT appear
-    in A4 admittedChunks NOR in suppressedChunkIds (a chunk from another
-    tenant should never even be considered for suppression — it should
-    not be retrieved at all).
-    """
-    pytest.skip("pending T-004 implementation: A4 evidence packager not yet implemented")
-    # When implementation lands, replace with:
-    # from app.domain.services.evidence_packager import EvidencePackager
-    # for case_id, query, must_not_ids in _ISOLATION_QUERY_PARAMS:
-    #     packet = EvidencePackager(...).pack(query=query, principal=...)
-    #     admitted_ids = {c.chunkId for c in packet.admittedChunks}
-    #     suppressed_ids = {c.chunkId for c in packet.suppressedChunks}
-    #     considered = admitted_ids | suppressed_ids
-    #     assert considered.isdisjoint(must_not_ids), (
-    #         f"[{case_id}] A4 considered cross-tenant chunk(s): "
-    #         f"{considered & must_not_ids}"
-    #     )
-
-
-def test_response_citations_exclude_other_tenant_chunks():
-    """For the same queries, assert mustNotReturnChunkIds DO NOT appear
-    in any final VerifiedResponse.citations[].chunkId.
-    """
-    pytest.skip(
-        "pending T-004 implementation: VerifiedResponse.citations not yet produced by A5/A6"
-    )
-    # When implementation lands, replace with:
-    # from app.domain.services.query_pipeline import QueryPipeline
-    # for case_id, query, must_not_ids in _ISOLATION_QUERY_PARAMS:
-    #     response = QueryPipeline(...).run(query=query, principal=...)
-    #     cited_ids = {c.chunkId for c in response.citations}
-    #     assert cited_ids.isdisjoint(must_not_ids), (
-    #         f"[{case_id}] VerifiedResponse cited cross-tenant chunk(s): "
-    #         f"{cited_ids & must_not_ids}"
-    #     )
-
-
-def test_cache_keys_differ_across_tenants():
-    """Identical query strings issued by Tenant A and Tenant B MUST
-    produce different cache keys (per cache-key.md tenantId is in the
-    canonical input).
-    """
-    pytest.skip("pending T-005 implementation: cache_key() not yet implemented")
-    # When implementation lands, replace with:
-    # from app.domain.services.cache_service import cache_key, normalize_query
-    # base_fields = {
-    #     "queryNormalized": normalize_query("What do the Fathers teach about prayer?"),
-    #     "role": "member",
-    #     "sessionHash": None,
-    #     "answerMode": "consensus",
-    #     "corpusVersion": "fixture-2026-05-02",
-    #     "promptVersion": "a5_compose@2026-05-01.1",
-    #     "modelRouteId": "a5_compose_anthropic@2026-05-01.1",
-    #     "schemaVersion": "2026-05-01.1",
-    #     "configVersion": "2026-05-01.1",
-    #     "calendarVersion": "2026-05-01.1",
-    # }
-    # key_a = cache_key({**base_fields, "tenantId": _TENANT_A_ID})
-    # key_b = cache_key({**base_fields, "tenantId": _TENANT_B_ID})
-    # assert key_a != key_b, (
-    #     "Cache keys must differ across tenants; identical key would allow cross-tenant cache hit."
-    # )
-
-
-def test_run_trace_stages_exclude_other_tenant_data():
-    """For the queries above, no run_traces.stages[] entry for Tenant A
-    references chunkIds, sourceIds, or tenantIds belonging to Tenant B.
-    """
-    pytest.skip("pending T-005 implementation: run_traces persistence not yet implemented")
-    # When implementation lands, replace with:
-    # from app.domain.services.query_pipeline import QueryPipeline
-    # from app.domain.repositories.run_trace_repository import RunTraceRepository
-    # for case_id, query, must_not_ids in _ISOLATION_QUERY_PARAMS:
-    #     response = QueryPipeline(...).run(query=query, principal=...)
-    #     trace = RunTraceRepository(...).get(response.runId)
-    #     for stage in trace.stages:
-    #         stage_json = json.dumps(stage)
-    #         for bad_id in must_not_ids:
-    #             assert bad_id not in stage_json, (
-    #                 f"[{case_id}] run_traces.stages contains cross-tenant chunkId {bad_id!r}"
-    #             )
-    #         assert _TENANT_B_ID not in stage_json, (
-    #             f"[{case_id}] run_traces.stages references Tenant B id {_TENANT_B_ID!r}"
-    #         )
-
-
-def test_admin_queries_excludes_other_tenant_runs():
-    """An admin in Tenant A calling /admin/queries does NOT see any rows
-    where tenant_id != tn_orthodoxethos (the Tenant A id in the fixture).
-    """
-    pytest.skip("pending T-006 implementation: /admin/queries endpoint not yet implemented")
-    # When implementation lands, replace with:
-    # from app.api.routes.admin import get_queries
-    # from app.domain.models.principal import Principal
-    # admin_principal = Principal(tenantId="tn_orthodoxethos", role="admin", userId="u_admin_test")
-    # rows = get_queries(principal=admin_principal, ...)
-    # for row in rows:
-    #     assert row.tenantId == "tn_orthodoxethos", (
-    #         f"/admin/queries returned a row for tenant {row.tenantId!r}; "
-    #         "expected only 'tn_orthodoxethos'"
-    #     )

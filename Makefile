@@ -1,4 +1,5 @@
-.PHONY: dev test safety lint typecheck migrate up down install retrieval-eval-run
+.PHONY: dev test safety lint typecheck migrate up down install retrieval-eval-run \
+	check-docs-index codegen codegen-check
 
 install:
 	(cd backend && uv sync)
@@ -53,3 +54,16 @@ retrieval-eval-run:
 		$(if $(SAFETY_RUN_ID),--safety-run-id $(SAFETY_RUN_ID),) \
 		$(if $(ESTABLISH_BASELINE),--establish-baseline,) \
 		$(if $(JUDGE),--judge,))
+
+# REC-003: fail if docs/{adr,contracts,schemas}/ drifts from docs/DOCS_INDEX.md. Stdlib only.
+check-docs-index:
+	python3 scripts/check_docs_index.py
+
+# REC-009 (scaffold): regenerate / drift-check the schema-derived artifacts. Tools run ephemerally
+# (uvx / pnpm dlx) — no manifest changes, network egress only. No artifacts are generated yet; see
+# scripts/codegen/README.md for the enable procedure.
+codegen:
+	scripts/codegen/generate.sh
+
+codegen-check:
+	scripts/codegen/generate.sh --check

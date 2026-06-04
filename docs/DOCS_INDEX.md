@@ -140,9 +140,9 @@ Read `docs/contracts/`, `docs/adr/`, `docs/api/`, and `docs/schemas/` when the t
 | `tests/safety/test_20_queries.py` | contract | Canonical 20-query safety expectations (data + structural meta-tests + canonical-text substring inventory for cases 6/10/12/17/20). |
 | `tests/safety/test_20_queries_paraphrases.py` | contract (skeleton, content delivered by T-007) | Paraphrase fuzz harness; gated on production + non-stub configs. |
 | `tests/integration/test_corpus.py` | contract (skeleton, body delivered by T-002) | Encodes the chunks⇒sources approval invariant. |
-| `tests/integration/test_tenant_isolation.py` | contract (skeleton, body delivered by T-005) | Owner of Phase 1 → 2 exit criterion #5 (tenant isolation invariant). |
-| `tests/unit/test_quote_overlap.py` | contract (skeleton, body delivered by T-004) | Asserts quote-overlap V1–V6 vectors within ±0.01. |
-| `tests/unit/test_cache_key.py` | contract (skeleton, body delivered by T-005) | Asserts cache-key V1–V4 vectors (literal sha256 + from-input-dict). |
+| `tests/integration/test_tenant_isolation.py` | contract | Owner of Phase 1 → 2 exit criterion #5 (tenant isolation invariant); end-to-end A3 cross-tenant check. Further isolation concerns covered in `backend/tests/`. |
+| `backend/tests/unit/test_quote_overlap.py` | contract | Asserts quote-overlap V1–V6 vectors within ±0.01 (T-004). |
+| `backend/tests/unit/test_cache_key.py` | contract | Asserts cache-key V1–V4 vectors (literal sha256 + from-input-dict) (T-005). |
 | `scripts/exit_criteria_dashboard.py` | contract (skeleton, body delivered with Phase-2-exit dashboard work) | Phase 1 mechanism for tracking the 9 exit criteria; replaces the deferred Prometheus exporter. |
 | `backend/tests/safety/test_20_queries_harness.py` | contract (delivered by T-006) | Executes the 20 cases through the live A1–A6 pipeline; required by CI `safety-suite-execution` job. |
 

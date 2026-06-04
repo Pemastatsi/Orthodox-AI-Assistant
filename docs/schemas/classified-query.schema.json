@@ -57,6 +57,17 @@
       ]
     },
     "reframingDisclosureRequired": { "type": "boolean", "default": false },
-    "classifierVersion": { "type": "string" }
+    "classifierVersion": { "type": "string" },
+    "caseClass": {
+      "enum": [
+        "fabrication_attempt",
+        "no_source_quote",
+        "political_voting",
+        "self_harm",
+        "medical_emergency",
+        null
+      ],
+      "description": "Optional A1 pre-classification of a block_with_redirect query into its bounded-fallback case class. Disambiguates wire-identical hard-safety cases (e.g. fabrication_attempt vs no_source_quote) so the /query hard-safety path emits the correct canonical bounded text; when absent, the path falls back to risk-flag / sensitivity heuristics."
+    }
   }
 }
