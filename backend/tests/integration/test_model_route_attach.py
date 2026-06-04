@@ -26,26 +26,10 @@ from app.domain.repositories.model_route_repository import ModelRouteRepository
 from app.domain.repositories.retrieval_eval_run_repository import (
     RetrievalEvalRunRepository,
 )
-from app.main import app
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import text
 
-# Quarantined: TestClient event-loop teardown issue (see tracking issue). __EVENTLOOP_QUARANTINE__
-# Skip (not xfail): these drive the app through the sync TestClient, which runs the ASGI app on a
-# separate anyio portal loop while the async DB fixtures use the pytest loop. On block exit the
-# app's lifespan disposes the shared module-level engine on the wrong loop ("got Future attached to
-# a different loop"), which corrupts the pool and breaks the NEXT DB test in the suite (e.g.
-# test_retention_worker). xfail still executes the body, so it would not stop that pollution; skip
-# does. Pre-existing; surfaced once CI gained a Postgres service so these tests actually run.
-# Follow-up: migrate to httpx.AsyncClient or a NullPool test engine (see tracking issue).
-_EVENTLOOP_SKIP_REASON = (
-    "TestClient event-loop teardown disposes the shared engine on the wrong loop and poisons "
-    "later DB tests; skipped pending httpx.AsyncClient/NullPool migration (see tracking issue)."
-)
-pytestmark = [
-    pytest.mark.asyncio,
-    pytest.mark.skip(reason=_EVENTLOOP_SKIP_REASON),
-]
+pytestmark = pytest.mark.asyncio
 
 _ROUTE_ID = "embedding_attach_test@2026-05-29.1"
 _SSR_ID = "ssr_attach_test"
@@ -142,7 +126,9 @@ async def unlinked_route(seed_tenant: tuple[str, str]) -> AsyncIterator[tuple[st
     await _delete_rows()
 
 
-async def test_attach_both_then_certify_200(unlinked_route: tuple[str, str]) -> None:
+async def test_attach_both_then_certify_200(
+    async_client: AsyncClient, unlinked_route: tuple[str, str]
+) -> None:
     route_id, _user_id = unlinked_route
     async with session_scope() as session:
         repo = ModelRouteRepository(session)
@@ -153,12 +139,11 @@ async def test_attach_both_then_certify_200(unlinked_route: tuple[str, str]) -> 
     assert linked.safety_suite_run_id == _SSR_ID
     assert linked.retrieval_eval_run_id == _REVAL_ID
 
-    with TestClient(app) as client:
-        resp = client.patch(
-            f"/api/v1/admin/model-routes/{route_id}/certify",
-            headers=_dev_header(role="owner"),
-            json={"certificationNotes": "Both gates linked via attach_*."},
-        )
+    resp = await async_client.patch(
+        f"/api/v1/admin/model-routes/{route_id}/certify",
+        headers=_dev_header(role="owner"),
+        json={"certificationNotes": "Both gates linked via attach_*."},
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()["certificationStatus"] == "certified"
 
@@ -177,36 +162,34 @@ async def test_attach_both_then_certify_200(unlinked_route: tuple[str, str]) -> 
 
 
 async def test_omitting_retrieval_eval_attach_is_409(
-    unlinked_route: tuple[str, str],
+    async_client: AsyncClient, unlinked_route: tuple[str, str]
 ) -> None:
     route_id, _user_id = unlinked_route
     async with session_scope() as session:
         await ModelRouteRepository(session).attach_safety_suite_run(
             route_id=route_id, run_id=_SSR_ID
         )
-    with TestClient(app) as client:
-        resp = client.patch(
-            f"/api/v1/admin/model-routes/{route_id}/certify",
-            headers=_dev_header(role="owner"),
-            json={"certificationNotes": "Safety only — retrieval-eval gate unlinked."},
-        )
+    resp = await async_client.patch(
+        f"/api/v1/admin/model-routes/{route_id}/certify",
+        headers=_dev_header(role="owner"),
+        json={"certificationNotes": "Safety only — retrieval-eval gate unlinked."},
+    )
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"]["code"] == "route_not_certifiable"
 
 
 async def test_omitting_safety_attach_is_409(
-    unlinked_route: tuple[str, str],
+    async_client: AsyncClient, unlinked_route: tuple[str, str]
 ) -> None:
     route_id, _user_id = unlinked_route
     async with session_scope() as session:
         await ModelRouteRepository(session).attach_retrieval_eval_run(
             route_id=route_id, run_id=_REVAL_ID
         )
-    with TestClient(app) as client:
-        resp = client.patch(
-            f"/api/v1/admin/model-routes/{route_id}/certify",
-            headers=_dev_header(role="owner"),
-            json={"certificationNotes": "Retrieval-eval only — safety gate unlinked."},
-        )
+    resp = await async_client.patch(
+        f"/api/v1/admin/model-routes/{route_id}/certify",
+        headers=_dev_header(role="owner"),
+        json={"certificationNotes": "Retrieval-eval only — safety gate unlinked."},
+    )
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"]["code"] == "route_not_certifiable"
