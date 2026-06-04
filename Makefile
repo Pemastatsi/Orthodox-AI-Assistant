@@ -1,4 +1,4 @@
-.PHONY: dev test safety lint typecheck migrate up down install retrieval-eval-run \
+.PHONY: dev worker test safety lint typecheck migrate up down install retrieval-eval-run \
 	check-docs-index codegen codegen-check
 
 install:
@@ -8,7 +8,13 @@ install:
 dev:
 	docker compose -f infrastructure/docker-compose.yml up -d
 	(cd backend && uv run uvicorn app.main:app --reload --port 8000) &
+	(cd backend && uv run arq app.workers.retention_worker.WorkerSettings) &
 	(cd web && pnpm dev)
+
+# Retention worker (arq). Standalone runner for local verification / observing the sweep.
+# Needs the compose deps up (`make up`) + migrations (`make migrate`); see docs/runbooks/retention-worker.md.
+worker:
+	(cd backend && uv run arq app.workers.retention_worker.WorkerSettings)
 
 test:
 	(cd backend && uv run pytest -q)

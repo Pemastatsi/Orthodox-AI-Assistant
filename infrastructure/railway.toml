@@ -11,6 +11,20 @@ dockerfilePath = "infrastructure/Dockerfile.backend"
 healthcheckPath = "/health"
 restartPolicyType = "ON_FAILURE"
 
+# Retention worker: reuses the backend image, overrides the start command to run the arq scheduler
+# instead of uvicorn. No healthcheck (not an HTTP service). Attach the same env as `backend` in the
+# dashboard: DATABASE_ADMIN_URL (falls back to DATABASE_URL), REDIS_URL, and optionally
+# RETENTION_WORKER_CRON. See docs/runbooks/retention-worker.md.
+[[services]]
+name = "retention-worker"
+
+[services.build]
+dockerfilePath = "infrastructure/Dockerfile.backend"
+
+[services.deploy]
+startCommand = "arq app.workers.retention_worker.WorkerSettings"
+restartPolicyType = "ON_FAILURE"
+
 [[services]]
 name = "web"
 
