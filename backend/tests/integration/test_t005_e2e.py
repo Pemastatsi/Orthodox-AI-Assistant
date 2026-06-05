@@ -42,7 +42,7 @@ from app.domain.services.safety_config import (
     load_sensitivity_keywords,
 )
 from app.main import app
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import text
 
 from tests.fixtures.fakes import ComposerFakeProvider, FakeStructuredProvider
@@ -154,8 +154,9 @@ def cipher_env() -> Iterator[None]:
 @pytest.fixture()
 def pipeline_stubs(
     seed_tenant: tuple[str, str], cipher_env: None
-) -> Iterator[tuple[TestClient, StubVectorStore]]:
-    """Spin up the full app with stub providers + real DB + real Redis."""
+) -> Iterator[StubVectorStore]:
+    """Install stub providers (+ real DB + real Redis) and yield the vector store the tests
+    assert against. The HTTP client itself comes from the `async_client` fixture."""
     del seed_tenant
     del cipher_env
 
@@ -178,7 +179,7 @@ def pipeline_stubs(
     app.dependency_overrides[get_vector_store] = lambda: store
     app.dependency_overrides[get_sparse_embedder] = lambda: sparse
 
-    yield TestClient(app), store
+    yield store
 
     for key in [
         get_safety_config,
@@ -240,13 +241,11 @@ async def _fetch_billing(tenant_id: str) -> tuple[int, int]:
 
 @pytest.mark.asyncio
 async def test_cache_hit_persists_run_trace_with_new_run_id(  # noqa: N802
-    pipeline_stubs: tuple[TestClient, StubVectorStore], flush_test_cache: None
+    async_client: AsyncClient, pipeline_stubs: StubVectorStore, flush_test_cache: None
 ) -> None:
     """F-23/F-18: second identical request must hit the cache, mint a new runId, and
     persist a minimal run_traces row with cache_hit=true."""
-    client, _ = pipeline_stubs
-
-    first = client.post(
+    first = await async_client.post(
         "/api/v1/query",
         json={"queryText": "What do the Fathers teach about prayer?"},
         headers=_dev_header(),
@@ -262,7 +261,7 @@ async def test_cache_hit_persists_run_trace_with_new_run_id(  # noqa: N802
     first_trace = await _fetch_run_trace_by_run_id(first_run_id)
     assert first_trace["cache_hit"] is False
 
-    second = client.post(
+    second = await async_client.post(
         "/api/v1/query",
         json={"queryText": "What do the Fathers teach about prayer?"},
         headers=_dev_header(),
@@ -287,12 +286,12 @@ async def test_cache_hit_persists_run_trace_with_new_run_id(  # noqa: N802
 
 @pytest.mark.asyncio
 async def test_hard_safety_query_still_persists_run_trace(
-    pipeline_stubs: tuple[TestClient, StubVectorStore], flush_test_cache: None
+    async_client: AsyncClient, pipeline_stubs: StubVectorStore, flush_test_cache: None
 ) -> None:
     """F-18: hard-safety bypass must still mint a runId and write a run_traces row."""
-    client, store = pipeline_stubs
+    store = pipeline_stubs
 
-    response = client.post(
+    response = await async_client.post(
         "/api/v1/query",
         json={"queryText": "I want to kill myself"},
         headers=_dev_header(),
@@ -329,14 +328,12 @@ async def test_hard_safety_query_still_persists_run_trace(
 
 @pytest.mark.asyncio
 async def test_flagged_query_redacts_pii_and_encrypts_raw(
-    pipeline_stubs: tuple[TestClient, StubVectorStore], flush_test_cache: None
+    async_client: AsyncClient, pipeline_stubs: StubVectorStore, flush_test_cache: None
 ) -> None:
     """Hard-safety query containing PII (email, phone) gets stored redacted in
     flagged_queries.query_text_redacted while the original is encrypted at rest."""
-    client, _ = pipeline_stubs
-
     raw = "I want to kill myself, my email is alice@example.com call +1-415-555-9876"
-    response = client.post(
+    response = await async_client.post(
         "/api/v1/query", json={"queryText": raw}, headers=_dev_header()
     )
     assert response.status_code == 200
