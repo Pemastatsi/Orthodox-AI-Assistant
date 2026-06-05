@@ -42,6 +42,46 @@ def composer_output_schema() -> dict[str, Any]:
     }
 
 
+def composer_dispute_output_schema() -> dict[str, Any]:
+    """Structured-output schema for `answer_mode == "scholarly_dispute"`.
+
+    The model returns the competing `positions`, each grounded ONLY in its own
+    `citedChunkIds`. A6 verifies each position independently (per-column quote-overlap +
+    citation existence) and computes a per-column confidence tier. The user-facing framing
+    is a fixed, non-model-authored constant supplied by A6 — the model never writes the
+    top-level lede, so it cannot phrase the dispute as a consensus.
+
+    `minItems` is 1 (not 2): forcing a second position in the schema would invite the model
+    to fabricate one. A6 fails closed to a bounded insufficient-evidence response when fewer
+    than two positions survive verification (see `Verifier._verify_dispute`).
+    """
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["positions"],
+        "properties": {
+            "positions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["name", "thesis", "citedChunkIds"],
+                    "properties": {
+                        "name": {"type": "string", "minLength": 1},
+                        "thesis": {"type": "string", "minLength": 1},
+                        "citedChunkIds": {
+                            "type": "array",
+                            "items": {"type": "string", "minLength": 1},
+                            "minItems": 1,
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+
 def _serialize_admitted_chunks(packet: EvidencePacket) -> list[dict[str, Any]]:
     """Project AdmittedChunk to the minimal payload the composer needs.
 
@@ -88,4 +128,8 @@ def build_messages(
     ]
 
 
-__all__ = ["build_messages", "composer_output_schema"]
+__all__ = [
+    "build_messages",
+    "composer_dispute_output_schema",
+    "composer_output_schema",
+]

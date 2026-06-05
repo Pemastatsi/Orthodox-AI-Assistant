@@ -62,6 +62,7 @@ from app.domain.models.user import User, UserStatus
 from app.domain.models.verified_response import (
     Citation,
     CorpusOrigin,
+    Position,
     Reframing,
     Verification,
     VerifiedResponse,
@@ -80,6 +81,7 @@ __all__ = [
     "Chunk",
     "ChunkLanguage",
     "Citation",
+    "Position",
     "ClassifiedQuery",
     "ConfidenceTier",
     "CorpusOrigin",

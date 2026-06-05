@@ -101,8 +101,12 @@ export const VerifiedResponseSchema = z.object({
   servedFromCache: z.boolean(),
   schemaVersion: z.string(),
   runId: z.string(),
-  /** Present only when the answer is a scholarly_dispute; renders side-by-side. */
-  positions: z.array(PositionSchema).optional(),
+  /**
+   * Present (non-null) only when the answer is a scholarly_dispute; renders side-by-side.
+   * The backend emits `null` on every other response (FastAPI serializes the optional
+   * field), so accept null as well as absent — matching the nullable Citation fields above.
+   */
+  positions: z.array(PositionSchema).nullable().optional(),
 });
 export type VerifiedResponse = z.infer<typeof VerifiedResponseSchema>;
 

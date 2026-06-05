@@ -51,6 +51,21 @@ class VerifiedResponseUsage(WireModel):
     completion_tokens: int | None = Field(default=None, ge=0)
 
 
+class Position(WireModel):
+    """One competing position of a `scholarly_dispute` answer (T-006 §Scholarly Dispute UX).
+
+    Each position is composed and verified against its OWN cited chunks; `citation_ids`
+    references the top-level `VerifiedResponse.citations` and is scoped to this column —
+    citations are NEVER aggregated across columns. `confidence_tier` is computed from this
+    column's chunks alone via the same A4 coverage logic.
+    """
+
+    name: str
+    thesis: str
+    citation_ids: list[str] = Field(default_factory=list)
+    confidence_tier: ConfidenceTier
+
+
 class VerifiedResponse(WireModel):
     answer: str
     confidence_tier: ConfidenceTier
@@ -62,3 +77,6 @@ class VerifiedResponse(WireModel):
     served_from_cache: bool
     schema_version: str
     run_id: str
+    # Present only for scholarly_dispute answers; null/absent otherwise. Add-only optional
+    # field (api-versioning.md §"Add-only changes do not bump"), so schemaVersion is unchanged.
+    positions: list[Position] | None = None

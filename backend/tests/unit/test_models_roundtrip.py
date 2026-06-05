@@ -13,6 +13,7 @@ from app.domain.models import (
     Citation,
     ClassifiedQuery,
     EvidencePacket,
+    Position,
     Principal,
     Reframing,
     RetrievalEvalRegression,
@@ -230,3 +231,60 @@ def test_evidence_packet_roundtrips() -> None:
         lineage_context=[],
     )
     _roundtrip(packet)
+
+
+def test_dispute_response_roundtrips() -> None:
+    r = VerifiedResponse(
+        answer="The approved library surfaces more than one position on this question.",
+        confidence_tier="YELLOW",
+        handling="answer",
+        citations=[
+            Citation(
+                citation_id="c1",
+                chunk_id="ch_1",
+                source_id="s_1",
+                title="On Original Sin",
+                source_hash=SHA,
+                chunk_hash=SHA,
+                corpus_origin="tenant",
+            ),
+            Citation(
+                citation_id="c2",
+                chunk_id="ch_2",
+                source_id="s_2",
+                title="On Ancestral Sin",
+                source_hash=SHA,
+                chunk_hash=SHA,
+                corpus_origin="tenant",
+            ),
+        ],
+        verification=Verification(passed=True, checked_at=NOW, verifier_version="a6@2026-05-01.1"),
+        reframing=Reframing(was_reframed=False),
+        usage=VerifiedResponseUsage(
+            served_answer_count=1,
+            fresh_model_run_count=1,
+            model_route_id="a5_compose_anthropic@2026-05-01.1",
+        ),
+        served_from_cache=False,
+        schema_version="2026-05-01.1",
+        run_id="run_dispute",
+        positions=[
+            Position(
+                name="Augustinian",
+                thesis="Guilt is inherited.",
+                citation_ids=["c1"],
+                confidence_tier="YELLOW",
+            ),
+            Position(
+                name="Eastern patristic",
+                thesis="Mortality is inherited; guilt is not.",
+                citation_ids=["c2"],
+                confidence_tier="GREEN",
+            ),
+        ],
+    )
+    _roundtrip(r)
+    dumped = r.model_dump(by_alias=True, mode="json")
+    # camelCase aliases survive and per-column scoping is preserved on the wire.
+    assert dumped["positions"][0]["citationIds"] == ["c1"]
+    assert dumped["positions"][1]["confidenceTier"] == "GREEN"

@@ -64,7 +64,7 @@ class Settings(BaseSettings):
 
     active_schema_version: str = "2026-05-01.1"
     active_prompt_version_a1a2: str = "qa_analyze@2026-05-01.1"
-    active_prompt_version_a5: str = "a5_compose@2026-05-01.1"
+    active_prompt_version_a5: str = "a5_compose@2026-06-05.1"
     active_verifier_version: str = "a6_verify@2026-05-01.1"
     active_model_route_a1a2: str = "qa_analyze_anthropic@2026-05-01.1"
     active_model_route_a5: str = "a5_compose_anthropic@2026-05-01.1"
