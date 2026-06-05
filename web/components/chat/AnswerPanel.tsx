@@ -19,6 +19,7 @@
 import { AlertTriangle, Ban, CircleDashed, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { DisputeCard } from "./DisputeCard";
 import type { VerifiedResponse } from "@/lib/schemas";
 
 export interface AnswerPanelProps {
@@ -32,6 +33,18 @@ export function AnswerPanel({
   onCitationClick,
   highlightedCitationId = null,
 }: AnswerPanelProps) {
+  // scholarly_dispute is signalled by `positions`. Renders even when handling
+  // is "answer" — the dispute view IS the answer for that case.
+  if (response.positions && response.positions.length >= 2) {
+    return (
+      <DisputeCard
+        response={response}
+        positions={response.positions}
+        onCitationClick={onCitationClick}
+        highlightedCitationId={highlightedCitationId}
+      />
+    );
+  }
   switch (response.handling) {
     case "block_with_redirect":
       return <BlockedCard response={response} />;

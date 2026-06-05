@@ -30,10 +30,12 @@ from app.core.config import get_settings
 from app.core.errors import ProviderRefusedError
 from app.core.logging import get_logger
 from app.domain.agents.composer import ComposerOutput
+from app.domain.agents.evidence_packager import confidence_tier_for
 from app.domain.models.classified_query import ClassifiedQuery, ConfidenceTier, Handling
-from app.domain.models.evidence_packet import EvidencePacket
+from app.domain.models.evidence_packet import AdmittedChunk, EvidencePacket
 from app.domain.models.verified_response import (
     Citation,
+    Position,
     Reframing,
     Verification,
     VerifiedResponse,
@@ -65,6 +67,17 @@ _LINEAGE_PATTERNS: tuple[re.Pattern[str], ...] = (
 # default (F-08); loaded at import so a misconfigured registry fails fast. See /prompts/README.md.
 _JUDGE_SYSTEM_PROMPT = load_prompt(
     "a6_judge", "en", registry_version(get_settings().active_verifier_version)
+)
+
+# Tier severity for picking the most-conservative top-level tier across dispute columns.
+_TIER_ORDER: dict[ConfidenceTier, int] = {"RED": 0, "YELLOW": 1, "GREEN": 2}
+
+# Fixed, non-model-authored framing for a scholarly_dispute answer. A5 composes the
+# positions; this top-level lede is a reviewed constant, so the user-facing framing can
+# never phrase a genuine dispute as a consensus. Count-agnostic (holds for 2+ positions).
+_DISPUTE_FRAMING: str = (
+    "The approved library surfaces more than one position on this question. They are "
+    "presented side by side below; the library does not adjudicate between them."
 )
 
 
@@ -100,97 +113,40 @@ class Verifier:
         start = time.perf_counter()
         admitted_by_id = {c.chunk_id: c for c in packet.admitted_chunks}
 
-        # 1. Citation existence — any cited chunkId that A4 did not admit fails immediately.
-        unknown_ids = [
-            cid for cid in composer_output.cited_chunk_ids if cid not in admitted_by_id
-        ]
-        if unknown_ids:
+        # Scholarly-dispute answers are composed per column; verify each position
+        # independently and assemble VerifiedResponse.positions (fail-closed). See
+        # _verify_dispute.
+        if composer_output.positions is not None:
+            return self._verify_dispute(
+                composer_output=composer_output,
+                packet=packet,
+                classified=classified,
+                run_id=run_id,
+                admitted_by_id=admitted_by_id,
+                original_query=original_query,
+                reframed_query=reframed_query,
+                start=start,
+            )
+
+        # Single-answer path: the deterministic checks run over the one claim set
+        # (citation existence, pastoral filter, lineage, quote-overlap).
+        passed, failure_reason, cited_chunks = self._verify_claim_set(
+            answer=composer_output.answer,
+            cited_chunk_ids=composer_output.cited_chunk_ids,
+            packet=packet,
+            admitted_by_id=admitted_by_id,
+            run_id=run_id,
+        )
+        if not passed:
             return self._reject(
                 run_id=run_id,
                 composer_output=composer_output,
-                failure_reason=f"unknown_chunk_ids:{','.join(sorted(unknown_ids))}",
+                failure_reason=failure_reason or "verification_failed",
                 original_query=original_query,
                 reframed_query=reframed_query,
             )
 
-        cited_chunks = [
-            admitted_by_id[cid] for cid in composer_output.cited_chunk_ids
-        ]
-
-        # 2. Pastoral-filter rules — first reject_answer match fails verification.
-        # Runs before quote-overlap so a forbidden phrase is caught even when the rest of
-        # the answer happens to be supported by the cited chunks.
-        matches = iter_pastoral_matches(composer_output.answer, self._pastoral)
-        for match in matches:
-            if match.action == "reject_answer":
-                return self._reject(
-                    run_id=run_id,
-                    composer_output=composer_output,
-                    failure_reason=f"pastoral_filter:{match.rule_id}",
-                    original_query=original_query,
-                    reframed_query=reframed_query,
-                )
-            logger.info(
-                "verifier.pastoral_warn",
-                run_id=run_id,
-                tenant_id=packet.tenant_id,
-                rule_id=match.rule_id,
-            )
-
-        # 3. Lineage claims — Phase 1 has no approved edges, so any lineage claim fails.
-        lineage_hit = _detect_lineage_claim(composer_output.answer)
-        if lineage_hit is not None and not packet.lineage_context:
-            return self._reject(
-                run_id=run_id,
-                composer_output=composer_output,
-                failure_reason=f"lineage_claim_without_evidence:{lineage_hit}",
-                original_query=original_query,
-                reframed_query=reframed_query,
-            )
-
-        # 4. Quote-overlap — every non-trivial claim must have at least one cited chunk
-        # whose overlap meets the threshold. Treat the whole answer as one claim if it is
-        # short; otherwise split on sentence-ending punctuation.
-        claims = _split_claims(composer_output.answer)
-        overlap_details: list[dict[str, Any]] = []
-        unsupported_claims: list[str] = []
-        for claim in claims:
-            if not _is_meaningful_claim(claim):
-                continue
-            best_ratio = 0.0
-            best_chunk_id: str | None = None
-            for chunk in cited_chunks:
-                ratio = quote_overlap(claim, chunk.text)
-                if ratio > best_ratio:
-                    best_ratio = ratio
-                    best_chunk_id = chunk.chunk_id
-            overlap_details.append(
-                {
-                    "claim": claim,
-                    "best_ratio": round(best_ratio, 4),
-                    "best_chunk_id": best_chunk_id,
-                }
-            )
-            if best_ratio < QUOTE_OVERLAP_THRESHOLD:
-                unsupported_claims.append(claim)
-
-        if unsupported_claims:
-            logger.info(
-                "verifier.unsupported_claims",
-                run_id=run_id,
-                tenant_id=packet.tenant_id,
-                count=len(unsupported_claims),
-                details=overlap_details,
-            )
-            return self._reject(
-                run_id=run_id,
-                composer_output=composer_output,
-                failure_reason=f"quote_overlap_below_threshold:{len(unsupported_claims)}",
-                original_query=original_query,
-                reframed_query=reframed_query,
-            )
-
-        # 5. Optional certified judge. Skipped when judge_route_id is empty (F-08).
+        # Optional certified judge. Skipped when judge_route_id is empty (F-08).
         final_tier = packet.confidence_tier
         if self._judge is not None:
             try:
@@ -234,6 +190,199 @@ class Verifier:
             citation_count=len(citations),
             confidence_tier=final_tier,
             judge_active=self._judge is not None,
+            duration_ms=duration_ms,
+        )
+        return response
+
+    def _verify_claim_set(
+        self,
+        *,
+        answer: str,
+        cited_chunk_ids: list[str],
+        packet: EvidencePacket,
+        admitted_by_id: dict[str, AdmittedChunk],
+        run_id: str,
+    ) -> tuple[bool, str | None, list[AdmittedChunk]]:
+        """Run the four deterministic checks over a single claim set.
+
+        Returns ``(passed, failure_reason, cited_chunks)``. Shared by the single-answer path
+        and every column of the scholarly-dispute path, so a dispute column is held to
+        exactly the same citation-existence / pastoral / lineage / quote-overlap bar as a
+        normal answer — and a column can only cite chunks A4 admitted."""
+        # 1. Citation existence — any cited chunkId A4 did not admit fails immediately.
+        unknown_ids = [cid for cid in cited_chunk_ids if cid not in admitted_by_id]
+        if unknown_ids:
+            return False, f"unknown_chunk_ids:{','.join(sorted(unknown_ids))}", []
+        cited_chunks = [admitted_by_id[cid] for cid in cited_chunk_ids]
+
+        # 2. Pastoral-filter rules — first reject_answer match fails verification.
+        for match in iter_pastoral_matches(answer, self._pastoral):
+            if match.action == "reject_answer":
+                return False, f"pastoral_filter:{match.rule_id}", cited_chunks
+            logger.info(
+                "verifier.pastoral_warn",
+                run_id=run_id,
+                tenant_id=packet.tenant_id,
+                rule_id=match.rule_id,
+            )
+
+        # 3. Lineage claims — Phase 1 has no approved edges, so any lineage claim fails.
+        lineage_hit = _detect_lineage_claim(answer)
+        if lineage_hit is not None and not packet.lineage_context:
+            return False, f"lineage_claim_without_evidence:{lineage_hit}", cited_chunks
+
+        # 4. Quote-overlap — every non-trivial claim must overlap a cited chunk at threshold.
+        overlap_details: list[dict[str, Any]] = []
+        unsupported_claims: list[str] = []
+        for claim in _split_claims(answer):
+            if not _is_meaningful_claim(claim):
+                continue
+            best_ratio = 0.0
+            best_chunk_id: str | None = None
+            for chunk in cited_chunks:
+                ratio = quote_overlap(claim, chunk.text)
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_chunk_id = chunk.chunk_id
+            overlap_details.append(
+                {
+                    "claim": claim,
+                    "best_ratio": round(best_ratio, 4),
+                    "best_chunk_id": best_chunk_id,
+                }
+            )
+            if best_ratio < QUOTE_OVERLAP_THRESHOLD:
+                unsupported_claims.append(claim)
+        if unsupported_claims:
+            logger.info(
+                "verifier.unsupported_claims",
+                run_id=run_id,
+                tenant_id=packet.tenant_id,
+                count=len(unsupported_claims),
+                details=overlap_details,
+            )
+            return (
+                False,
+                f"quote_overlap_below_threshold:{len(unsupported_claims)}",
+                cited_chunks,
+            )
+        return True, None, cited_chunks
+
+    def _verify_dispute(
+        self,
+        *,
+        composer_output: ComposerOutput,
+        packet: EvidencePacket,
+        classified: ClassifiedQuery,
+        run_id: str,
+        admitted_by_id: dict[str, AdmittedChunk],
+        original_query: str | None,
+        reframed_query: str | None,
+        start: float,
+    ) -> VerifiedResponse:
+        """Verify each competing position independently and assemble the dispute response.
+
+        Fail-closed: if ANY position fails the deterministic checks, or fewer than two
+        positions survive, the whole response degrades to a bounded insufficient-evidence
+        fallback — a half-verified or one-sided "dispute" is never shown. Citations are
+        scoped per column (each Position.citation_ids lists only that column's chunks); the
+        per-column verifier's citation-existence check makes cross-column citation
+        impossible. The optional A6 judge is not run on the dispute path (off by default;
+        per-column tiers are derived deterministically from coverage)."""
+        assert composer_output.positions is not None  # guaranteed by caller
+        citation_by_chunk: dict[str, Citation] = {}
+        union_citations: list[Citation] = []
+        positions_out: list[Position] = []
+        column_tiers: list[ConfidenceTier] = []
+
+        for pos in composer_output.positions:
+            passed, failure_reason, cited_chunks = self._verify_claim_set(
+                answer=pos.thesis,
+                cited_chunk_ids=pos.cited_chunk_ids,
+                packet=packet,
+                admitted_by_id=admitted_by_id,
+                run_id=run_id,
+            )
+            if not passed:
+                return self._reject(
+                    run_id=run_id,
+                    composer_output=composer_output,
+                    failure_reason=f"dispute_position:{pos.name}:{failure_reason}",
+                    original_query=original_query,
+                    reframed_query=reframed_query,
+                )
+            column_citation_ids: list[str] = []
+            for chunk in cited_chunks:
+                citation = citation_by_chunk.get(chunk.chunk_id)
+                if citation is None:
+                    citation = format_citation(chunk)
+                    citation_by_chunk[chunk.chunk_id] = citation
+                    union_citations.append(citation)
+                column_citation_ids.append(citation.citation_id)
+            tier = confidence_tier_for(cited_chunks, classified=classified)
+            column_tiers.append(tier)
+            positions_out.append(
+                Position(
+                    name=pos.name,
+                    thesis=pos.thesis,
+                    citation_ids=column_citation_ids,
+                    confidence_tier=tier,
+                )
+            )
+
+        # A "dispute" with fewer than two verified positions is not a dispute — fail closed.
+        if len(positions_out) < 2:
+            return self._reject(
+                run_id=run_id,
+                composer_output=composer_output,
+                failure_reason=f"dispute_insufficient_positions:{len(positions_out)}",
+                original_query=original_query,
+                reframed_query=reframed_query,
+            )
+
+        top_tier = min(column_tiers, key=lambda t: _TIER_ORDER[t])
+        was_reframed = reframed_query is not None and reframed_query != original_query
+        response = VerifiedResponse(
+            answer=_DISPUTE_FRAMING,
+            confidence_tier=top_tier,
+            handling=_handling_from_classified(classified),
+            citations=union_citations,
+            verification=Verification(
+                passed=True,
+                checked_at=datetime.now(UTC),
+                verifier_version=self._config.verifier_version,
+                failure_reason=None,
+            ),
+            reframing=Reframing(
+                was_reframed=was_reframed,
+                original_query=original_query if was_reframed else None,
+                reframed_query=reframed_query if was_reframed else None,
+                disclosure_text=None,
+            ),
+            usage=VerifiedResponseUsage(
+                served_answer_count=1,
+                fresh_model_run_count=1,
+                model_route_id=composer_output.model_route_id,
+                prompt_tokens=composer_output.prompt_tokens,
+                completion_tokens=composer_output.completion_tokens,
+            ),
+            served_from_cache=False,
+            schema_version=self._config.schema_version,
+            run_id=run_id,
+            positions=positions_out,
+        )
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        logger.info(
+            "query.verified",
+            run_id=run_id,
+            tenant_id=packet.tenant_id,
+            stage="a6_verifier",
+            mode="scholarly_dispute",
+            verifier_passed=True,
+            position_count=len(positions_out),
+            citation_count=len(union_citations),
+            confidence_tier=top_tier,
+            judge_active=False,
             duration_ms=duration_ms,
         )
         return response

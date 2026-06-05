@@ -179,6 +179,20 @@ def _compute_confidence_tier(
     return "RED"
 
 
+def confidence_tier_for(
+    admitted: list[AdmittedChunk],
+    *,
+    classified: ClassifiedQuery,
+) -> ConfidenceTier:
+    """Public wrapper over the ADR-0002 coverage rule (`_compute_confidence_tier`).
+
+    A6 uses it to derive a per-column confidence tier for a scholarly_dispute position from
+    exactly the thresholds A4 applies to the whole packet — there is no separate per-column
+    threshold. A single-chunk column therefore tops out at YELLOW (GREEN needs ≥2 chunks
+    ≥ GREEN_SCORE), which is the intended conservative behavior."""
+    return _compute_confidence_tier(admitted, classified=classified)
+
+
 def _fallback_source_hash(chunk: Chunk) -> str:
     """When the caller didn't pass Source records, derive a placeholder source hash from the
     chunk hash so the AdmittedChunk still validates against the schema.
@@ -198,4 +212,5 @@ __all__ = [
     "YELLOW_SCORE",
     "EvidencePackager",
     "PackagingResult",
+    "confidence_tier_for",
 ]

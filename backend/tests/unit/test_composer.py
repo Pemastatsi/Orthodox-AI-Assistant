@@ -127,3 +127,56 @@ async def test_compose_rejects_invalid_payload() -> None:
     composer = _composer(BadProvider(cited_chunk_ids=["ch_1"]))
     with pytest.raises(ProviderInvalidResponseError):
         await composer.compose(packet=_packet(), classified=_classified(), run_id="r")
+
+
+def _dispute_classified() -> ClassifiedQuery:
+    return ClassifiedQuery(
+        raw_query="Do the Fathers agree on the origin of the soul?",
+        answer_mode="scholarly_dispute",
+        sensitivity_primary="normal",
+        risk_flags=[],
+        handling="answer",
+        preliminary_confidence_tier="YELLOW",
+    )
+
+
+async def test_compose_returns_positions_for_scholarly_dispute() -> None:
+    """In scholarly_dispute mode A5 emits `positions[]`; `answer` is empty and the
+    composer's `cited_chunk_ids` is the order-preserving union across columns."""
+    provider = ComposerFakeProvider(
+        positions=[
+            {
+                "name": "Creationism",
+                "thesis": "The soul is created directly by God.",
+                "citedChunkIds": ["ch_1"],
+            },
+            {
+                "name": "Traducianism",
+                "thesis": "The soul is transmitted with the body from the parents.",
+                "citedChunkIds": ["ch_2", "ch_1"],
+            },
+        ],
+    )
+    composer = _composer(provider)
+
+    output = await composer.compose(
+        packet=_packet(), classified=_dispute_classified(), run_id="run_d"
+    )
+
+    assert output.positions is not None
+    assert [p.name for p in output.positions] == ["Creationism", "Traducianism"]
+    assert output.positions[0].cited_chunk_ids == ["ch_1"]
+    assert output.positions[1].cited_chunk_ids == ["ch_2", "ch_1"]
+    assert output.answer == ""
+    # Union is order-preserving and de-duplicated (ch_1 cited by both columns appears once).
+    assert output.cited_chunk_ids == ["ch_1", "ch_2"]
+
+
+async def test_compose_dispute_rejects_payload_without_positions() -> None:
+    """A scholarly_dispute payload missing `positions` is invalid → bounded fallback upstream."""
+    provider = ComposerFakeProvider(answer="x", cited_chunk_ids=["ch_1"])
+    composer = _composer(provider)
+    with pytest.raises(ProviderInvalidResponseError):
+        await composer.compose(
+            packet=_packet(), classified=_dispute_classified(), run_id="r"
+        )

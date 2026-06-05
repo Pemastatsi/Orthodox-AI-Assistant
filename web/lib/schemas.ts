@@ -73,6 +73,23 @@ export const VerifiedResponseUsageSchema = z.object({
   completionTokens: z.number().int().nullable().optional(),
 });
 
+/**
+ * One position of a scholarly_dispute answer. Each position is composed from
+ * its own sub-packet (A5 runs per column, per the T-006 task card); citations
+ * are scoped to the column and NEVER aggregated across columns.
+ *
+ * The backend pipeline does not yet emit `positions`; the field is optional on
+ * the wire today. When the per-column A5 composition lands (follow-up to T-006),
+ * `<DisputeCard>` will pick up real data without further frontend changes.
+ */
+export const PositionSchema = z.object({
+  name: z.string(),
+  thesis: z.string(),
+  citationIds: z.array(z.string()).default([]),
+  confidenceTier: ConfidenceTierSchema,
+});
+export type Position = z.infer<typeof PositionSchema>;
+
 export const VerifiedResponseSchema = z.object({
   answer: z.string(),
   confidenceTier: ConfidenceTierSchema,
@@ -84,6 +101,12 @@ export const VerifiedResponseSchema = z.object({
   servedFromCache: z.boolean(),
   schemaVersion: z.string(),
   runId: z.string(),
+  /**
+   * Present (non-null) only when the answer is a scholarly_dispute; renders side-by-side.
+   * The backend emits `null` on every other response (FastAPI serializes the optional
+   * field), so accept null as well as absent — matching the nullable Citation fields above.
+   */
+  positions: z.array(PositionSchema).nullable().optional(),
 });
 export type VerifiedResponse = z.infer<typeof VerifiedResponseSchema>;
 

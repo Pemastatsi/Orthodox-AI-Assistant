@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from app.domain.agents.composer import ComposerOutput
+from app.domain.agents.composer import ComposerOutput, ComposerPosition
 from app.domain.agents.verifier import Verifier, VerifierConfig
 from app.domain.models.classified_query import ClassifiedQuery
 from app.domain.models.evidence_packet import AdmittedChunk, EvidencePacket
@@ -241,3 +241,206 @@ async def test_verified_response_validates_against_schema_shape(pastoral_config)
     payload = response.model_dump(by_alias=True, mode="json")
     revived = type(response).model_validate(payload)
     assert revived.model_dump(by_alias=True, mode="json") == payload
+
+
+# --------------------------------------------------------------------------------------
+# Scholarly-dispute per-column verification (T-006).
+# --------------------------------------------------------------------------------------
+
+# Theses are near-verbatim slices of their column's chunk so quote-overlap clears 0.70.
+_AUG_THESIS = (
+    "The guilt of Adam's sin is inherited by all his descendants as a shared condemnation."
+)
+_BAS_THESIS = (
+    "Mortality and corruption are inherited from Adam, but personal guilt is not "
+    "transmitted to his descendants."
+)
+
+
+def _dispute_packet() -> EvidencePacket:
+    return EvidencePacket(
+        tenant_id="tn_test",
+        corpus_version="2026-05-01",
+        confidence_tier="YELLOW",
+        admitted_chunks=[
+            AdmittedChunk(
+                chunk_id="ch_aug",
+                source_id="src_aug",
+                title="On Original Sin",
+                text=(
+                    "Augustine teaches that the guilt of Adam's sin is inherited by all "
+                    "his descendants as a shared condemnation."
+                ),
+                score=0.82,
+                visibility="member",
+                source_hash=SHA,
+                chunk_hash=SHA,
+                father="Augustine",
+            ),
+            AdmittedChunk(
+                chunk_id="ch_aug2",
+                source_id="src_aug2",
+                title="On Original Sin II",
+                text=(
+                    "The same guilt of Adam binds the whole human race in a shared "
+                    "condemnation passed down through generation."
+                ),
+                score=0.70,
+                visibility="member",
+                source_hash=SHA,
+                chunk_hash=SHA,
+                father="Augustine",
+            ),
+            AdmittedChunk(
+                chunk_id="ch_bas",
+                source_id="src_bas",
+                title="On Ancestral Sin",
+                text=(
+                    "Basil teaches that mortality and corruption are inherited from Adam, "
+                    "but personal guilt is not transmitted to his descendants."
+                ),
+                score=0.80,
+                visibility="member",
+                source_hash=SHA,
+                chunk_hash=SHA,
+                father="Basil",
+            ),
+        ],
+        suppressed_chunk_ids=[],
+        lineage_context=[],
+    )
+
+
+def _dispute_output(positions: list[ComposerPosition]) -> ComposerOutput:
+    union = list(dict.fromkeys(cid for p in positions for cid in p.cited_chunk_ids))
+    return ComposerOutput(
+        answer="",
+        cited_chunk_ids=union,
+        prompt_tokens=10,
+        completion_tokens=20,
+        model_route_id="a5_compose_anthropic@2026-05-01.1",
+        raw_text="<fake>",
+        positions=positions,
+    )
+
+
+async def test_dispute_verifies_per_column_and_scopes_citations(pastoral_config) -> None:
+    verifier = _verifier(pastoral_config)
+    positions = [
+        ComposerPosition(name="Augustinian", thesis=_AUG_THESIS, cited_chunk_ids=["ch_aug"]),
+        ComposerPosition(
+            name="Eastern patristic", thesis=_BAS_THESIS, cited_chunk_ids=["ch_bas"]
+        ),
+    ]
+    response = await verifier.verify(
+        composer_output=_dispute_output(positions),
+        packet=_dispute_packet(),
+        classified=_classified(),
+        run_id="r_disp",
+    )
+    assert response.verification.passed is True
+    assert response.handling == "answer"
+    assert response.positions is not None
+    assert [p.name for p in response.positions] == ["Augustinian", "Eastern patristic"]
+
+    pos_a, pos_b = response.positions
+    # Per-column citation scoping: each column references only its own chunk, never the
+    # other's — citations are not aggregated across columns.
+    assert len(pos_a.citation_ids) == 1
+    assert len(pos_b.citation_ids) == 1
+    assert set(pos_a.citation_ids).isdisjoint(pos_b.citation_ids)
+    cited_chunk_by_id = {c.citation_id: c.chunk_id for c in response.citations}
+    assert cited_chunk_by_id[pos_a.citation_ids[0]] == "ch_aug"
+    assert cited_chunk_by_id[pos_b.citation_ids[0]] == "ch_bas"
+    # Single-chunk columns top out at YELLOW under the A4 coverage rule.
+    assert pos_a.confidence_tier == "YELLOW"
+    assert pos_b.confidence_tier == "YELLOW"
+    # The top-level lede is the fixed framing — it never implies a consensus.
+    assert "does not adjudicate" in response.answer
+
+
+async def test_dispute_top_tier_is_most_conservative(pastoral_config) -> None:
+    """A GREEN column (≥2 chunks ≥ GREEN_SCORE) and a YELLOW column yield a YELLOW top tier."""
+    verifier = _verifier(pastoral_config)
+    positions = [
+        ComposerPosition(
+            name="Augustinian", thesis=_AUG_THESIS, cited_chunk_ids=["ch_aug", "ch_aug2"]
+        ),
+        ComposerPosition(
+            name="Eastern patristic", thesis=_BAS_THESIS, cited_chunk_ids=["ch_bas"]
+        ),
+    ]
+    response = await verifier.verify(
+        composer_output=_dispute_output(positions),
+        packet=_dispute_packet(),
+        classified=_classified(),
+        run_id="r_tier",
+    )
+    assert response.verification.passed is True
+    assert response.positions is not None
+    tiers = {p.name: p.confidence_tier for p in response.positions}
+    assert tiers["Augustinian"] == "GREEN"
+    assert tiers["Eastern patristic"] == "YELLOW"
+    assert response.confidence_tier == "YELLOW"
+
+
+async def test_dispute_fails_closed_when_one_column_unsupported(pastoral_config) -> None:
+    """If ANY column's thesis fails quote-overlap, the whole response is a bounded fallback —
+    a half-verified dispute is never shown."""
+    verifier = _verifier(pastoral_config)
+    positions = [
+        ComposerPosition(name="Augustinian", thesis=_AUG_THESIS, cited_chunk_ids=["ch_aug"]),
+        ComposerPosition(
+            name="Bogus",
+            thesis="The liturgy begins with the great litany and the small entrance.",
+            cited_chunk_ids=["ch_bas"],
+        ),
+    ]
+    response = await verifier.verify(
+        composer_output=_dispute_output(positions),
+        packet=_dispute_packet(),
+        classified=_classified(),
+        run_id="r_fail",
+    )
+    assert response.verification.passed is False
+    assert response.handling == "insufficient_evidence"
+    assert response.positions is None
+    assert "dispute_position:Bogus" in (response.verification.failure_reason or "")
+
+
+async def test_dispute_column_cannot_cite_unadmitted_chunk(pastoral_config) -> None:
+    """A column citing a chunk A4 did not admit fails closed (cross-column / phantom cite)."""
+    verifier = _verifier(pastoral_config)
+    positions = [
+        ComposerPosition(name="A", thesis=_AUG_THESIS, cited_chunk_ids=["ch_aug"]),
+        ComposerPosition(name="B", thesis=_BAS_THESIS, cited_chunk_ids=["ch_not_admitted"]),
+    ]
+    response = await verifier.verify(
+        composer_output=_dispute_output(positions),
+        packet=_dispute_packet(),
+        classified=_classified(),
+        run_id="r_unknown",
+    )
+    assert response.verification.passed is False
+    assert "dispute_position:B:unknown_chunk_ids" in (
+        response.verification.failure_reason or ""
+    )
+
+
+async def test_dispute_fails_closed_with_single_position(pastoral_config) -> None:
+    """A 'dispute' that resolves to a single position is not a dispute — fail closed."""
+    verifier = _verifier(pastoral_config)
+    positions = [
+        ComposerPosition(name="Only one", thesis=_AUG_THESIS, cited_chunk_ids=["ch_aug"]),
+    ]
+    response = await verifier.verify(
+        composer_output=_dispute_output(positions),
+        packet=_dispute_packet(),
+        classified=_classified(),
+        run_id="r_one",
+    )
+    assert response.verification.passed is False
+    assert response.handling == "insufficient_evidence"
+    assert "dispute_insufficient_positions:1" in (
+        response.verification.failure_reason or ""
+    )

@@ -145,6 +145,35 @@
     "schemaVersion": {
       "type": "string",
       "description": "Format YYYY-MM-DD.NN per docs/contracts/api-versioning.md."
+    },
+    "positions": {
+      "type": ["array", "null"],
+      "description": "Present (non-null) only for scholarly_dispute answers (T-006 §Scholarly Dispute UX). Competing positions rendered side-by-side; each position's citationIds are scoped to that column and reference the top-level citations[] — citations are NEVER aggregated across columns. Add-only optional field (api-versioning.md §Add-only changes do not bump), so schemaVersion is unchanged.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "thesis", "citationIds", "confidenceTier"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Neutral label for the position, drawn from the evidence (father/work/council/era). Never model-invented."
+          },
+          "thesis": {
+            "type": "string",
+            "description": "Short composed statement of this position, verified against this column's chunks only."
+          },
+          "citationIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "citationId values from the top-level citations[] belonging to THIS column only."
+          },
+          "confidenceTier": {
+            "type": "string",
+            "enum": ["GREEN", "YELLOW", "RED"],
+            "description": "Confidence for this column alone, via the same A4 coverage rule applied to the column's chunks."
+          }
+        }
+      }
     }
   }
 }

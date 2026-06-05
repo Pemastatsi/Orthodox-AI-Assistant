@@ -400,10 +400,15 @@ class ComposerFakeProvider:
         *,
         answer: str = "Saint Basil writes that prayer requires patience.",
         cited_chunk_ids: list[str] | None = None,
+        positions: list[dict[str, Any]] | None = None,
         finish_reason: str = "stop",
     ) -> None:
         self._answer = answer
         self._cited = cited_chunk_ids or []
+        # When set, generate_structured returns the scholarly_dispute shape ({"positions": ...})
+        # instead of the {answer, citedChunkIds} shape. Each entry is a wire-shaped dict:
+        # {"name": ..., "thesis": ..., "citedChunkIds": [...]}.
+        self._positions = positions
         self._finish_reason = finish_reason
         self.calls: list[dict[str, Any]] = []
 
@@ -444,7 +449,11 @@ class ComposerFakeProvider:
                 "run_id": run_id,
             }
         )
-        data = {"answer": self._answer, "citedChunkIds": list(self._cited)}
+        data: dict[str, Any] = (
+            {"positions": self._positions}
+            if self._positions is not None
+            else {"answer": self._answer, "citedChunkIds": list(self._cited)}
+        )
         return StructuredResult(
             data=data,
             raw_text="<fake>",
