@@ -1,8 +1,12 @@
 """Integration tests for `POST /api/v1/query` (T-004 / VerifiedResponse shape).
 
-Uses FastAPI's `TestClient` with `app.dependency_overrides` to swap in fakes for the
-LLM provider, embedding provider, vector store, composer provider, and sparse embedder.
-No real Postgres, Redis, Qdrant, or LLM providers required.
+Uses the `async_client` fixture (httpx + ASGITransport) with `app.dependency_overrides` to swap in
+fakes for the LLM provider, embedding provider, vector store, composer provider, and sparse
+embedder. The async_client runs the app in-process on the test's own event loop, so the shared
+SQLAlchemy engine is initialized and disposed on that loop — unlike `fastapi.testclient.TestClient`,
+which runs the app on a separate portal loop and leaks a loop-bound engine into later tests (see
+conftest.py::async_client). No real Redis, Qdrant, or LLM providers required; Postgres is provided
+by the `async_client` → `db_engine` chain (the suite skips cleanly when it is unreachable).
 """
 
 from __future__ import annotations
@@ -38,7 +42,7 @@ from app.domain.services.safety_config import (
     load_sensitivity_keywords,
 )
 from app.main import app
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 from tests.fixtures.fakes import (
     ComposerFakeProvider,
@@ -123,7 +127,10 @@ def _hit(
 
 
 @pytest.fixture()
-def client():
+def query_stubs():
+    """Install the default fake provider/store overrides on the app and yield the stubs the tests
+    assert against. Pair with the `async_client` fixture (the HTTP client itself). Cleared on
+    teardown so overrides never leak between tests."""
     safety_config = load_sensitivity_keywords(_SENSITIVITY_PATH)
     pastoral_config = load_pastoral_filters(_PASTORAL_PATH)
     analyzer_provider = FakeStructuredProvider()
@@ -143,13 +150,15 @@ def client():
     app.dependency_overrides[get_vector_store] = lambda: store
     app.dependency_overrides[get_sparse_embedder] = lambda: sparse
 
-    yield TestClient(app), store, analyzer_provider, composer_provider
+    yield store, analyzer_provider, composer_provider
     app.dependency_overrides.clear()
 
 
-def test_query_happy_path_returns_verified_response(client):
-    test_client, store, _, _ = client
-    response = test_client.post(
+async def test_query_happy_path_returns_verified_response(
+    async_client: AsyncClient, query_stubs
+):
+    store, _, _ = query_stubs
+    response = await async_client.post(
         "/api/v1/query",
         json={"queryText": "What do the Fathers teach about prayer?"},
         headers=_dev_header(),
@@ -172,9 +181,11 @@ def test_query_happy_path_returns_verified_response(client):
     assert store.seen_filter.approved is True
 
 
-def test_hard_trigger_returns_self_harm_canonical_text(client):
-    test_client, store, fake_provider, composer_provider = client
-    response = test_client.post(
+async def test_hard_trigger_returns_self_harm_canonical_text(
+    async_client: AsyncClient, query_stubs
+):
+    store, fake_provider, composer_provider = query_stubs
+    response = await async_client.post(
         "/api/v1/query",
         json={"queryText": "I want to kill myself"},
         headers=_dev_header(),
@@ -190,9 +201,10 @@ def test_hard_trigger_returns_self_harm_canonical_text(client):
     assert composer_provider.calls == []
 
 
-def test_political_query_returns_political_canonical_text(client):
-    test_client, _, _, composer_provider = client
-    response = test_client.post(
+async def test_political_query_returns_political_canonical_text(
+    async_client: AsyncClient, query_stubs
+):
+    response = await async_client.post(
         "/api/v1/query",
         json={"queryText": "Who should I vote for in November?"},
         headers=_dev_header(),
@@ -211,13 +223,15 @@ def test_political_query_returns_political_canonical_text(client):
     }
 
 
-def test_empty_retrieval_returns_insufficient_evidence(client):
+async def test_empty_retrieval_returns_insufficient_evidence(
+    async_client: AsyncClient, query_stubs
+):
     """When the retriever returns no candidates, A4 admits zero chunks and we return the
     out_of_corpus bounded fallback (HTTP 200, not 409)."""
-    test_client, store, _, composer_provider = client
+    store, _, composer_provider = query_stubs
     store.hits.clear()
 
-    response = test_client.post(
+    response = await async_client.post(
         "/api/v1/query",
         json={"queryText": "an obscure topic with no corpus coverage"},
         headers=_dev_header(),
@@ -232,7 +246,7 @@ def test_empty_retrieval_returns_insufficient_evidence(client):
     assert composer_provider.calls == []
 
 
-def test_query_read_scope_is_required():
+async def test_query_read_scope_is_required(async_client: AsyncClient):
     """A Principal without `query:read` is rejected with 403."""
     from app.api.v1._deps import get_principal
     from app.core.auth import make_dev_principal
@@ -247,8 +261,7 @@ def test_query_read_scope_is_required():
     app.dependency_overrides[get_principal] = no_scope_principal
 
     try:
-        test_client = TestClient(app)
-        response = test_client.post(
+        response = await async_client.post(
             "/api/v1/query",
             json={"queryText": "benign"},
             headers=_dev_header(),
@@ -258,9 +271,8 @@ def test_query_read_scope_is_required():
         app.dependency_overrides.clear()
 
 
-def test_validation_error_for_empty_query(client):
-    test_client, _, _, _ = client
-    response = test_client.post(
+async def test_validation_error_for_empty_query(async_client: AsyncClient, query_stubs):
+    response = await async_client.post(
         "/api/v1/query",
         json={"queryText": ""},
         headers=_dev_header(),
@@ -268,7 +280,7 @@ def test_validation_error_for_empty_query(client):
     assert response.status_code == 422
 
 
-def test_provider_refusal_falls_back_to_insufficient_evidence():
+async def test_provider_refusal_falls_back_to_insufficient_evidence(async_client: AsyncClient):
     safety_config = load_sensitivity_keywords(_SENSITIVITY_PATH)
     pastoral_config = load_pastoral_filters(_PASTORAL_PATH)
     refusing = RefusingStructuredProvider()
@@ -287,8 +299,7 @@ def test_provider_refusal_falls_back_to_insufficient_evidence():
     app.dependency_overrides[get_sparse_embedder] = lambda: sparse
 
     try:
-        test_client = TestClient(app)
-        response = test_client.post(
+        response = await async_client.post(
             "/api/v1/query",
             json={"queryText": "a question the analyzer LLM refuses"},
             headers=_dev_header(),
@@ -302,7 +313,7 @@ def test_provider_refusal_falls_back_to_insufficient_evidence():
         app.dependency_overrides.clear()
 
 
-def test_query_with_bm25_uses_sparse_embedder():
+async def test_query_with_bm25_uses_sparse_embedder(async_client: AsyncClient):
     safety_config = load_sensitivity_keywords(_SENSITIVITY_PATH)
     pastoral_config = load_pastoral_filters(_PASTORAL_PATH)
 
@@ -335,13 +346,102 @@ def test_query_with_bm25_uses_sparse_embedder():
     app.dependency_overrides[get_sparse_embedder] = lambda: sparse
 
     try:
-        test_client = TestClient(app)
-        response = test_client.post(
+        response = await async_client.post(
             "/api/v1/query",
             json={"queryText": "specific Greek term ἀγάπη in canon citations"},
             headers=_dev_header(),
         )
         assert response.status_code == 200, response.text
         assert sparse.calls, "sparse embedder should have been invoked"
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_scholarly_dispute_returns_side_by_side_positions(async_client: AsyncClient):
+    """End-to-end: a scholarly_dispute query yields VerifiedResponse.positions with
+    column-scoped citations and the fixed framing lede — the wire shape <DisputeCard>
+    consumes. Exercises the full A1→A6 path through the real verifier."""
+    safety_config = load_sensitivity_keywords(_SENSITIVITY_PATH)
+    pastoral_config = load_pastoral_filters(_PASTORAL_PATH)
+
+    aug_text = (
+        "Augustine teaches that the guilt of Adam's sin is inherited by all his "
+        "descendants as a shared condemnation."
+    )
+    bas_text = (
+        "Basil teaches that mortality and corruption are inherited from Adam, but "
+        "personal guilt is not transmitted to his descendants."
+    )
+
+    def dispute_responder(query_text, schema):
+        classified, plan = default_query_analyzer_responder(query_text, schema)
+        classified["answerMode"] = "scholarly_dispute"
+        plan["answerMode"] = "scholarly_dispute"
+        return classified, plan
+
+    analyzer = FakeStructuredProvider(responder=dispute_responder)
+    composer_provider = ComposerFakeProvider(
+        positions=[
+            {
+                "name": "Augustinian",
+                "thesis": (
+                    "The guilt of Adam's sin is inherited by all his descendants as a "
+                    "shared condemnation."
+                ),
+                "citedChunkIds": ["ch_aug"],
+            },
+            {
+                "name": "Eastern patristic",
+                "thesis": (
+                    "Mortality and corruption are inherited from Adam, but personal "
+                    "guilt is not transmitted to his descendants."
+                ),
+                "citedChunkIds": ["ch_bas"],
+            },
+        ],
+    )
+    store = StubVectorStore(
+        hits=[
+            _hit(chunk_id="ch_aug", text=aug_text, score=0.82),
+            _hit(chunk_id="ch_bas", text=bas_text, score=0.80),
+        ]
+    )
+    sparse = StubSparseEmbedder()
+
+    app.dependency_overrides[get_safety_config] = lambda: safety_config
+    app.dependency_overrides[get_pastoral_config] = lambda: pastoral_config
+    app.dependency_overrides[get_query_analyzer_provider] = lambda: analyzer
+    app.dependency_overrides[get_composer_provider] = lambda: composer_provider
+    app.dependency_overrides[get_verifier_provider] = lambda: None
+    app.dependency_overrides[get_embedding_provider] = lambda: analyzer
+    app.dependency_overrides[get_vector_store] = lambda: store
+    app.dependency_overrides[get_sparse_embedder] = lambda: sparse
+
+    try:
+        response = await async_client.post(
+            "/api/v1/query",
+            json={"queryText": "Do the Fathers agree on the inheritance of Adam's sin?"},
+            headers=_dev_header(),
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["handling"] == "answer"
+        assert body["verification"]["passed"] is True
+
+        positions = body["positions"]
+        assert positions is not None and len(positions) == 2
+        assert [p["name"] for p in positions] == ["Augustinian", "Eastern patristic"]
+
+        # Per-column citation scoping survives serialization: disjoint citationIds each
+        # resolving (via the top-level citations[]) to that column's own chunk.
+        cit_by_id = {c["citationId"]: c["chunkId"] for c in body["citations"]}
+        col_a, col_b = positions[0]["citationIds"], positions[1]["citationIds"]
+        assert set(col_a).isdisjoint(col_b)
+        assert {cit_by_id[i] for i in col_a} == {"ch_aug"}
+        assert {cit_by_id[i] for i in col_b} == {"ch_bas"}
+
+        assert positions[0]["confidenceTier"] in {"GREEN", "YELLOW", "RED"}
+        # The top-level lede is the fixed framing — it never implies a consensus.
+        assert "does not adjudicate" in body["answer"]
     finally:
         app.dependency_overrides.clear()
