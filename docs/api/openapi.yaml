@@ -663,20 +663,21 @@ components:
 
   schemas:
     # NOTE: This inline AnswerMode is a manual mirror of
-    # docs/schemas/answer-mode.schema.json. The two enum lists MUST stay
-    # byte-for-byte identical; a CI parity check (see scripts/verify_openapi_enums.py
-    # — to be added in T-001) fails the build when they drift. If you edit one,
-    # edit both. We do not use a JSON Schema $ref here because OpenAPI 3.1
+    # docs/schemas/answer-mode.schema.json AND the backend Pydantic Literal in
+    # backend/app/domain/models/answer_mode.py. The enum lists MUST stay
+    # byte-for-byte identical; the CI parity check scripts/verify_openapi_enums.py
+    # fails the build when they drift. If you edit one, edit all three. We do not
+    # use a JSON Schema $ref here because OpenAPI 3.1
     # tooling support for cross-file $ref to JSON Schema files is uneven and
     # we want every generator to read the enum without resolution.
     AnswerMode:
       type: string
       enum:
-        - direct_citation
         - consensus
-        - historical_development
-        - scholarly_dispute
         - institutional_policy
+        - scholarly_dispute
+        - pastoral_guidance
+        - insufficient
 
     # NOTE: ProgressEvent and ProgressVariant are the SSE-payload manual mirrors of
     # docs/schemas/progress-event.schema.json. The stage enum and ProgressVariant

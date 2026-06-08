@@ -37,7 +37,7 @@ A user without the required scope is redirected to `/` with a non-blocking toast
 Submits a question and receives a `VerifiedResponse`.
 
 ```ts
-type AnswerMode = "direct_citation" | "consensus" | "historical_development" | "scholarly_dispute" | "institutional_policy";
+type AnswerMode = "consensus" | "institutional_policy" | "scholarly_dispute" | "pastoral_guidance" | "insufficient";
 
 interface ChatComposerProps {
   defaultAnswerMode: AnswerMode;

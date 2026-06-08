@@ -41,7 +41,7 @@ A gold set is a JSON file per tenant under `tests/retrieval_eval/gold_sets/<tena
         "chunk_athanasius_serapion_001_p013"
       ],
       "minimallySufficientChunkIds": ["chunk_athanasius_serapion_001_p012"],
-      "answerMode": "direct_citation",
+      "answerMode": "consensus",
       "sensitivityPrimary": "normal",
       "notes": "Tests Father-name + concept retrieval against a long work."
     }
@@ -58,7 +58,7 @@ Required per-case fields:
 | `language` | `'en' \| 'el' \| 'grc'` | Modern English, modern Greek, or Polytonic Greek. Determines which embedding/reranker variants this case exercises. |
 | `expectedChunkIds` | `list[str]` | The set of approved chunks that, together, fully answer the question. At least one. |
 | `minimallySufficientChunkIds` | `list[str]` | The subset that alone is enough to answer. Used for Recall@K when redundancy across `expectedChunkIds` would inflate the metric. |
-| `answerMode` | `AnswerMode` | Expected `EvidencePacket.answerMode` (see `answer-mode.schema.json`). |
+| `answerMode` | `AnswerMode` | Expected answer mode for this case (see `answer-mode.schema.json`). |
 | `sensitivityPrimary` | `Sensitivity` | Expected `ClassifiedQuery.sensitivityPrimary` (see `flagged-query.schema.json`). Cases that route to `block_with_redirect` carry `expectedChunkIds: []` and are tested by the safety suite, not this one. |
 | `notes` | `str` | Curator's rationale for inclusion. Used in regression triage. |
 
