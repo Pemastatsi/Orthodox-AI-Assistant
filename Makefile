@@ -1,5 +1,5 @@
 .PHONY: dev worker test safety lint typecheck migrate up down install retrieval-eval-run \
-	check-docs-index verify-enums codegen codegen-check
+	check-docs-index verify-enums check-safety-coverage codegen codegen-check
 
 install:
 	(cd backend && uv sync)
@@ -69,6 +69,11 @@ check-docs-index:
 # docs/schemas, docs/api/openapi.yaml, and the backend Pydantic Literal. Requires PyYAML.
 verify-enums:
 	python3 scripts/verify_openapi_enums.py
+
+# Safety-config coverage report (T-007 aid): which sensitivity/riskFlag rules + Greek variants are
+# present vs missing. Exits non-zero only when an English rule is missing. Requires PyYAML.
+check-safety-coverage:
+	python3 scripts/check_safety_coverage.py
 
 # REC-009 (scaffold): regenerate / drift-check the schema-derived artifacts. Tools run ephemerally
 # (uvx / pnpm dlx) — no manifest changes, network egress only. No artifacts are generated yet; see
