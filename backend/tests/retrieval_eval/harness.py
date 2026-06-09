@@ -54,9 +54,10 @@ TINY_APPROVED_CORPUS = (
 ConfigLabel = Literal["dense_only", "hybrid", "hybrid_rerank"]
 
 # Retrieval ranking is independent of the answer mode (A3 uses semantic_query, k, filters, and the
-# retrieval config — not answer_mode). The gold set's `answerMode` is the *expected EvidencePacket*
-# mode (answer-mode.schema.json) used by the judge path, NOT a valid RetrievalPlan.answer_mode
-# (A2's enum), so plans use this fixed, valid placeholder.
+# retrieval config — not answer_mode). The gold set's `answerMode` now shares the single AnswerMode
+# taxonomy (answer-mode.schema.json == RetrievalPlan.answer_mode, enforced by
+# scripts/verify_openapi_enums.py), so any gold value is a legal plan value; we still pin one fixed
+# value here because the plan's answer_mode has no effect on retrieval metrics.
 _PLAN_ANSWER_MODE = "consensus"
 
 
@@ -70,11 +71,11 @@ class GoldCase(WireModel):
     expected_chunk_ids: list[str]
     minimally_sufficient_chunk_ids: list[str]
     answer_mode: Literal[
-        "direct_citation",
         "consensus",
-        "historical_development",
-        "scholarly_dispute",
         "institutional_policy",
+        "scholarly_dispute",
+        "pastoral_guidance",
+        "insufficient",
     ]
     sensitivity_primary: Literal[
         "normal",

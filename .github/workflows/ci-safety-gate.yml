@@ -82,6 +82,14 @@ jobs:
         # index row, or an index row pointing at a missing file). Stdlib only — no deps.
         run: python scripts/check_docs_index.py
 
+      - name: Check enum parity (schema ↔ OpenAPI ↔ Pydantic)
+        # Fails if the hand-maintained AnswerMode / ProgressVariant.stage enum mirrors drift across
+        # docs/schemas, docs/api/openapi.yaml, and the backend Pydantic Literal. The OpenAPI NOTE
+        # comments promise exactly this gate. PyYAML (installed above) + stdlib; imports no app code.
+        run: |
+          pip install pyyaml
+          python scripts/verify_openapi_enums.py
+
       - name: Check schema codegen drift (REC-009; guarded)
         # REC-009 is scaffolded but not enabled: no _generated/ artifacts exist yet, so this step
         # skips and stays green. It activates automatically once `make codegen` output is committed

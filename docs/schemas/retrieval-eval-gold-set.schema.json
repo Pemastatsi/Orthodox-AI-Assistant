@@ -89,13 +89,13 @@
         "answerMode": {
           "type": "string",
           "enum": [
-            "direct_citation",
             "consensus",
-            "historical_development",
+            "institutional_policy",
             "scholarly_dispute",
-            "institutional_policy"
+            "pastoral_guidance",
+            "insufficient"
           ],
-          "description": "Expected EvidencePacket.answerMode (answer-mode.schema.json)."
+          "description": "Expected answer mode for this case (answer-mode.schema.json taxonomy)."
         },
         "sensitivityPrimary": {
           "type": "string",

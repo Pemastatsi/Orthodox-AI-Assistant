@@ -1,5 +1,5 @@
 .PHONY: dev worker test safety lint typecheck migrate up down install retrieval-eval-run \
-	check-docs-index codegen codegen-check
+	check-docs-index verify-enums codegen codegen-check
 
 install:
 	(cd backend && uv sync)
@@ -64,6 +64,11 @@ retrieval-eval-run:
 # REC-003: fail if docs/{adr,contracts,schemas}/ drifts from docs/DOCS_INDEX.md. Stdlib only.
 check-docs-index:
 	python3 scripts/check_docs_index.py
+
+# Enum-parity gate: fail if the AnswerMode / ProgressVariant.stage enum mirrors drift across
+# docs/schemas, docs/api/openapi.yaml, and the backend Pydantic Literal. Requires PyYAML.
+verify-enums:
+	python3 scripts/verify_openapi_enums.py
 
 # REC-009 (scaffold): regenerate / drift-check the schema-derived artifacts. Tools run ephemerally
 # (uvx / pnpm dlx) — no manifest changes, network egress only. No artifacts are generated yet; see

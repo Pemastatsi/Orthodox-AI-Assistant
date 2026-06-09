@@ -14,7 +14,7 @@
       "language": "en",
       "expectedChunkIds": ["chunk_id_that_together_answer_the_question"],
       "minimallySufficientChunkIds": ["subset_of_expected_that_alone_suffices"],
-      "answerMode": "direct_citation",
+      "answerMode": "consensus",
       "sensitivityPrimary": "normal",
       "notes": "Curator rationale for inclusion; admin-readable only."
     }

@@ -4,10 +4,10 @@
   "title": "AnswerMode",
   "type": "string",
   "enum": [
-    "direct_citation",
     "consensus",
-    "historical_development",
+    "institutional_policy",
     "scholarly_dispute",
-    "institutional_policy"
+    "pastoral_guidance",
+    "insufficient"
   ]
 }

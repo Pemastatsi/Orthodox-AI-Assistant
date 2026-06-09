@@ -52,7 +52,7 @@
       "language": "en",
       "expectedChunkIds": ["chunk-wealth-001"],
       "minimallySufficientChunkIds": ["chunk-wealth-001"],
-      "answerMode": "direct_citation",
+      "answerMode": "consensus",
       "sensitivityPrimary": "normal",
       "notes": "SYNTHETIC smoke case. Distinctive vocab: Chrysostom, wealth, almsgiving."
     },
