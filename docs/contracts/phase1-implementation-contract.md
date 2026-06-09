@@ -102,7 +102,7 @@ The founder Phase-2 sign-off required by exit criterion #6 is recorded as a sing
   ```json
   {
     "reviewedRunIds": ["<run_id>", ...],            // ≥ 20 entries
-    "answerModesCovered": ["consensus", ...],        // each VerifiedResponse.answerMode seen in the sample
+    "answerModesCovered": ["consensus", ...],        // each distinct ClassifiedQuery.answerMode in the sample
     "sensitivityCategoriesCovered": ["normal", ...], // ≥ 3 distinct values
     "concerns": "free text",
     "checklistVersion": "phase2-signoff-2026-05-02.1"
