@@ -27,9 +27,10 @@ Build the Phase 1 user-facing chat and tenant-aware admin surfaces needed for pr
 
 ## Scholarly Dispute UX (decisive competitive affordance)
 
-When `VerifiedResponse.answerMode === "scholarly_dispute"`, `<AnswerPanel>` MUST render
-the competing patristic positions in **side-by-side columns**, not as one collapsed
-paragraph. Each column carries:
+When `VerifiedResponse.positions` is present (a scholarly_dispute answer carries ≥ 2
+competing positions; there is no `answerMode` field on the response), `<AnswerPanel>`
+MUST render the competing patristic positions in **side-by-side columns**, not as one
+collapsed paragraph. Each column carries:
 
 - A clear position label (e.g. the father, the council, the work, the era) sourced from
   the chunk metadata (`father`, `work`, `sectionPath`); never invented.
