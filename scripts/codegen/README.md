@@ -1,8 +1,10 @@
 # Schema-to-code generators (REC-009)
 
-**Status: scaffold.** The wiring (Makefile targets, generator script, `.gitattributes`, guarded CI
-step) is in place, but **no `_generated/` artifacts are produced yet** and **no dependencies are
-installed**. This was a deliberate scope decision; enabling is a future, owner-approved step (below).
+**Status: enabled (REC-009 active).** The generators are wired (Makefile targets, generator script,
+`.gitattributes`, CI drift gate) and the `_generated/` artifacts are committed. Generation runs the
+tools **ephemerally** (pinned `uvx` / `pnpm dlx`) — **no project dependencies are installed**. The
+hand-written models (`backend/app/domain/models/*.py`) and Zod schemas (`web/lib/schemas.ts`) remain
+the source of truth; the generated artifacts are additive and gated for drift only.
 
 The goal (T-008, REC-009): generate the three downstream artifacts from the canonical contracts
 instead of hand-maintaining them, and fail CI if they drift — making "update the schema first" a
@@ -25,22 +27,35 @@ adopted. Generation is **additive** (writes to `_generated/`); it does not overw
 `make codegen` / `make codegen-check` call `scripts/codegen/generate.sh`, which runs every tool
 **ephemerally** via `uvx` (Python) and `pnpm dlx` (Node). Nothing is added to `pyproject.toml`,
 `package.json`, `uv.lock`, or `pnpm-lock.yaml`; the only requirement is **network egress** to fetch
-the tools. This is why the scaffold keeps CI green: it touches no lockfile, and the CI drift check is
-guarded to skip until artifacts exist.
+the (pinned) tools. The CI `codegen-check` step (in the `contracts` job, guarded on the `_generated/`
+dirs) runs on every PR and fails on drift.
 
 ```
 make codegen        # (re)generate all three artifact sets
 make codegen-check  # fail if regenerating would change the committed artifacts (CI gate)
 ```
 
-## Enabling (future, owner-approved)
+## Determinism (why the drift gate is stable)
 
-1. Confirm network egress for `uvx` / `pnpm dlx` in the dev + CI environments.
-2. Run `make codegen`; review the output (alias/casing conventions — the hand-written `WireModel`
-   uses `alias_generator=to_camel`; tune the `datamodel-codegen` flags in `generate.sh` to match).
-3. Commit the `_generated/` artifacts. The guarded CI `codegen-check` step in the `contracts` job
-   (`.github/workflows/ci-safety-gate.yml`) activates automatically once the dirs exist.
-4. If pinned tool versions are preferred over ephemeral runners, add the three tools as dev
-   dependencies (`uv add --dev datamodel-code-generator`; `pnpm add -D openapi-typescript
-   json-schema-to-zod`) and drop the `uvx` / `pnpm dlx` prefixes in `generate.sh`. That step is a
-   genuine dependency install (CLAUDE.md §6, High-risk) and needs explicit approval.
+`make codegen-check` regenerates into a temp dir and diffs against the committed artifacts, so
+generation must be byte-reproducible. Three measures ensure that:
+
+1. **Pinned tool versions** in `generate.sh`: `datamodel-code-generator==0.61.0`,
+   `openapi-typescript@7.13.0`, `json-schema-to-zod@2.8.1`. CI fetches the same versions
+   ephemerally, so output matches. Bumping a pin is a deliberate edit + a `make codegen` re-commit.
+2. **`--disable-timestamp`** on `datamodel-codegen` (the only nondeterministic header line).
+3. **`--formatters builtin`** so Pydantic formatting does not depend on floating `black` / `isort`
+   versions.
+
+The generated artifacts are not hand-maintained, so they are excluded from the other gates: ruff via
+`extend-exclude` (`ruff.toml`), mypy via `ignore_errors` for `app.domain.models._generated.*`
+(`mypy.ini`), and eslint / tsc via `ignorePatterns` / `exclude` (`web/.eslintrc.json`,
+`web/tsconfig.json`).
+
+## Regenerating after a schema change
+
+Run `make codegen`, then review and commit the `_generated/` diff. If you forget, the `contracts` CI
+job's `codegen-check` step fails on the drift. To pin the tools as dev dependencies instead of
+ephemeral runners, add them (`uv add --dev datamodel-code-generator`; `pnpm add -D
+openapi-typescript json-schema-to-zod`) and drop the `uvx` / `pnpm dlx` prefixes in `generate.sh` —
+that is a genuine dependency install (CLAUDE.md §6, High-risk) and needs explicit approval.
