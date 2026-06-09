@@ -1,6 +1,11 @@
 line-length = 100
 target-version = "py312"
 
+# REC-009: the _generated/ artifacts are machine-generated and guarded by the codegen-check
+# drift gate, not by ruff. Exclude them so generated style (long schema-description lines, etc.)
+# never gates a PR.
+extend-exclude = ["**/_generated"]
+
 [lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RET", "ARG", "N"]
 

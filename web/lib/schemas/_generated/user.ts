@@ -1,0 +1,3 @@
+import { z } from "zod"
+
+export default z.object({ "userId": z.string(), "clerkUserId": z.string(), "tenantId": z.string(), "email": z.union([z.string().email(), z.null()]).optional(), "displayName": z.union([z.string(), z.null()]).optional(), "role": z.enum(["member","scholar","content_manager","admin","owner"]), "status": z.enum(["active","invited","disabled"]), "createdAt": z.string().datetime({ offset: true }), "lastSeenAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional() }).strict().describe("Internal user record. Source of truth for identity is Clerk; this row carries internal mapping and tenant binding.")

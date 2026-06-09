@@ -29,19 +29,26 @@ generate() {
   local py_out="$1" ts_client="$2" zod_out="$3"
   mkdir -p "$py_out" "$zod_out" "$(dirname "$ts_client")"
 
-  # 1) Pydantic v2 models from the JSON Schemas.
-  uvx --from datamodel-code-generator datamodel-codegen \
+  # All three tools are PINNED and run with deterministic options so the committed
+  # artifacts regenerate byte-for-byte in CI (the `--check` drift gate). Bumping a pin is a
+  # deliberate edit here + a `make codegen` re-commit.
+
+  # 1) Pydantic v2 models from the JSON Schemas. `--disable-timestamp` drops the only
+  #    nondeterministic header line; `--formatters builtin` uses datamodel-codegen's own
+  #    formatter so output does not depend on floating black/isort versions.
+  uvx --from 'datamodel-code-generator==0.61.0' datamodel-codegen \
     --input "$SCHEMAS" --input-file-type jsonschema \
     --output "$py_out" --output-model-type pydantic_v2.BaseModel \
-    --use-standard-collections --use-schema-description --snake-case-field
+    --use-standard-collections --use-schema-description --snake-case-field \
+    --disable-timestamp --formatters builtin
 
   # 2) TypeScript types for the frontend API client from the OpenAPI spec.
-  pnpm dlx openapi-typescript "$OPENAPI" -o "$ts_client"
+  pnpm dlx openapi-typescript@7.13.0 "$OPENAPI" -o "$ts_client"
 
   # 3) Zod validators from the JSON Schemas (one module per schema).
   for f in "$SCHEMAS"/*.json; do
     name="$(basename "$f" .schema.json)"
-    pnpm dlx json-schema-to-zod -i "$f" -o "$zod_out/$name.ts"
+    pnpm dlx json-schema-to-zod@2.8.1 -i "$f" -o "$zod_out/$name.ts"
   done
 }
 
@@ -50,7 +57,9 @@ if [ "$CHECK" -eq 1 ]; then
   trap 'rm -rf "$tmp"' EXIT
   generate "$tmp/models" "$tmp/api-client.generated.ts" "$tmp/schemas"
   rc=0
-  diff -ruN "$PY_OUT" "$tmp/models" || rc=1
+  # --exclude=__pycache__: ignore Python bytecode cache that appears once the generated modules
+  # are imported (e.g. by mypy or a local import). It is not a generated artifact and is gitignored.
+  diff -ruN --exclude=__pycache__ "$PY_OUT" "$tmp/models" || rc=1
   diff -ruN "$TS_CLIENT" "$tmp/api-client.generated.ts" || rc=1
   diff -ruN "$ZOD_OUT" "$tmp/schemas" || rc=1
   if [ "$rc" -ne 0 ]; then

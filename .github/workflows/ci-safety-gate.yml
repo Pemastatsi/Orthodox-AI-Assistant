@@ -39,6 +39,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Node + pnpm are needed by the REC-009 codegen-check step below (it runs the TS/Zod
+      # generators via `pnpm dlx`); uv (for `uvx`) is installed in that step.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
       - name: Validate JSON Schemas
         run: |
           python -c "
@@ -90,15 +99,17 @@ jobs:
           pip install pyyaml
           python scripts/verify_openapi_enums.py
 
-      - name: Check schema codegen drift (REC-009; guarded)
-        # REC-009 is scaffolded but not enabled: no _generated/ artifacts exist yet, so this step
-        # skips and stays green. It activates automatically once `make codegen` output is committed
-        # (see scripts/codegen/README.md).
+      - name: Check schema codegen drift (REC-009)
+        # REC-009 is enabled: the _generated/ artifacts are committed, so this regenerates from the
+        # schemas (pinned uvx / pnpm dlx generators; network egress fetches them) and fails on any
+        # drift. The dir guard keeps the step robust if the artifacts are ever removed.
+        # See scripts/codegen/README.md.
         run: |
+          pip install uv
           if [ -d backend/app/domain/models/_generated ] || [ -d web/lib/schemas/_generated ]; then
             make codegen-check
           else
-            echo "REC-009 scaffold: codegen artifacts not generated yet; skipping drift check."
+            echo "REC-009: codegen artifacts not present; skipping drift check."
           fi
 
   backend:
