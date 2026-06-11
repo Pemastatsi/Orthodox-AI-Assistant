@@ -239,6 +239,27 @@ async def _fetch_billing(tenant_id: str) -> tuple[int, int]:
         return (int(row[0]), int(row[1])) if row else (0, 0)
 
 
+async def _fetch_billing_usage_record_id(tenant_id: str) -> str | None:
+    """Usage-record id stamped on the current period row (BILLING_MODE=local stamps one)."""
+    from app.domain.repositories._base import session_scope
+
+    async with session_scope() as session:
+        result = await session.execute(
+            text(
+                """
+                SELECT stripe_usage_record_id
+                FROM billing_usage
+                WHERE tenant_id = :t
+                ORDER BY period_start DESC
+                LIMIT 1
+                """
+            ),
+            {"t": tenant_id},
+        )
+        row = result.one_or_none()
+        return row[0] if row else None
+
+
 @pytest.mark.asyncio
 async def test_cache_hit_persists_run_trace_with_new_run_id(  # noqa: N802
     async_client: AsyncClient, pipeline_stubs: StubVectorStore, flush_test_cache: None
@@ -257,6 +278,10 @@ async def test_cache_hit_persists_run_trace_with_new_run_id(  # noqa: N802
     # Wait for any async DB writes to settle by re-reading.
     served_1, fresh_1 = await _fetch_billing("tn_test")
     assert served_1 == 1 and fresh_1 == 1
+    usage_id_1 = await _fetch_billing_usage_record_id("tn_test")
+    assert usage_id_1 is not None and usage_id_1.startswith("unmetered_"), (
+        "local billing mode must stamp billing_usage.stripe_usage_record_id (criterion #8b)"
+    )
     assert await _count_run_traces("tn_test") == 1
     first_trace = await _fetch_run_trace_by_run_id(first_run_id)
     assert first_trace["cache_hit"] is False
@@ -277,6 +302,8 @@ async def test_cache_hit_persists_run_trace_with_new_run_id(  # noqa: N802
     served_2, fresh_2 = await _fetch_billing("tn_test")
     assert served_2 == 2, "cache hit must increment served_answer_count"
     assert fresh_2 == 1, "cache hit must NOT increment fresh_model_run_count"
+    usage_id_2 = await _fetch_billing_usage_record_id("tn_test")
+    assert usage_id_2 == usage_id_1, "usage-record id must be stable across the billing period"
 
     assert await _count_run_traces("tn_test") == 2
     second_trace = await _fetch_run_trace_by_run_id(second_run_id)

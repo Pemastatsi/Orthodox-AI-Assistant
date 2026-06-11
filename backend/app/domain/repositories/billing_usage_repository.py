@@ -89,6 +89,39 @@ class BillingUsageRepository:
             },
         )
 
+    async def set_usage_record_id(
+        self,
+        *,
+        tenant_id: str,
+        period_start: datetime,
+        usage_record_id: str,
+        reported_at: datetime,
+    ) -> None:
+        """Stamp the usage-record id on the current period row, once.
+
+        Idempotent: only updates when `stripe_usage_record_id IS NULL`, so the first served
+        answer of a billing period sets it and later answers in the same period leave it alone.
+        """
+        assert_tenant(tenant_id)
+        await self._session.execute(
+            text(
+                """
+                UPDATE billing_usage
+                SET stripe_usage_record_id = :usage_record_id,
+                    reported_at = :reported_at
+                WHERE tenant_id = :tenant_id
+                  AND period_start = :period_start
+                  AND stripe_usage_record_id IS NULL
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "period_start": period_start,
+                "usage_record_id": usage_record_id,
+                "reported_at": reported_at,
+            },
+        )
+
     async def get_current(
         self, *, tenant_id: str, now: datetime | None = None
     ) -> BillingUsage | None:
