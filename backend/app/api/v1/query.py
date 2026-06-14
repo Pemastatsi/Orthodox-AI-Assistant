@@ -80,12 +80,14 @@ from app.domain.services.cache_service import (
     cache_key,
 )
 from app.domain.services.encryption_service import SensitiveLogCipher
+from app.domain.services.metering_service import resolve_inline_usage_record_id
 from app.domain.services.prompt_loader import registry_version
 from app.domain.services.redaction_service import (
     redact_query_text,
     should_capture_raw_sensitive,
 )
 from app.domain.services.safety_config import PastoralConfig, SafetyConfig
+from app.domain.services.usage_service import compute_period_start
 
 router = APIRouter(prefix="/query", tags=["query"])
 logger = get_logger(__name__)
@@ -197,6 +199,7 @@ async def post_query(
             flag_reason="hard_safety_trigger",
             cipher=cipher,
             sensitive_log_retention_days=settings.sensitive_log_retention_days,
+            billing_mode=settings.billing_mode,
         )
         _log_completed(run_id, principal, response, start, case="hard_safety", cache_hit=False)
         return response
@@ -242,6 +245,7 @@ async def post_query(
             flag_reason=None,
             cipher=cipher,
             sensitive_log_retention_days=settings.sensitive_log_retention_days,
+            billing_mode=settings.billing_mode,
         )
         _log_completed(run_id, principal, response, start, case="cache_hit", cache_hit=True)
         return response
@@ -301,6 +305,7 @@ async def post_query(
             flag_reason="insufficient_evidence",
             cipher=cipher,
             sensitive_log_retention_days=settings.sensitive_log_retention_days,
+            billing_mode=settings.billing_mode,
         )
         _log_completed(run_id, principal, response, start, case="red_evidence", cache_hit=False)
         return response
@@ -347,6 +352,7 @@ async def post_query(
             flag_reason="verifier_failed",
             cipher=cipher,
             sensitive_log_retention_days=settings.sensitive_log_retention_days,
+            billing_mode=settings.billing_mode,
         )
         _log_completed(
             run_id, principal, response, start, case="composer_refusal", cache_hit=False
@@ -389,6 +395,7 @@ async def post_query(
         flag_reason=None if a6_passed else "verifier_failed",
         cipher=cipher,
         sensitive_log_retention_days=settings.sensitive_log_retention_days,
+        billing_mode=settings.billing_mode,
     )
 
     if a6_passed and response.handling in ("answer", "answer_with_disclaimer"):
@@ -499,6 +506,7 @@ async def _persist_run_outcome(
     flag_reason: str | None,
     cipher: SensitiveLogCipher | None,
     sensitive_log_retention_days: int,
+    billing_mode: str,
 ) -> None:
     """Single durable write-down for every request outcome.
 
@@ -533,13 +541,29 @@ async def _persist_run_outcome(
             await set_tenant_guc(session, principal.tenant_id)
 
             await RunTraceRepository(session).insert(trace)
-            await BillingUsageRepository(session).increment(
+            billing = BillingUsageRepository(session)
+            await billing.increment(
                 tenant_id=principal.tenant_id,
                 served_answer_count=1,
                 fresh_model_run_count=1 if fresh_model_run else 0,
                 prompt_tokens=response.usage.prompt_tokens or 0,
                 completion_tokens=response.usage.completion_tokens or 0,
+                now=finished_at,
             )
+            # Meter the served answer (criterion #8b). `local` mode stamps a synthetic id inline so
+            # the billing path is fully functional without Stripe; `stripe` mode defers to the
+            # periodic reporter. Idempotent per billing period.
+            period_start = compute_period_start(finished_at)
+            usage_record_id = resolve_inline_usage_record_id(
+                billing_mode, tenant_id=principal.tenant_id, period_start=period_start
+            )
+            if usage_record_id is not None:
+                await billing.set_usage_record_id(
+                    tenant_id=principal.tenant_id,
+                    period_start=period_start,
+                    usage_record_id=usage_record_id,
+                    reported_at=finished_at,
+                )
 
             if needs_flagged and effective_flag is not None:
                 raw_log_id: str | None = None

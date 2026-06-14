@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     stripe_secret_key: str = "sk_test_REPLACE_ME"
     stripe_webhook_secret: str = "whsec_REPLACE_ME"
     stripe_usage_meter: str = "served_answer_count"
+    # Billing backend. `local` (default) meters served answers with a synthetic usage-record id
+    # — fully functional, no Stripe account, no charges. `stripe` defers metering to the periodic
+    # reporter (monetization step). See app/domain/services/metering_service.py.
+    billing_mode: Literal["local", "stripe"] = "local"
 
     anthropic_api_key: str = "REPLACE_ME"
     openai_api_key: str = "REPLACE_ME"
