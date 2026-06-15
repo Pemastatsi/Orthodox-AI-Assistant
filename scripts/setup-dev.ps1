@@ -52,7 +52,16 @@ Push-Location backend; & uv sync; $code = $LASTEXITCODE; Pop-Location
 if ($code -ne 0) { throw "uv sync failed (exit $code)" }
 
 Write-Host "==> Installing web deps (pnpm install)" -ForegroundColor Cyan
-Push-Location web; & pnpm install; $code = $LASTEXITCODE; Pop-Location
+Push-Location web
+& pnpm install
+if ($LASTEXITCODE -ne 0) {
+    # Newer pnpm (10+) blocks dependency build scripts by default (ERR_PNPM_IGNORED_BUILDS).
+    # Those builds aren't needed to run the dev server, so retry skipping them.
+    Write-Host "    pnpm blocked dependency build scripts; retrying with --ignore-scripts (fine for local dev)..." -ForegroundColor Yellow
+    & pnpm install --ignore-scripts
+}
+$code = $LASTEXITCODE
+Pop-Location
 if ($code -ne 0) { throw "pnpm install failed (exit $code)" }
 
 # --- Env files (ascii = no BOM, which dotenv parsers dislike) ----------------
