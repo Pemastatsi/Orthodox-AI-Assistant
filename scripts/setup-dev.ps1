@@ -66,13 +66,23 @@ if ($code -ne 0) { throw "pnpm install failed (exit $code)" }
 
 # --- Env files (ascii = no BOM, which dotenv parsers dislike) ----------------
 # Backend reads `.env` from its own working dir (uvicorn runs in backend/).
+# Write a CLEAN minimal env. Do NOT copy .env.example: the dotenv parser keeps each line's
+# inline "# comment" as the value for blank keys (e.g. DATABASE_ADMIN_URL), which then breaks
+# the database URL. Everything not set here uses the safe defaults in app/core/config.py.
 if (-not (Test-Path "backend/.env")) {
     Write-Host "==> Writing backend/.env" -ForegroundColor Cyan
-    (Get-Content ".env.example") -replace '^QDRANT_URL=.*$', 'QDRANT_URL=http://localhost:6333' |
-        Set-Content "backend/.env" -Encoding ascii
+    @(
+        "APP_ENV=development",
+        "AUTH_PROVIDER=dev",
+        "DATABASE_URL=postgresql+asyncpg://orthodox:orthodox@localhost:5432/orthodox",
+        "REDIS_URL=redis://localhost:6379/0",
+        "QDRANT_URL=http://localhost:6333",
+        "OPENAI_API_KEY=REPLACE_ME",
+        "ANTHROPIC_API_KEY=REPLACE_ME"
+    ) | Set-Content "backend/.env" -Encoding ascii
     Write-Host "    For real answers, edit backend/.env: set OPENAI_API_KEY + ANTHROPIC_API_KEY." -ForegroundColor Yellow
 } else {
-    Write-Host "==> backend/.env exists - leaving as-is (ensure QDRANT_URL=http://localhost:6333)" -ForegroundColor DarkGray
+    Write-Host "==> backend/.env exists - leaving as-is" -ForegroundColor DarkGray
 }
 
 # Next.js reads `.env.local` from the web/ dir. Without NEXT_PUBLIC_AUTH_MODE=dev it
