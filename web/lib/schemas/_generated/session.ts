@@ -1,3 +1,0 @@
-import { z } from "zod"
-
-export default z.object({ "sessionId": z.string(), "tenantId": z.string(), "userId": z.string(), "sessionHash": z.string().describe("Stable hash derived from sessionId + tenantId; used in cache key for follow-ups only."), "turnCount": z.number().int().gte(0), "lastQueryAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional(), "expiresAt": z.string().datetime({ offset: true }).optional(), "createdAt": z.string().datetime({ offset: true }) }).strict().describe("Conversation session for follow-up queries. The sessionHash is derived from sessionId+tenantId and contributes to cache keys for follow-ups so they do not share cache entries with standalone queries.")

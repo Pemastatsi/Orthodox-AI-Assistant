@@ -1,3 +1,0 @@
-import { z } from "zod"
-
-export default z.object({ "tenantId": z.string(), "periodStart": z.string().datetime({ offset: true }), "periodEnd": z.string().datetime({ offset: true }), "servedAnswerCount": z.number().int().gte(0), "freshModelRunCount": z.number().int().gte(0), "promptTokens": z.number().int().gte(0).optional(), "completionTokens": z.number().int().gte(0).optional(), "embeddingTokens": z.number().int().gte(0).optional(), "stripeUsageRecordId": z.union([z.string(), z.null()]).optional(), "reportedAt": z.union([z.string().datetime({ offset: true }), z.null()]).optional() }).strict().describe("Per-tenant rolling usage row used by the Stripe metered meter. servedAnswerCount is the meter; freshModelRunCount is internal cost tracking only.")

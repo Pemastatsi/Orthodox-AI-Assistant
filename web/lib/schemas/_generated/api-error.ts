@@ -1,3 +1,0 @@
-import { z } from "zod"
-
-export default z.object({ "code": z.string().regex(new RegExp("^[a-z][a-z0-9_]+$")).describe("Stable machine-readable code from error-taxonomy.md."), "message": z.string().describe("Human-readable, user-safe message. Never includes secrets, raw sensitive query text, or stack traces."), "traceId": z.string().describe("ULID matching X-Run-Id; used to find logs."), "details": z.record(z.string(), z.any()).describe("Optional structured details. Must not include sensitive fields.").optional(), "retryable": z.boolean().default(false), "retryAfterSeconds": z.union([z.number().int().gte(0), z.null()]).optional() }).strict().describe("Canonical error envelope returned by every non-2xx response. Code values defined in docs/contracts/error-taxonomy.md.")

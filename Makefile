@@ -3,13 +3,13 @@
 
 install:
 	(cd backend && uv sync)
-	(cd web && pnpm install)
+	(cd web && npm install)
 
 dev:
 	docker compose -f infrastructure/docker-compose.yml up -d
 	(cd backend && uv run uvicorn app.main:app --reload --port 8000) &
 	(cd backend && uv run arq app.workers.retention_worker.WorkerSettings) &
-	(cd web && pnpm dev)
+	(cd web && npm run dev)
 
 # Retention worker (arq). Standalone runner for local verification / observing the sweep.
 # Needs the compose deps up (`make up`) + migrations (`make migrate`); see docs/runbooks/retention-worker.md.
@@ -18,14 +18,14 @@ worker:
 
 test:
 	(cd backend && uv run pytest -q)
-	(cd web && pnpm test --run)
+	@echo "web: no JS unit tests configured yet (UI migrated to Vite/TanStack)"
 
 safety:
 	pytest tests/safety -v
 
 lint:
 	(cd backend && uv run ruff check . && uv run mypy app)
-	(cd web && pnpm lint && pnpm typecheck)
+	(cd web && npm run lint)
 
 typecheck: lint
 
